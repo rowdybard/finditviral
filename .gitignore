@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-node-types
+.env
+.env.local
+*.local
+.DS_Store
