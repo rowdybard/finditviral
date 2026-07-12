@@ -7,13 +7,26 @@ create table if not exists public.profile_contacts (
   updated_at timestamptz not null default now()
 );
 
-insert into public.profile_contacts (user_id, contact_info)
-select id, contact_info
-from public.profiles
-where contact_info is not null
-on conflict (user_id) do update
-  set contact_info = excluded.contact_info,
-      updated_at = now();
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'contact_info'
+  ) then
+    execute $copy$
+      insert into public.profile_contacts (user_id, contact_info)
+      select id, contact_info
+      from public.profiles
+      where contact_info is not null
+      on conflict (user_id) do update
+        set contact_info = excluded.contact_info,
+            updated_at = now()
+    $copy$;
+  end if;
+end $$;
 
 alter table public.profiles drop column if exists contact_info;
 

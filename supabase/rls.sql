@@ -1,4 +1,18 @@
--- FindItViral - Row Level Security Policies
+-- FindItViral — Row Level Security Policies
+-- Legacy bootstrap only: run this before the owner-only private-app migration.
+-- Refuse to run after lockdown so a manual replay cannot recreate public reads.
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'private'
+      and table_name = 'app_owners'
+  ) then
+    raise exception 'Refusing to run legacy rls.sql after owner-only lockdown';
+  end if;
+end $$;
 -- Run this in the Supabase SQL Editor after schema.sql
 
 -- Explicit Data API grants. RLS decides which rows are visible after these grants.

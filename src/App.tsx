@@ -1,41 +1,21 @@
-import { Navigate, Routes, Route } from 'react-router-dom'
-import Layout from './components/Layout'
-import ProtectedRoute from './components/ProtectedRoute'
-import OwnerGate from './components/OwnerGate'
+import { lazy, Suspense } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import EarlyAccess from './pages/EarlyAccess'
-import Home from './pages/Home'
-import TrendPage from './pages/TrendPage'
-import ProductPage from './pages/ProductPage'
-import Bounties from './pages/Bounties'
-import NewBounty from './pages/NewBounty'
-import BountyDetail from './pages/BountyDetail'
-import Sightings from './pages/Sightings'
-import NewSighting from './pages/NewSighting'
-import Profile from './pages/Profile'
+import Privacy from './pages/Privacy'
+
+const PrivateApp = lazy(() => import('./PrivateApp'))
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<EarlyAccess />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route
         path="*"
         element={
-          <OwnerGate>
-            <Layout>
-              <Routes>
-                <Route path="/home" element={<Home />} />
-                <Route path="/trends/:slug" element={<TrendPage />} />
-                <Route path="/products/:slug" element={<ProductPage />} />
-                <Route path="/bounties" element={<Bounties />} />
-                <Route path="/bounties/new" element={<ProtectedRoute><NewBounty /></ProtectedRoute>} />
-                <Route path="/bounties/:id" element={<BountyDetail />} />
-                <Route path="/sightings" element={<Sightings />} />
-                <Route path="/sightings/new" element={<ProtectedRoute><NewSighting /></ProtectedRoute>} />
-                <Route path="/profile/:username" element={<Profile />} />
-                <Route path="*" element={<Navigate to="/home" replace />} />
-              </Routes>
-            </Layout>
-          </OwnerGate>
+          <Suspense fallback={<div className="min-h-screen bg-stone-950" aria-label="Loading private access" />}>
+            <PrivateApp />
+          </Suspense>
         }
       />
     </Routes>

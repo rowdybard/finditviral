@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /home
+Disallow: /trends/
+Disallow: /products/
+Disallow: /bounties
+Disallow: /sightings
+Disallow: /profile/
+
+Sitemap: https://finditviral.com/sitemap.xml

@@ -6,3 +6,4 @@ dist-node-types
 *.local
 .DS_Store
 supabase/.temp/
+.wrangler/
