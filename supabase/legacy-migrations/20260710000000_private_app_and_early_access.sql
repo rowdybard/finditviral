@@ -1,8 +1,15 @@
--- Replace the public prototype with a public early-access form.
+-- Legacy/manual private-prototype lockdown. Do not include this file in the public launch migration chain.
 --
 -- Before applying this migration, make sure your owner account already exists in
 -- Supabase Auth. After applying it, run the owner enrollment statement at the
 -- bottom of this file in the Supabase SQL editor.
+
+do $$
+begin
+  if to_regprocedure('public.request_early_access(text,text)') is not null then
+    raise exception 'Refusing to replay the legacy private-app migration after the public launch migration';
+  end if;
+end $$;
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;

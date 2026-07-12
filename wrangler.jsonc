@@ -1,6 +1,15 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "finditviral",
-  "compatibility_date": "2026-07-11",
-  "pages_build_output_dir": "./dist"
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "finditviral",
+	"compatibility_date": "2026-07-11",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"pages_build_output_dir": "./dist",
+	"kv_namespaces": [
+		{
+			"binding": "EARLY_ACCESS_RATE_LIMIT",
+			"id": "c0e906064e7b4325b48b31275e7fb4cb"
+		}
+	]
 }

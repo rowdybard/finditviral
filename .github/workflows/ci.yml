@@ -25,3 +25,21 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+      - run: supabase start
+      - run: supabase db reset
+      - run: supabase db lint --local --schema public --level warning --fail-on error
+      - run: supabase test db
+      - name: Reapply migrations from a clean database
+        run: supabase db reset
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

@@ -1,10 +1,10 @@
 -- Public-launch waitlist baseline.
 -- Safe to run on a new project or after the private-app migrations.
 
-create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 create table if not exists public.early_access_requests (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   email text not null,
   reason text not null,
   created_at timestamptz not null default now(),
@@ -24,6 +24,9 @@ alter table public.early_access_requests
 
 create unique index if not exists early_access_requests_email_key
   on public.early_access_requests (lower(email));
+
+create index if not exists early_access_requests_expires_at_idx
+  on public.early_access_requests (expires_at);
 
 alter table public.early_access_requests enable row level security;
 
@@ -46,7 +49,9 @@ declare
   v_email text := lower(trim(p_email));
   v_reason text := trim(p_reason);
 begin
-  if char_length(v_email) not between 3 and 320
+  if v_email is null
+    or v_reason is null
+    or char_length(v_email) not between 3 and 320
     or v_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
     or char_length(v_reason) not between 10 and 1200
   then

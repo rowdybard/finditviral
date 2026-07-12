@@ -3,9 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --font-sans: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
-    -webkit-tap-highlight-color: transparent;
+    @apply bg-stone-50 text-stone-900 antialiased;
   }
 }
 

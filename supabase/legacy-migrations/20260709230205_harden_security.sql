@@ -1,4 +1,4 @@
--- Harden profile privacy, claim integrity, and Data API grants.
+-- Legacy upgrade only: harden profile privacy, claim integrity, and Data API grants.
 
 create table if not exists public.profile_contacts (
   user_id uuid primary key references auth.users(id) on delete cascade,
