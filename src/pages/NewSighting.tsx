@@ -3,10 +3,9 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Product, Trend } from '../types/database'
-import PhotoUpload from '../components/PhotoUpload'
 
 export default function NewSighting() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [trends, setTrends] = useState<Trend[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -17,7 +16,6 @@ export default function NewSighting() {
   const [state, setState] = useState('')
   const [zipCode, setZipCode] = useState('')
   const [stockLevel, setStockLevel] = useState('in_stock')
-  const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -60,7 +58,6 @@ export default function NewSighting() {
         stock_level: stockLevel,
         is_public: true,
         bounty_id: null,
-        photo_urls: photoUrls.length > 0 ? photoUrls : null,
       })
 
     setLoading(false)
@@ -177,12 +174,6 @@ export default function NewSighting() {
             <option value="none">Out of Stock</option>
           </select>
         </div>
-
-        <PhotoUpload
-          isPro={profile?.is_pro ?? false}
-          photoUrls={photoUrls}
-          onChange={setPhotoUrls}
-        />
 
         {error && (
           <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

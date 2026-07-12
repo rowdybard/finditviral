@@ -60,7 +60,6 @@ export default function NewBounty() {
         zip_code: zipCode,
         radius_miles: parseInt(radiusMiles),
         notes: notes.trim() || null,
-        status: 'open',
       })
       .select('id')
       .single()

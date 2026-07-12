@@ -30,13 +30,13 @@ export default function ProductPage() {
       const [bountiesRes, sightingsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('product_id', productData.id)
           .eq('status', 'open')
           .order('created_at', { ascending: false }),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('product_id', productData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false }),

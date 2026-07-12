@@ -19,10 +19,16 @@ export type Product = {
 export type Profile = {
   id: string
   username: string
-  contact_info: string | null
   karma: number
   is_pro: boolean
   created_at: string
+}
+
+export type ProfileContact = {
+  user_id: string
+  contact_info: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type Bounty = {
@@ -65,6 +71,7 @@ export type BountyClaim = {
   sighting_id: string
   status: 'pending' | 'accepted' | 'rejected'
   created_at: string
+  bounty?: Bounty
   sighting?: Sighting
   finder?: Profile
 }

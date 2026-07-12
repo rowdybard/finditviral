@@ -5,3 +5,4 @@ dist-node-types
 .env.local
 *.local
 .DS_Store
+supabase/.temp/

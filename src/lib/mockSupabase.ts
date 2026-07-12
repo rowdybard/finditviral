@@ -116,11 +116,16 @@ const initialData = {
     { id: 'p96', trend_id: 't5', name: 'Magic Jellykins Doll Playset 12pk', slug: 'magic-jellykins-doll-playset-12pk', created_at: days(10) },
   ],
   profiles: [
-    { id: 'u1', username: 'DemoHunter', contact_info: 'demo@finditviral.com', karma: 12, is_pro: true, created_at: days(90) },
-    { id: 'u2', username: 'SquishFan22', contact_info: 'poster@finditviral.com', karma: 5, is_pro: false, created_at: days(60) },
-    { id: 'u3', username: 'TargetScout', contact_info: null, karma: 8, is_pro: false, created_at: days(45) },
-    { id: 'u4', username: 'DumplingDiva', contact_info: null, karma: 15, is_pro: false, created_at: days(80) },
+    { id: 'u1', username: 'DemoHunter', karma: 12, is_pro: true, created_at: days(90) },
+    { id: 'u2', username: 'SquishFan22', karma: 5, is_pro: false, created_at: days(60) },
+    { id: 'u3', username: 'TargetScout', karma: 8, is_pro: false, created_at: days(45) },
+    { id: 'u4', username: 'DumplingDiva', karma: 15, is_pro: false, created_at: days(80) },
   ],
+  profile_contacts: [
+    { user_id: 'u1', contact_info: 'demo@finditviral.com', created_at: days(90), updated_at: days(90) },
+    { user_id: 'u2', contact_info: 'poster@finditviral.com', created_at: days(60), updated_at: days(60) },
+  ],
+  early_access_requests: [],
   bounties: [
     { id: 'b1', user_id: 'u2', product_id: 'p2', reward_amount: 25, zip_code: '10001', radius_miles: 50, notes: 'Looking for the blue Nice Cube', status: 'open', created_at: hours(5) },
     { id: 'b2', user_id: 'u2', product_id: 'p10', reward_amount: 30, zip_code: '90210', radius_miles: 25, notes: 'Need the Nice Berg for a gift', status: 'open', created_at: hours(12) },
@@ -186,6 +191,7 @@ class Builder {
   private ln?: number
   private isSingle = false
   private ins: any = null
+  private ups: any = null
   private upd: any = null
 
   constructor(t: string) { this.t = t }
@@ -196,16 +202,24 @@ class Builder {
   limit(n: number) { this.ln = n; return this }
   single() { this.isSingle = true; return this }
   insert(d: any) { this.ins = d; return this }
+  upsert(d: any) { this.ups = d; return this }
   update(d: any) { this.upd = d; return this }
 
   then(res: any, rej?: any) {
-    if (this.ins) {
-      const items = Array.isArray(this.ins) ? this.ins : [this.ins]
+    if (this.ins || this.ups) {
+      const payload = this.ins || this.ups
+      const items = Array.isArray(payload) ? payload : [payload]
       const rows = items.map(item => {
-        const id = item.id || uid()
-        const idx = store[this.t].findIndex(r => r.id === id)
+        const key = this.t === 'profile_contacts' ? 'user_id' : 'id'
+        const id = item[key] || item.id || item.user_id || uid()
+        const idx = store[this.t].findIndex(r => r[key] === id)
         if (idx >= 0) { Object.assign(store[this.t][idx], item); return store[this.t][idx] }
-        const r = { ...item, id, created_at: new Date().toISOString() }
+        const defaults = this.t === 'bounties'
+          ? { status: 'open' }
+          : this.t === 'sightings'
+            ? { stock_level: 'in_stock', is_public: true, bounty_id: null, photo_urls: null }
+            : {}
+        const r = { ...defaults, ...item, [key]: id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
         store[this.t].push(r)
         return r
       })
@@ -235,12 +249,91 @@ class Builder {
 
 export const mockSupabase = {
   from(t: string) { return new Builder(t) },
+  rpc(name: string, args: any) {
+    const currentUserId = mockSession?.user?.id
+    if (!currentUserId) {
+      return Promise.resolve({ data: null, error: { message: 'Authentication required' } })
+    }
+
+    if (name === 'submit_bounty_claim') {
+      const bounty = store.bounties.find(b => b.id === args.p_bounty_id)
+      if (!bounty || bounty.status !== 'open') {
+        return Promise.resolve({ data: null, error: { message: 'Bounty is not open' } })
+      }
+      if (bounty.user_id === currentUserId) {
+        return Promise.resolve({ data: null, error: { message: 'You cannot claim your own bounty' } })
+      }
+      const sighting = {
+        id: uid(),
+        user_id: currentUserId,
+        product_id: bounty.product_id,
+        store_name: args.p_store_name,
+        city: args.p_city,
+        state: args.p_state,
+        zip_code: args.p_zip_code,
+        stock_level: args.p_stock_level || 'in_stock',
+        is_public: false,
+        bounty_id: bounty.id,
+        photo_urls: null,
+        created_at: new Date().toISOString(),
+      }
+      store.sightings.push(sighting)
+      const claim = {
+        id: uid(),
+        bounty_id: bounty.id,
+        finder_id: currentUserId,
+        sighting_id: sighting.id,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      }
+      store.bounty_claims.push(claim)
+      return Promise.resolve({ data: claim.id, error: null })
+    }
+
+    if (name === 'accept_bounty_claim' || name === 'reject_bounty_claim') {
+      const claim = store.bounty_claims.find(c => c.id === args.p_claim_id)
+      const bounty = claim && store.bounties.find(b => b.id === claim.bounty_id)
+      if (!claim || !bounty) {
+        return Promise.resolve({ data: null, error: { message: 'Claim not found' } })
+      }
+      if (bounty.user_id !== currentUserId) {
+        return Promise.resolve({ data: null, error: { message: 'Only the bounty owner can update this claim' } })
+      }
+      if (name === 'accept_bounty_claim') {
+        claim.status = 'accepted'
+        bounty.status = 'claimed'
+        store.bounty_claims.forEach(c => {
+          if (c.bounty_id === bounty.id && c.id !== claim.id && c.status === 'pending') c.status = 'rejected'
+        })
+        const finder = store.profiles.find(p => p.id === claim.finder_id)
+        if (finder) finder.karma += 1
+      } else {
+        claim.status = 'rejected'
+      }
+      return Promise.resolve({ data: null, error: null })
+    }
+
+    if (name === 'close_bounty') {
+      const bounty = store.bounties.find(b => b.id === args.p_bounty_id)
+      if (!bounty) return Promise.resolve({ data: null, error: { message: 'Bounty not found' } })
+      if (bounty.user_id !== currentUserId) {
+        return Promise.resolve({ data: null, error: { message: 'Only the bounty owner can close this bounty' } })
+      }
+      bounty.status = 'closed'
+      store.bounty_claims.forEach(c => {
+        if (c.bounty_id === bounty.id && c.status === 'pending') c.status = 'rejected'
+      })
+      return Promise.resolve({ data: null, error: null })
+    }
+
+    return Promise.resolve({ data: null, error: { message: `Unknown RPC: ${name}` } })
+  },
   auth: {
     getSession: () => Promise.resolve({ data: { session: mockSession }, error: null }),
     signUp: ({ email, options }: any) => {
       const id = uid()
       const username = options?.data?.username || 'DemoUser'
-      store.profiles.push({ id, username, contact_info: null, karma: 0, created_at: new Date().toISOString() })
+      store.profiles.push({ id, username, karma: 0, is_pro: false, created_at: new Date().toISOString() })
       mockSession = { user: { id, email }, access_token: 'mock' }
       listeners.forEach(l => l('SIGNED_IN', mockSession))
       return Promise.resolve({ data: { user: { id, email }, session: mockSession }, error: null })

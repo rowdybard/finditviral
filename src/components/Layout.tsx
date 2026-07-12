@@ -10,7 +10,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   async function demoLogin(email: string) {
     await signIn(email, 'demo')
-    navigate('/')
+    navigate('/home')
   }
 
   return (

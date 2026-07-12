@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, username, karma, is_pro, created_at')
       .eq('id', userId)
       .single()
     setProfile(data as Profile | null)
@@ -59,19 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signUp(email: string, password: string, username: string) {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { username } },
     })
     if (error) return { error: error.message }
-    if (data.user) {
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        username,
-        karma: 0,
-      })
-    }
     return { error: null }
   }
 

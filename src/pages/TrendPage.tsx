@@ -39,14 +39,14 @@ export default function TrendPage() {
       const [bountiesRes, sightingsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('status', 'open')
           .in('product_id', productIds)
           .order('created_at', { ascending: false })
           .limit(10),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('is_public', true)
           .in('product_id', productIds)
           .order('created_at', { ascending: false })

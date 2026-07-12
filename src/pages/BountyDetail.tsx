@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import type { Bounty, BountyClaim } from '../types/database'
+import type { Bounty, BountyClaim, ProfileContact } from '../types/database'
 import { formatReward, timeAgo, statusColor, statusLabel } from '../lib/utils'
 import EmptyState from '../components/EmptyState'
 
@@ -11,6 +11,8 @@ export default function BountyDetail() {
   const { user } = useAuth()
   const [bounty, setBounty] = useState<Bounty | null>(null)
   const [claims, setClaims] = useState<BountyClaim[]>([])
+  const [claimContacts, setClaimContacts] = useState<Record<string, string | null>>({})
+  const [ownerContact, setOwnerContact] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [claimStore, setClaimStore] = useState('')
@@ -23,28 +25,74 @@ export default function BountyDetail() {
 
   const isOwner = user?.id === bounty?.user_id
 
+  async function loadContacts(nextBounty: Bounty | null, nextClaims: BountyClaim[]) {
+    setClaimContacts({})
+    setOwnerContact(null)
+    if (!user || !nextBounty) return
+
+    const acceptedClaims = nextClaims.filter((claim) => claim.status === 'accepted')
+    if (user.id === nextBounty.user_id) {
+      const finderIds = Array.from(new Set(acceptedClaims.map((claim) => claim.finder_id)))
+      if (finderIds.length === 0) return
+
+      const { data } = await supabase
+        .from('profile_contacts')
+        .select('user_id, contact_info')
+        .in('user_id', finderIds)
+
+      const contacts = (data as Pick<ProfileContact, 'user_id' | 'contact_info'>[] | null) ?? []
+      setClaimContacts(
+        Object.fromEntries(contacts.map((contact) => [contact.user_id, contact.contact_info])),
+      )
+      return
+    }
+
+    const acceptedForCurrentUser = acceptedClaims.some((claim) => claim.finder_id === user.id)
+    if (!acceptedForCurrentUser) return
+
+    const { data } = await supabase
+      .from('profile_contacts')
+      .select('user_id, contact_info')
+      .eq('user_id', nextBounty.user_id)
+      .single()
+    setOwnerContact((data as Pick<ProfileContact, 'user_id' | 'contact_info'> | null)?.contact_info ?? null)
+  }
+
+  async function reloadBountyAndClaims() {
+    if (!id) return
+    const { data: bountyData } = await supabase
+      .from('bounties')
+      .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+      .eq('id', id)
+      .single()
+    const nextBounty = bountyData as Bounty | null
+    setBounty(nextBounty)
+
+    if (!nextBounty) {
+      setClaims([])
+      setClaimContacts({})
+      setOwnerContact(null)
+      return
+    }
+
+    const { data: claimsData } = await supabase
+      .from('bounty_claims')
+      .select('*, sighting:sightings(*), finder:profiles(id, username, karma, is_pro, created_at)')
+      .eq('bounty_id', id)
+      .order('created_at', { ascending: false })
+    const nextClaims = claimsData as BountyClaim[] ?? []
+    setClaims(nextClaims)
+    await loadContacts(nextBounty, nextClaims)
+  }
+
   useEffect(() => {
     if (!id) return
     async function load() {
-      const { data: bountyData } = await supabase
-        .from('bounties')
-        .select('*, product(*), profile:profiles(*)')
-        .eq('id', id)
-        .single()
-      setBounty(bountyData as Bounty | null)
-
-      if (bountyData) {
-        const { data: claimsData } = await supabase
-          .from('bounty_claims')
-          .select('*, sighting:sightings(*), finder:profiles(*)')
-          .eq('bounty_id', id)
-          .order('created_at', { ascending: false })
-        setClaims(claimsData as BountyClaim[] ?? [])
-      }
+      await reloadBountyAndClaims()
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [id, user?.id])
 
   async function handleClaimSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -56,36 +104,14 @@ export default function BountyDetail() {
     }
 
     setClaimLoading(true)
-    const { data: sighting, error: sightingError } = await supabase
-      .from('sightings')
-      .insert({
-        user_id: user.id,
-        product_id: bounty.product_id,
-        store_name: claimStore.trim(),
-        city: claimCity.trim() || null,
-        state: claimState.trim() || null,
-        zip_code: claimZip.trim() || null,
-        stock_level: claimStock,
-        is_public: false,
-        bounty_id: bounty.id,
-      })
-      .select('id')
-      .single()
-
-    if (sightingError) {
-      setClaimError(sightingError.message)
-      setClaimLoading(false)
-      return
-    }
-
-    const { error: claimError } = await supabase
-      .from('bounty_claims')
-      .insert({
-        bounty_id: bounty.id,
-        finder_id: user.id,
-        sighting_id: sighting.id,
-        status: 'pending',
-      })
+    const { error: claimError } = await supabase.rpc('submit_bounty_claim', {
+      p_bounty_id: bounty.id,
+      p_store_name: claimStore.trim(),
+      p_city: claimCity.trim() || null,
+      p_state: claimState.trim() || null,
+      p_zip_code: claimZip.trim() || null,
+      p_stock_level: claimStock,
+    })
 
     setClaimLoading(false)
     if (claimError) {
@@ -98,69 +124,23 @@ export default function BountyDetail() {
     setClaimCity('')
     setClaimState('')
     setClaimZip('')
-    const { data: claimsData } = await supabase
-      .from('bounty_claims')
-      .select('*, sighting:sightings(*), finder:profiles(*)')
-      .eq('bounty_id', id)
-      .order('created_at', { ascending: false })
-    setClaims(claimsData as BountyClaim[] ?? [])
+    await reloadBountyAndClaims()
   }
 
   async function handleClaimAction(claimId: string, action: 'accepted' | 'rejected') {
-    const { error } = await supabase
-      .from('bounty_claims')
-      .update({ status: action })
-      .eq('id', claimId)
+    const { error } = await supabase.rpc(
+      action === 'accepted' ? 'accept_bounty_claim' : 'reject_bounty_claim',
+      { p_claim_id: claimId },
+    )
 
     if (error) return
-
-    if (action === 'accepted') {
-      await supabase.from('bounties').update({ status: 'claimed' }).eq('id', id)
-      const { data: claimData } = await supabase
-        .from('bounty_claims')
-        .select('finder_id')
-        .eq('id', claimId)
-        .single()
-      if (claimData) {
-        const { data: finderProfile } = await supabase
-          .from('profiles')
-          .select('karma')
-          .eq('id', claimData.finder_id)
-          .single()
-        if (finderProfile) {
-          await supabase
-            .from('profiles')
-            .update({ karma: finderProfile.karma + 1 })
-            .eq('id', claimData.finder_id)
-        }
-      }
-    }
-
-    const { data: claimsData } = await supabase
-      .from('bounty_claims')
-      .select('*, sighting:sightings(*), finder:profiles(*)')
-      .eq('bounty_id', id)
-      .order('created_at', { ascending: false })
-    setClaims(claimsData as BountyClaim[] ?? [])
-
-    if (action === 'accepted') {
-      const { data: bountyData } = await supabase
-        .from('bounties')
-        .select('*, product(*), profile:profiles(*)')
-        .eq('id', id)
-        .single()
-      setBounty(bountyData as Bounty | null)
-    }
+    await reloadBountyAndClaims()
   }
 
   async function handleClose() {
-    await supabase.from('bounties').update({ status: 'closed' }).eq('id', id)
-    const { data: bountyData } = await supabase
-      .from('bounties')
-      .select('*, product(*), profile:profiles(*)')
-      .eq('id', id)
-      .single()
-    setBounty(bountyData as Bounty | null)
+    if (!id) return
+    await supabase.rpc('close_bounty', { p_bounty_id: id })
+    await reloadBountyAndClaims()
   }
 
   if (loading) {
@@ -273,10 +253,10 @@ export default function BountyDetail() {
                       </button>
                     </div>
                   )}
-                  {claim.status === 'accepted' && claim.finder?.contact_info && (
+                  {claim.status === 'accepted' && claimContacts[claim.finder_id] && (
                     <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm">
                       <p className="font-medium text-green-800">Contact info:</p>
-                      <p className="mt-1 text-green-700">{claim.finder.contact_info}</p>
+                      <p className="mt-1 text-green-700">{claimContacts[claim.finder_id]}</p>
                     </div>
                   )}
                 </div>
@@ -391,7 +371,7 @@ export default function BountyDetail() {
           </p>
           <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm">
             <p className="font-medium text-green-800">{bounty.profile?.username}'s contact info:</p>
-            <p className="mt-1 text-green-700">{bounty.profile?.contact_info || 'No contact info provided'}</p>
+            <p className="mt-1 text-green-700">{ownerContact || 'No contact info provided'}</p>
           </div>
         </div>
       )}

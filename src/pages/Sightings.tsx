@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import type { Sighting, Product } from '../types/database'
+import type { Sighting, Product, Trend } from '../types/database'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { haversineMiles } from '../lib/distance'
@@ -9,28 +9,46 @@ import { haversineMiles } from '../lib/distance'
 export default function Sightings() {
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [trends, setTrends] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
+  const [trendFilter, setTrendFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
   const [zipFilter, setZipFilter] = useState('')
   const [radiusFilter, setRadiusFilter] = useState('50')
 
   useEffect(() => {
-    supabase.from('products').select('*').order('name').then(({ data }) => {
+    supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
+      setTrends(data as Trend[] ?? [])
+    })
+    supabase.from('products').select('*, trend(*)').order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])
+
+  const filteredProducts = trendFilter
+    ? products.filter((p) => p.trend_id === trendFilter)
+    : products
 
   useEffect(() => {
     async function load() {
       setLoading(true)
       let query = supabase
         .from('sightings')
-        .select('*, product(*), profile:profiles(*)')
+        .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
 
       if (productFilter) {
         query = query.eq('product_id', productFilter)
+      } else if (trendFilter) {
+        const trendProductIds = products.filter((p) => p.trend_id === trendFilter).map((p) => p.id)
+        if (trendProductIds.length > 0) {
+          query = query.in('product_id', trendProductIds)
+        } else {
+          setSightings([])
+          setLoading(false)
+          return
+        }
       }
 
       const { data } = await query
@@ -74,7 +92,7 @@ export default function Sightings() {
       setLoading(false)
     }
     load()
-  }, [productFilter, zipFilter, radiusFilter])
+  }, [productFilter, trendFilter, zipFilter, radiusFilter, products])
 
   return (
     <div className="space-y-4">
@@ -85,14 +103,24 @@ export default function Sightings() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <select
+          className="input sm:w-auto"
+          value={trendFilter}
+          onChange={(e) => { setTrendFilter(e.target.value); setProductFilter('') }}
+        >
+          <option value="">All trends</option>
+          {trends.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
         <select
           className="input sm:w-auto"
           value={productFilter}
           onChange={(e) => setProductFilter(e.target.value)}
         >
           <option value="">All products</option>
-          {products.map((p) => (
+          {filteredProducts.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>

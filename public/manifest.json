@@ -1,7 +1,7 @@
 {
   "name": "FindItViral",
   "short_name": "FindItViral",
-  "description": "Find hard-to-find viral products. Post bounties, report sightings, connect with finders.",
+  "description": "FindItViral is building a better way to find the hard-to-find. Join the early-access list.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff7ed",

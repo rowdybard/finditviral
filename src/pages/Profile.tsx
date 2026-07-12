@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import type { Profile, Bounty, Sighting } from '../types/database'
+import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
@@ -13,9 +13,12 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
+  const [claims, setClaims] = useState<BountyClaim[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [contactInfo, setContactInfo] = useState('')
+  const [savedContactInfo, setSavedContactInfo] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const isOwnProfile = user?.id === profile?.id
@@ -25,7 +28,7 @@ export default function ProfilePage() {
     async function load() {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, username, karma, is_pro, created_at')
         .eq('username', username)
         .single()
       if (!profileData) {
@@ -33,38 +36,65 @@ export default function ProfilePage() {
         return
       }
       setProfile(profileData as Profile)
+      const ownProfile = user?.id === profileData.id
 
-      const [bountiesRes, sightingsRes] = await Promise.all([
+      const [bountiesRes, sightingsRes, claimsRes, contactRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('user_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(*)')
+          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(20),
+        supabase
+          .from('bounty_claims')
+          .select('*, bounty:bounties(*, product(*)), finder:profiles(id, username, karma, is_pro, created_at)')
+          .eq('finder_id', profileData.id)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        ownProfile
+          ? supabase
+              .from('profile_contacts')
+              .select('user_id, contact_info, created_at, updated_at')
+              .eq('user_id', profileData.id)
+              .single()
+          : Promise.resolve({ data: null }),
       ])
 
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
+      setClaims(claimsRes.data as BountyClaim[] ?? [])
+      setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
       setLoading(false)
     }
     load()
-  }, [username])
+  }, [username, user?.id])
 
   async function handleSaveContact() {
     if (!profile) return
+    setSaveError(null)
     setSaving(true)
-    await supabase
-      .from('profiles')
-      .update({ contact_info: contactInfo.trim() || null })
-      .eq('id', profile.id)
-    setProfile({ ...profile, contact_info: contactInfo.trim() || null })
+    const nextContactInfo = contactInfo.trim() || null
+    const { error } = await supabase
+      .from('profile_contacts')
+      .upsert(
+        { user_id: profile.id, contact_info: nextContactInfo },
+        { onConflict: 'user_id' },
+      )
+
+    if (error) {
+      setSaveError(error.message)
+      setSaving(false)
+      return
+    }
+
+    setSavedContactInfo(nextContactInfo)
     setEditing(false)
     setSaving(false)
   }
@@ -116,7 +146,7 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Contact info</h2>
             {!editing && (
-              <button onClick={() => { setContactInfo(profile.contact_info ?? ''); setEditing(true) }} className="btn-ghost text-sm">
+              <button onClick={() => { setContactInfo(savedContactInfo ?? ''); setEditing(true); setSaveError(null) }} className="btn-ghost text-sm">
                 Edit
               </button>
             )}
@@ -133,6 +163,9 @@ export default function ProfilePage() {
               <p className="text-xs text-gray-500">
                 This is shown to bounty posters when they accept your claim. It is never public.
               </p>
+              {saveError && (
+                <p className="text-xs text-red-600">{saveError}</p>
+              )}
               <div className="flex gap-2">
                 <button onClick={handleSaveContact} className="btn-primary text-sm" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
@@ -144,7 +177,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             <p className="mt-2 text-sm text-gray-600">
-              {profile.contact_info || 'No contact info set. Add one so bounty posters can reach you.'}
+              {savedContactInfo || 'No contact info set. Add one so bounty posters can reach you.'}
             </p>
           )}
         </div>
@@ -173,6 +206,35 @@ export default function ProfilePage() {
           </div>
         ) : (
           <p className="text-sm text-gray-500">No public sightings reported.</p>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Claim History ({claims.length})</h2>
+        {claims.length > 0 ? (
+          <div className="space-y-3">
+            {claims.map((c) => (
+              <div key={c.id} className="card">
+                <div className="flex items-center justify-between">
+                  <Link
+                    to={`/bounties/${c.bounty_id}`}
+                    className="truncate font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    {c.bounty?.product?.name ?? 'Unknown product'}
+                  </Link>
+                  <span className={`badge ${
+                    c.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                    c.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {c.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No claims submitted.</p>
         )}
       </section>
     </div>
