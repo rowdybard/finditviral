@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, newSession) => {
         setSession(newSession)
         if (newSession) {
+          setLoading(true)
           fetchProfile(newSession.user.id)
         } else {
           setProfile(null)

@@ -19,7 +19,8 @@ function OnboardingRedirect({ children }: { children: React.ReactNode }) {
   const location = useLocation()
 
   if (loading || !user) return <>{children}</>
-  if (profile && !profile.onboarding_completed && location.pathname !== '/onboarding') {
+  const needsOnboarding = !profile || !profile.onboarding_completed
+  if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />
   }
   return <>{children}</>
