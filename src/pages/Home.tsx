@@ -122,7 +122,7 @@ export default function Home() {
           </div>
         ) : (
           <EmptyState
-            title="No open bounties in Greater Lansing yet"
+            title="No open bounties yet"
             message="Be the first to post a bounty for a hard-to-find product."
             action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
           />
@@ -144,7 +144,7 @@ export default function Home() {
           </div>
         ) : (
           <EmptyState
-            title="No sightings reported in Greater Lansing yet"
+            title="No sightings reported yet"
             message="Report what you find to help other shoppers avoid wasted trips."
             action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
           />
