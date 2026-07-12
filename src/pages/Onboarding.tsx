@@ -357,7 +357,7 @@ export default function Onboarding() {
                 <p className="text-sm font-medium text-brand-800">
                   You already have <span className="font-bold">3 months free Pro</span> from our launch promo!
                 </p>
-                <p className="mt-1 text-xs text-brand-600">
+                <p className="mt-1 text-sm text-brand-600">
                   Refer 9 friends for a full year of Pro — completely free.
                 </p>
               </div>

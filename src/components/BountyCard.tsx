@@ -23,12 +23,12 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
             {bounty.product?.name ?? 'Unknown product'}
           </h3>
           {bounty.product?.trend && (
-            <p className="text-xs text-brand-500">{bounty.product.trend.name}</p>
+            <p className="text-sm text-brand-500">{bounty.product.trend.name}</p>
           )}
           <p className="mt-0.5 truncate text-sm text-gray-500">
             {bounty.notes || 'No additional notes'}
           </p>
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+          <div className="mt-2 flex items-center gap-3 text-sm text-gray-400">
             <span>ZIP {bounty.zip_code}</span>
             <span>·</span>
             <span>{bounty.radius_miles}mi radius</span>
@@ -44,7 +44,7 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
             <span>{timeAgo(bounty.created_at)}</span>
           </div>
           {bounty.profile && (
-            <p className="mt-1 text-xs text-gray-400">by @{bounty.profile.username}</p>
+            <p className="mt-1 text-sm text-gray-400">by @{bounty.profile.username}</p>
           )}
         </div>
       </div>

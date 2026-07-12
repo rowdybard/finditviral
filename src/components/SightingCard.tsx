@@ -20,12 +20,12 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
             {sighting.product?.name ?? 'Unknown product'}
           </h3>
           {sighting.product?.trend && (
-            <p className="text-xs text-brand-500">{sighting.product.trend.name}</p>
+            <p className="text-sm text-brand-500">{sighting.product.trend.name}</p>
           )}
           <p className="mt-0.5 truncate text-sm text-gray-600">
             {sighting.store_name}
           </p>
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+          <div className="mt-2 flex items-center gap-3 text-sm text-gray-400">
             {sighting.city && sighting.state && (
               <>
                 <span>{sighting.city}, {sighting.state}</span>
@@ -49,7 +49,7 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
             <span>{timeAgo(sighting.created_at)}</span>
           </div>
           {sighting.profile && (
-            <p className="mt-1 text-xs text-gray-400">by @{sighting.profile.username}</p>
+            <p className="mt-1 text-sm text-gray-400">by @{sighting.profile.username}</p>
           )}
           {sighting.photo_urls && sighting.photo_urls.length > 0 && (
             <div className="mt-2 flex gap-1.5">

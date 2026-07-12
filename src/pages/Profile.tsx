@@ -213,11 +213,11 @@ export default function ProfilePage() {
                 placeholder="Email, Discord, Venmo, etc."
                 maxLength={200}
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 This is shown to bounty posters when they accept your claim. It is never public.
               </p>
               {saveError && (
-                <p className="text-xs text-red-600">{saveError}</p>
+                <p className="text-sm text-red-600">{saveError}</p>
               )}
               <div className="flex gap-2">
                 <button onClick={handleSaveContact} className="btn-primary text-sm" disabled={saving}>

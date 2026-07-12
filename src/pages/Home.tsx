@@ -84,9 +84,9 @@ export default function Home() {
                 >
                   <h3 className="font-semibold text-gray-900">{trend.name}</h3>
                   {trend.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-gray-500">{trend.description}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{trend.description}</p>
                   )}
-                  <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                  <div className="mt-2 flex items-center gap-3 text-sm text-gray-400">
                     <span>{trendProducts.length} products</span>
                     <span>·</span>
                     <span>{trendBounties.length} bounties</span>

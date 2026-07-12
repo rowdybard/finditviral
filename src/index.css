@@ -9,6 +9,12 @@
 
   body {
     @apply bg-stone-50 text-stone-900 antialiased;
+    font-size: 0.875rem;
+  }
+
+  .text-legible {
+    font-size: max(0.75rem, 12px);
+    line-height: 1.5;
   }
 }
 
