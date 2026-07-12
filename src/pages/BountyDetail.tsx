@@ -6,6 +6,7 @@ import type { Bounty, BountyClaim, ProfileContact } from '../types/database'
 import { formatReward, timeAgo, statusColor, statusLabel } from '../lib/utils'
 import { trackEvent } from '../lib/analytics'
 import EmptyState from '../components/EmptyState'
+import { activeMarket } from '../lib/market'
 
 export default function BountyDetail() {
   const { id } = useParams<{ id: string }>()
@@ -23,6 +24,8 @@ export default function BountyDetail() {
   const [claimStock, setClaimStock] = useState('in_stock')
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const isOwner = user?.id === bounty?.user_id
 
@@ -129,19 +132,32 @@ export default function BountyDetail() {
   }
 
   async function handleClaimAction(claimId: string, action: 'accepted' | 'rejected') {
+    setActionError(null)
+    setActionLoading(claimId)
     const { error } = await supabase.rpc(
       action === 'accepted' ? 'accept_bounty_claim' : 'reject_bounty_claim',
       { p_claim_id: claimId },
     )
 
-    if (error) return
+    setActionLoading(null)
+    if (error) {
+      setActionError(error.message)
+      return
+    }
     if (action === 'accepted') trackEvent('accept_claim')
     await reloadBountyAndClaims()
   }
 
   async function handleClose() {
     if (!id) return
-    await supabase.rpc('close_bounty', { p_bounty_id: id })
+    setActionError(null)
+    setActionLoading('close')
+    const { error } = await supabase.rpc('close_bounty', { p_bounty_id: id })
+    setActionLoading(null)
+    if (error) {
+      setActionError(error.message)
+      return
+    }
     await reloadBountyAndClaims()
   }
 
@@ -192,6 +208,9 @@ export default function BountyDetail() {
             {bounty.notes}
           </p>
         )}
+        <p className="mt-3 text-xs text-gray-400">
+          {activeMarket.trustNotice}
+        </p>
         <Link
           to={`/profile/${bounty.profile?.username ?? ''}`}
           className="mt-3 inline-block text-sm font-medium text-brand-600 hover:text-brand-700"
@@ -205,11 +224,16 @@ export default function BountyDetail() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Claims ({claims.length})</h2>
             {bounty.status === 'open' && (
-              <button onClick={handleClose} className="btn-ghost text-sm">
-                Close bounty
+              <button onClick={handleClose} className="btn-ghost text-sm" disabled={actionLoading === 'close'}>
+                {actionLoading === 'close' ? 'Closing...' : 'Close bounty'}
               </button>
             )}
           </div>
+          {actionError && (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {actionError}
+            </div>
+          )}
           {claims.length > 0 ? (
             <div className="space-y-3">
               {claims.map((claim) => (
@@ -244,14 +268,16 @@ export default function BountyDetail() {
                       <button
                         onClick={() => handleClaimAction(claim.id, 'accepted')}
                         className="btn-primary text-sm"
+                        disabled={actionLoading === claim.id}
                       >
-                        Accept
+                        {actionLoading === claim.id ? '...' : 'Accept'}
                       </button>
                       <button
                         onClick={() => handleClaimAction(claim.id, 'rejected')}
                         className="btn-secondary text-sm"
+                        disabled={actionLoading === claim.id}
                       >
-                        Reject
+                        {actionLoading === claim.id ? '...' : 'Reject'}
                       </button>
                     </div>
                   )}
@@ -285,6 +311,9 @@ export default function BountyDetail() {
           <p className="text-sm text-gray-500">
             Report where you found this product. The bounty poster will see your sighting and your contact info if they accept.
           </p>
+          <p className="text-xs text-gray-400">
+            Payment is arranged directly between you and the bounty poster.
+          </p>
           <div>
             <label className="label" htmlFor="claimStore">Store name *</label>
             <input
@@ -292,7 +321,8 @@ export default function BountyDetail() {
               className="input"
               value={claimStore}
               onChange={(e) => setClaimStore(e.target.value)}
-              placeholder="Walmart, Target, Five Below..."
+              placeholder={activeMarket.storePlaceholder}
+              maxLength={120}
               required
             />
           </div>
@@ -304,6 +334,7 @@ export default function BountyDetail() {
                 className="input"
                 value={claimCity}
                 onChange={(e) => setClaimCity(e.target.value)}
+                maxLength={100}
               />
             </div>
             <div className="w-20">

@@ -1,7 +1,7 @@
 {
   "name": "FindItViral",
   "short_name": "FindItViral",
-  "description": "FindItViral is building a better way to find the hard-to-find. Join the early-access list.",
+  "description": "Find viral and hard-to-find products around Greater Lansing. Check community sightings, report what you find, or post a bounty.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

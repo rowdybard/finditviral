@@ -141,7 +141,7 @@ export default function Auth() {
 
             {mode === 'signup' && (
               <p className="rounded-lg border-2 border-brand-200 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-800">
-                Sign up during launch and get <span className="font-bold">3 months free Pro</span>!
+                Create an account to start posting sightings and bounties.
               </p>
             )}
 

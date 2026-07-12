@@ -24,17 +24,25 @@ revoke all on profiles from anon, authenticated;
 revoke all on profile_contacts from anon, authenticated;
 revoke all on bounties from anon, authenticated;
 revoke all on sightings from anon, authenticated;
+revoke all on profile_locations from anon, authenticated;
 revoke all on bounty_claims from anon, authenticated;
 revoke all on zip_codes from anon, authenticated;
 
 grant select on trends, products, profiles, bounties, sightings, zip_codes to anon, authenticated;
 grant select on profile_contacts, bounty_claims to authenticated;
+grant select, insert, update on profile_locations to authenticated;
 grant insert (user_id, contact_info), update (user_id, contact_info) on profile_contacts to authenticated;
 grant insert (user_id, product_id, reward_amount, zip_code, radius_miles, notes) on bounties to authenticated;
 grant insert (user_id, product_id, store_name, city, state, zip_code, stock_level, is_public, bounty_id) on sightings to authenticated;
 
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.touch_profile_contacts_updated_at() from public, anon, authenticated;
+revoke execute on function public.touch_profile_locations_updated_at() from public, anon, authenticated;
+revoke execute on function public.complete_onboarding(text, text, text, text, text[]) from anon;
+grant execute on function public.complete_onboarding(text, text, text, text, text[]) to authenticated;
+revoke execute on function public.request_early_access(text, text) from anon, authenticated, service_role;
+grant execute on function public.request_early_access(text, text) to anon, authenticated;
+revoke execute on function pg_catalog.rls_auto_enable() from public, anon, authenticated;
 revoke execute on function public.submit_bounty_claim(uuid, text, text, text, text, text) from public, anon;
 revoke execute on function public.accept_bounty_claim(uuid) from public, anon;
 revoke execute on function public.reject_bounty_claim(uuid) from public, anon;
@@ -51,6 +59,7 @@ alter table profiles enable row level security;
 alter table profile_contacts enable row level security;
 alter table bounties enable row level security;
 alter table sightings enable row level security;
+alter table profile_locations enable row level security;
 alter table bounty_claims enable row level security;
 alter table zip_codes enable row level security;
 
@@ -72,6 +81,9 @@ drop policy if exists "sightings_private_read" on sightings;
 drop policy if exists "sightings_self_insert" on sightings;
 drop policy if exists "sightings_self_update" on sightings;
 drop policy if exists "sightings_self_delete" on sightings;
+drop policy if exists "profile_locations_self_read" on profile_locations;
+drop policy if exists "profile_locations_self_insert" on profile_locations;
+drop policy if exists "profile_locations_self_update" on profile_locations;
 drop policy if exists "claims_participant_read" on bounty_claims;
 drop policy if exists "claims_self_insert" on bounty_claims;
 drop policy if exists "claims_bounty_owner_update" on bounty_claims;
@@ -175,6 +187,19 @@ create policy "sightings_self_insert" on sightings
     and is_public = true
     and bounty_id is null
   );
+
+create policy "profile_locations_self_read" on profile_locations
+  for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "profile_locations_self_insert" on profile_locations
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "profile_locations_self_update" on profile_locations
+  for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 -- Claims are read by participants. Creation and status changes go through RPCs.
 create policy "claims_participant_read" on bounty_claims

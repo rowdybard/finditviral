@@ -20,7 +20,7 @@ export default function App() {
       <Route
         path="*"
         element={
-          <Suspense fallback={<div className="min-h-screen bg-stone-950" aria-label="Loading private access" />}>
+          <Suspense fallback={<div className="min-h-screen bg-stone-50" aria-label="Loading" />}>
             <PrivateApp />
           </Suspense>
         }

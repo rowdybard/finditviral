@@ -26,6 +26,7 @@ export type Profile = {
   referred_by?: string | null
   referral_count?: number
   looking_for?: string | null
+  preferred_cities?: string[] | null
 }
 
 export type ProfileContact = {

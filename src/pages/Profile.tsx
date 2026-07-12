@@ -31,7 +31,7 @@ export default function ProfilePage() {
     async function load() {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, username, karma, is_pro, created_at, referral_count, looking_for, onboarding_completed')
+        .select('id, username, karma, is_pro, created_at')
         .eq('username', username)
         .single()
       if (!profileData) {
@@ -41,7 +41,7 @@ export default function ProfilePage() {
       setProfile(profileData as Profile)
       const ownProfile = user?.id === profileData.id
 
-      const [bountiesRes, sightingsRes, claimsRes, contactRes] = await Promise.all([
+      const [bountiesRes, sightingsRes, claimsRes] = await Promise.all([
         supabase
           .from('bounties')
           .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
@@ -61,19 +61,31 @@ export default function ProfilePage() {
           .eq('finder_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
-        ownProfile
-          ? supabase
-              .from('profile_contacts')
-              .select('user_id, contact_info, created_at, updated_at')
-              .eq('user_id', profileData.id)
-              .single()
-          : Promise.resolve({ data: null }),
       ])
 
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
       setClaims(claimsRes.data as BountyClaim[] ?? [])
-      setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
+
+      if (ownProfile) {
+        const [ownProfileRes, contactRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, username, karma, is_pro, created_at, referral_count, looking_for, onboarding_completed, preferred_cities')
+            .eq('id', profileData.id)
+            .single(),
+          supabase
+            .from('profile_contacts')
+            .select('user_id, contact_info, created_at, updated_at')
+            .eq('user_id', profileData.id)
+            .single(),
+        ])
+        if (ownProfileRes.data) {
+          setProfile(ownProfileRes.data as Profile)
+        }
+        setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
+      }
+
       setLoading(false)
     }
     load()
@@ -194,6 +206,24 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {isOwnProfile && profile.looking_for && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">What you're looking for</h2>
+          <p className="mt-2 text-sm text-gray-600">{profile.looking_for}</p>
+        </div>
+      )}
+
+      {isOwnProfile && profile.preferred_cities && profile.preferred_cities.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">Your cities</h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {profile.preferred_cities.map((city) => (
+              <span key={city} className="badge bg-brand-100 text-brand-800">{city}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isOwnProfile && (
         <div className="card">
           <div className="flex items-center justify-between">
@@ -211,7 +241,7 @@ export default function ProfilePage() {
                 value={contactInfo}
                 onChange={(e) => setContactInfo(e.target.value)}
                 placeholder="Email, Discord, Venmo, etc."
-                maxLength={200}
+                maxLength={500}
               />
               <p className="text-sm text-gray-500">
                 This is shown to bounty posters when they accept your claim. It is never public.

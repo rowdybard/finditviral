@@ -16,7 +16,7 @@ export default function Privacy() {
             FindItViral
           </Link>
           <Link to="/" className="text-sm font-bold text-brand-700 underline-offset-4 hover:underline">
-            Back to early access
+            Back to home
           </Link>
         </div>
       </header>
@@ -30,35 +30,35 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-bold text-stone-900">What we collect</h2>
             <p className="mt-2">
-              When you join the early-access list, we store the email address you provide and your answer about what you are trying to find. Our hosting and database providers may also process standard technical information, such as an IP address, to deliver and protect the site.
+              When you create an account, we store your email address, username, ZIP code, and any preferences you share during onboarding. When you post a bounty, report a sighting, or submit a claim, we store the details you provide. If you add contact info for bounty coordination, it is stored separately and only revealed to the other party when a claim is accepted. Our hosting and database providers may also process standard technical information, such as an IP address, to deliver and protect the site.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">How we use it</h2>
             <p className="mt-2">
-              We use your submission to understand early interest, improve FindItViral, and contact you about product access. We do not sell your information or use it for unrelated advertising.
+              We use your information to provide the service — showing nearby sightings and bounties, connecting finders with bounty posters, and improving FindItViral. We do not sell your information or use it for unrelated advertising.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">Who processes it</h2>
             <p className="mt-2">
-              Cloudflare hosts the site and Supabase stores waitlist submissions. They process information on our behalf under their own security and privacy terms. We do not otherwise share waitlist data unless required by law.
+              Cloudflare hosts the site and Supabase stores account and content data. They process information on our behalf under their own security and privacy terms. We do not otherwise share your data unless required by law.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">Retention and your choices</h2>
             <p className="mt-2">
-              Waitlist submissions expire after 24 months unless they are still needed for an active early-access relationship. Every launch email will include a way to opt out or request deletion. If you never receive an email, the submission will expire automatically.
+              You can delete your account or request data deletion at any time by emailing us. Bounties, sightings, and claims you have posted may be retained as needed for the service. If you refer friends, referral data is kept only as long as needed to track your referral rewards.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">Contact</h2>
             <p className="mt-2">
-              Questions about this notice or your submission? Email{' '}
+              Questions about this notice or your account? Email{' '}
               <a href="mailto:contact@finditviral.com" className="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800">
                 contact@finditviral.com
               </a>.
@@ -68,7 +68,7 @@ export default function Privacy() {
       </main>
 
       <footer className="border-t-2 border-stone-200 py-6 text-center text-xs text-stone-500">
-        FindItViral &middot; Building a better way to find the hard-to-find.
+        FindItViral &middot; Greater Lansing Beta
       </footer>
     </div>
   )

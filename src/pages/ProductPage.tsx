@@ -93,8 +93,8 @@ export default function ProductPage() {
           </div>
         ) : (
           <EmptyState
-            title="No open bounties"
-            message="No one is hunting for this product yet."
+            title="No open bounties for this product"
+            message="Post a bounty to ask local shoppers for help finding it."
             action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
           />
         )}
@@ -115,8 +115,8 @@ export default function ProductPage() {
           </div>
         ) : (
           <EmptyState
-            title="No sightings"
-            message="No one has spotted this product yet."
+            title="No sightings reported for this product yet"
+            message="Check back later, report what you find, or post a bounty for local help."
             action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
           />
         )}

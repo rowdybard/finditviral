@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
 import type { Product, Trend } from '../types/database'
+import { activeMarket, citySuggestions } from '../lib/market'
 
 export default function NewSighting() {
   const { user } = useAuth()
@@ -14,7 +15,7 @@ export default function NewSighting() {
   const [selectedProduct, setSelectedProduct] = useState('')
   const [storeName, setStoreName] = useState('')
   const [city, setCity] = useState('')
-  const [state, setState] = useState('')
+  const [state, setState] = useState('MI')
   const [zipCode, setZipCode] = useState('')
   const [stockLevel, setStockLevel] = useState('in_stock')
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +44,18 @@ export default function NewSighting() {
     }
     if (!storeName.trim()) {
       setError('Store name is required.')
+      return
+    }
+    if (storeName.trim().length > 120) {
+      setError('Store name must be 120 characters or fewer.')
+      return
+    }
+    if (city.trim() && city.trim().length > 100) {
+      setError('City must be 100 characters or fewer.')
+      return
+    }
+    if (zipCode.trim() && !/^[0-9]{5}$/.test(zipCode.trim())) {
+      setError('Please enter a valid 5-digit ZIP code.')
       return
     }
 
@@ -76,7 +89,7 @@ export default function NewSighting() {
         <Link to="/sightings" className="text-sm text-gray-500 hover:text-gray-700">← Sightings</Link>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">Report a Sighting</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Spotted a viral product in a store? Share it with the community.
+          Spotted something? Share it so others don't waste a trip.
         </p>
       </div>
 
@@ -122,7 +135,8 @@ export default function NewSighting() {
             className="input"
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
-            placeholder="Walmart, Target, Five Below..."
+            placeholder={activeMarket.storePlaceholder}
+            maxLength={120}
             required
           />
         </div>
@@ -135,7 +149,14 @@ export default function NewSighting() {
               className="input"
               value={city}
               onChange={(e) => setCity(e.target.value)}
+              list="city-suggestions"
+              maxLength={100}
             />
+            <datalist id="city-suggestions">
+              {citySuggestions().map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </div>
           <div className="w-20">
             <label className="label" htmlFor="state">State</label>
@@ -159,7 +180,7 @@ export default function NewSighting() {
             maxLength={5}
             value={zipCode}
             onChange={(e) => setZipCode(e.target.value.replace(/\D/g, ''))}
-            placeholder="90210"
+            placeholder="48910"
           />
         </div>
 

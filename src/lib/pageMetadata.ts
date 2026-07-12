@@ -1,3 +1,5 @@
+import { activeMarket } from './market'
+
 export type PageMetadata = {
   title: string
   description: string
@@ -6,8 +8,8 @@ export type PageMetadata = {
 }
 
 const ROOT_METADATA: PageMetadata = {
-  title: 'FindItViral - Early Access',
-  description: 'FindItViral is building a better way to find the hard-to-find. Join the early-access list.',
+  title: activeMarket.seoTitle,
+  description: activeMarket.seoDescription,
   canonicalUrl: 'https://finditviral.com/',
   robots: 'index, follow',
 }
@@ -27,15 +29,15 @@ const PRIVATE_METADATA: PageMetadata = {
 }
 
 const AUTH_METADATA: PageMetadata = {
-  title: 'Sign In or Create Account - FindItViral',
-  description: 'Sign in to FindItViral or create a new account to start posting bounties and sightings.',
+  title: 'Sign In or Create Account - FindItViral | Greater Lansing Beta',
+  description: 'Sign in to FindItViral or create a new account to start posting bounties and sightings around Greater Lansing.',
   canonicalUrl: 'https://finditviral.com/auth',
   robots: 'noindex, nofollow',
 }
 
 const ONBOARDING_METADATA: PageMetadata = {
-  title: 'Welcome to FindItViral',
-  description: 'Set up your FindItViral account in a few quick steps.',
+  title: 'Join the Greater Lansing Beta - FindItViral',
+  description: 'Help Greater Lansing shoppers find products without driving from store to store. Set up your account in a few quick steps.',
   canonicalUrl: 'https://finditviral.com/onboarding',
   robots: 'noindex, nofollow',
 }

@@ -46,6 +46,14 @@ export default function NewBounty() {
       setError('Please enter a valid reward amount.')
       return
     }
+    if (reward > 10000) {
+      setError('Reward amount cannot exceed $10,000.')
+      return
+    }
+    if (Math.round(reward * 100) !== reward * 100) {
+      setError('Reward amount must have at most two decimal places.')
+      return
+    }
     if (zipCode.length !== 5) {
       setError('Please enter a valid 5-digit ZIP code.')
       return
@@ -80,7 +88,7 @@ export default function NewBounty() {
         <Link to="/bounties" className="text-sm text-gray-500 hover:text-gray-700">← Bounties</Link>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">Post a Bounty</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Offer a reward for someone to find a product for you. Payment is arranged off-platform.
+          Offer a reward for help finding a product. Payment is arranged directly — FindItViral doesn't process payments or hold funds.
         </p>
       </div>
 
@@ -126,10 +134,11 @@ export default function NewBounty() {
             className="input"
             type="number"
             min="1"
-            step="1"
+            max="10000"
+            step="0.01"
             value={rewardAmount}
             onChange={(e) => setRewardAmount(e.target.value)}
-            placeholder="20"
+            placeholder="20.00"
             required
           />
         </div>
@@ -146,7 +155,7 @@ export default function NewBounty() {
               maxLength={5}
               value={zipCode}
               onChange={(e) => setZipCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="90210"
+              placeholder="48910"
               required
             />
           </div>
@@ -175,7 +184,7 @@ export default function NewBounty() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Color preference, quantity, etc."
-            maxLength={500}
+            maxLength={2000}
           />
         </div>
 

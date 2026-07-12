@@ -97,7 +97,7 @@ export default function Sightings() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Sightings</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Local Sightings</h1>
         <Link to="/sightings/new" className="btn-primary text-sm">
           + Report Sighting
         </Link>
@@ -160,8 +160,8 @@ export default function Sightings() {
         </div>
       ) : (
         <EmptyState
-          title="No sightings found"
-          message={zipFilter ? 'No sightings within your search radius.' : 'No sightings match your filters.'}
+          title="No sightings reported yet"
+          message={zipFilter ? 'No sightings within your search radius.' : 'Check back later, report what you find, or post a bounty for local help.'}
           action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
         />
       )}

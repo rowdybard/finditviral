@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { validateUsername, normalizeUsername } from '../lib/username'
 import { getStoredReferrer, clearStoredReferrer, buildReferralLink } from '../lib/referral'
 import { trackEvent } from '../lib/analytics'
+import { activeMarket } from '../lib/market'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -18,6 +19,7 @@ export default function Onboarding() {
   const [username, setUsername] = useState('')
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
   const [zipCode, setZipCode] = useState('')
+  const [preferredCities, setPreferredCities] = useState<string[]>([])
   const [lookingFor, setLookingFor] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,22 +73,50 @@ export default function Onboarding() {
       return
     }
 
+    if (zipCode.trim() && !/^[0-9]{5}$/.test(zipCode.trim())) {
+      setError('Please enter a valid 5-digit ZIP code.')
+      setStep(1)
+      setSubmitting(false)
+      return
+    }
+
+    if (preferredCities.length < 1) {
+      setError('Please select at least one city.')
+      setStep(1)
+      setSubmitting(false)
+      return
+    }
+
     try {
       const { error: rpcError } = await supabase.rpc('complete_onboarding', {
         p_username: cleanUsername,
         p_zip_code: zipCode.trim() || null,
         p_looking_for: lookingFor.trim() || null,
         p_referrer_username: referrer || null,
+        p_preferred_cities: preferredCities,
       })
 
       if (rpcError) {
         const msg = rpcError.message
-        if (msg.includes('taken') || msg.includes('23505')) {
+        if (msg.includes('already completed') || msg.includes('55006')) {
+          await refreshProfile()
+          navigate('/home', { replace: true })
+          return
+        } else if (msg.includes('taken') || msg.includes('23505')) {
           setError('That username is taken. Try another one.')
           setStep(0)
         } else if (msg.includes('Username must be')) {
           setError(msg)
           setStep(0)
+        } else if (msg.includes('Invalid ZIP')) {
+          setError('Please enter a valid 5-digit ZIP code.')
+          setStep(1)
+        } else if (msg.includes('at least one city')) {
+          setError('Please select at least one city.')
+          setStep(1)
+        } else if (msg.includes('500 characters')) {
+          setError('Looking for must be 500 characters or fewer.')
+          setStep(2)
         } else {
           setError('Something went wrong. Please try again.')
         }
@@ -95,7 +125,7 @@ export default function Onboarding() {
       }
 
       await refreshProfile()
-      trackEvent('complete_onboarding', { has_referrer: !!referrer, has_zip: !!zipCode.trim() })
+      trackEvent('complete_onboarding', { has_referrer: !!referrer, has_zip: !!zipCode.trim(), city_count: preferredCities.length })
       clearStoredReferrer()
       navigate('/home', { replace: true })
     } catch {
@@ -188,9 +218,9 @@ export default function Onboarding() {
             <form onSubmit={handleNext} className="space-y-5">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Step 1 of 4</p>
-                <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Welcome! Pick your username</h1>
+                <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Set up your account</h1>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  This is the name others see when you post bounties or sightings.
+                  {activeMarket.onboardingHelp}
                 </p>
               </div>
 
@@ -248,9 +278,9 @@ export default function Onboarding() {
             <form onSubmit={handleNext} className="space-y-5">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Step 2 of 4</p>
-                <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Where are you hunting?</h1>
+                <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Where are you shopping?</h1>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  We'll show you bounties and sightings near you.
+                  {activeMarket.onboardingLocationHelp}
                 </p>
               </div>
 
@@ -266,9 +296,50 @@ export default function Onboarding() {
                   pattern="[0-9]{5}"
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                  placeholder="12345"
+                  placeholder="48910"
                   maxLength={5}
                 />
+              </div>
+
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-stone-800">
+                  Which cities are you interested in? <span className="text-stone-500 font-normal">(select at least 1)</span>
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  {activeMarket.cities.map((city) => {
+                    const checked = preferredCities.includes(city)
+                    return (
+                      <label
+                        key={city}
+                        className={`flex cursor-pointer items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition ${
+                          checked
+                            ? 'border-brand-500 bg-brand-50 text-brand-900'
+                            : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            if (checked) {
+                              setPreferredCities(preferredCities.filter((c) => c !== city))
+                            } else {
+                              setPreferredCities([...preferredCities, city])
+                            }
+                            setError(null)
+                          }}
+                          className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        {city}
+                      </label>
+                    )
+                  })}
+                </div>
+                {preferredCities.length > 0 && (
+                  <p className="mt-2 text-xs text-stone-500">
+                    {preferredCities.length} of {activeMarket.cities.length} selected
+                  </p>
+                )}
               </div>
 
               {error && (
@@ -280,9 +351,6 @@ export default function Onboarding() {
               <div className="flex gap-3">
                 <button type="button" onClick={() => { setStep(step - 1); setError(null) }} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
                   Back
-                </button>
-                <button type="button" onClick={handleSkip} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
-                  Skip for now
                 </button>
                 <button
                   type="submit"
@@ -314,7 +382,7 @@ export default function Onboarding() {
                   className="min-h-24 w-full resize-y rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
                   value={lookingFor}
                   onChange={(e) => setLookingFor(e.target.value)}
-                  placeholder="e.g. I'm looking for limited edition snacks, viral TikTok products, sold-out skincare items..."
+                  placeholder="e.g. limited edition snacks, Pokémon products, viral drinks, collectibles, trending toys..."
                   maxLength={500}
                 />
               </div>

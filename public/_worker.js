@@ -21,8 +21,8 @@ const SPA_ROUTES = [
 ]
 
 const ROOT_METADATA = {
-  title: 'FindItViral - Early Access',
-  description: 'FindItViral is building a better way to find the hard-to-find. Join the early-access list.',
+  title: 'FindItViral | Find Viral Products Around Greater Lansing',
+  description: 'Find recent community-reported sightings for viral and hard-to-find products around Lansing, East Lansing, Okemos, Holt, and nearby communities.',
   canonicalUrl: 'https://finditviral.com/',
   robots: 'index, follow',
 }

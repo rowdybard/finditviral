@@ -99,7 +99,7 @@ export default function Bounties() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Open Bounties</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Local Bounties</h1>
         <Link to="/bounties/new" className="btn-primary text-sm">
           + Post Bounty
         </Link>
@@ -170,8 +170,8 @@ export default function Bounties() {
         </div>
       ) : (
         <EmptyState
-          title="No bounties found"
-          message={zipFilter ? 'No bounties within your search radius.' : 'No open bounties match your filters.'}
+          title="No bounties yet"
+          message={zipFilter ? 'No bounties within your search radius.' : 'Be the first to post a bounty for a hard-to-find product.'}
           action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
         />
       )}

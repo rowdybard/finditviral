@@ -10,7 +10,7 @@ export const isSupabaseConfigured = Boolean(
 
 if (!isSupabaseConfigured) {
   console.warn(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Running in demo mode with mock data.',
+    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Supabase calls will fail.',
   )
 }
 

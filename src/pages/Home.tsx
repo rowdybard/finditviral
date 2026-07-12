@@ -5,6 +5,7 @@ import type { Trend, Bounty, Sighting, Product } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import { activeMarket } from '../lib/market'
 
 export default function Home() {
   const [trends, setTrends] = useState<Trend[]>([])
@@ -52,18 +53,24 @@ export default function Home() {
   return (
     <div className="space-y-8">
       <section className="text-center py-6">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Find hard-to-find <span className="text-brand-500">viral</span> products
+        <span className="inline-block rounded-full border border-brand-200 bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
+          {activeMarket.betaLabel}
+        </span>
+        <h1 className="mt-3 text-3xl font-bold text-gray-900">
+          Find viral products around <span className="text-brand-500">Greater Lansing</span>
         </h1>
         <p className="mt-2 text-gray-600">
-          Post bounties, report sightings, connect with finders. No fees, no middleman.
+          See what local shoppers are finding. Report what you spot, or ask for help finding something.
         </p>
-        <div className="mt-4 flex justify-center gap-3">
-          <Link to="/bounties/new" className="btn-primary">
-            Post a Bounty
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <Link to="/sightings" className="btn-primary">
+            Browse local sightings
           </Link>
           <Link to="/sightings/new" className="btn-secondary">
-            Report a Sighting
+            Report a sighting
+          </Link>
+          <Link to="/bounties/new" className="btn-secondary">
+            Post a bounty
           </Link>
         </div>
       </section>
@@ -115,7 +122,7 @@ export default function Home() {
           </div>
         ) : (
           <EmptyState
-            title="No open bounties yet"
+            title="No open bounties in Greater Lansing yet"
             message="Be the first to post a bounty for a hard-to-find product."
             action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
           />
@@ -124,7 +131,7 @@ export default function Home() {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Sightings</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Recent Local Sightings</h2>
           <Link to="/sightings" className="text-sm font-medium text-brand-600 hover:text-brand-700">
             View all →
           </Link>
@@ -137,8 +144,8 @@ export default function Home() {
           </div>
         ) : (
           <EmptyState
-            title="No sightings yet"
-            message="Report a sighting to help the community find stock."
+            title="No sightings reported in Greater Lansing yet"
+            message="Report what you find to help other shoppers avoid wasted trips."
             action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
           />
         )}
