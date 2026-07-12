@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { validateUsername, normalizeUsername } from '../lib/username'
-import { getStoredReferrer, buildReferralLink } from '../lib/referral'
+import { getStoredReferrer, clearStoredReferrer, buildReferralLink } from '../lib/referral'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -94,6 +94,7 @@ export default function Onboarding() {
       }
 
       await refreshProfile()
+      clearStoredReferrer()
       navigate('/home', { replace: true })
     } catch {
       setError('Something went wrong. Please try again.')

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getStoredReferrer, clearStoredReferrer } from '../lib/referral'
+import { getStoredReferrer } from '../lib/referral'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -36,7 +36,6 @@ export default function Auth() {
         setLoading(false)
         return
       }
-      clearStoredReferrer()
       setSuccessMessage('Account created! Check your email to confirm, then sign in.')
       setMode('signin')
       setPassword('')
