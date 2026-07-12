@@ -274,6 +274,7 @@ function applyPageMetadata(response, metadata) {
     .on('meta[property="og:url"]', setAttribute('content', metadata.canonicalUrl))
     .on('meta[name="twitter:title"]', setAttribute('content', metadata.title))
     .on('meta[name="twitter:description"]', setAttribute('content', metadata.description))
+    .on('script:not([src])', setAttribute('nonce', nonce))
     .transform(securedResponse)
 }
 
