@@ -305,7 +305,7 @@ export default function Onboarding() {
                 <span className="mb-2 block text-sm font-semibold text-stone-800">
                   Which cities are you interested in? <span className="text-stone-500 font-normal">(select at least 1)</span>
                 </span>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {activeMarket.cities.map((city) => {
                     const checked = preferredCities.includes(city)
                     return (

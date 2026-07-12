@@ -12,7 +12,7 @@ export default function Navbar() {
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <span className="hidden text-lg sm:inline">FindItViral</span>
+          <span className="text-lg">FindItViral</span>
           <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">Beta</span>
         </Link>
 

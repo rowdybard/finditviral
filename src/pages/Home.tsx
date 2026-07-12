@@ -57,14 +57,14 @@ export default function Home() {
           {activeMarket.betaLabel}
         </span>
         <h1 className="mt-3 text-3xl font-bold text-gray-900">
-          Find viral products around <span className="text-brand-500">Greater Lansing</span>
+          Find viral products around <span className="text-brand-500">{activeMarket.name}</span>
         </h1>
         <p className="mt-2 text-gray-600">
           See what local shoppers are finding. Report what you spot, or ask for help finding something.
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link to="/sightings" className="btn-primary">
-            Browse local sightings
+            Browse sightings
           </Link>
           <Link to="/sightings/new" className="btn-secondary">
             Report a sighting
@@ -131,7 +131,7 @@ export default function Home() {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Local Sightings</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Recent Sightings</h2>
           <Link to="/sightings" className="text-sm font-medium text-brand-600 hover:text-brand-700">
             View all →
           </Link>

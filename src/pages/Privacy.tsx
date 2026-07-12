@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { activeMarket } from '../lib/market'
 
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
@@ -68,7 +69,7 @@ export default function Privacy() {
       </main>
 
       <footer className="border-t-2 border-stone-200 py-6 text-center text-xs text-stone-500">
-        FindItViral &middot; Greater Lansing Beta
+        FindItViral &middot; {activeMarket.betaLabel}
       </footer>
     </div>
   )

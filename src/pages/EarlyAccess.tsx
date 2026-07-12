@@ -29,22 +29,16 @@ export default function EarlyAccess() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
         <section className="max-w-2xl text-center" aria-labelledby="early-access-title">
-          <h1 id="early-access-title" className="text-5xl font-extrabold tracking-tight text-stone-900 sm:text-6xl lg:text-7xl">
-            Find viral products around <span className="text-brand-600">Greater Lansing</span>.
+          <h1 id="early-access-title" className="text-4xl font-extrabold tracking-tight text-stone-900 sm:text-6xl lg:text-7xl">
+            Find viral products around <span className="text-brand-600">{activeMarket.name}</span>.
           </h1>
           <div className="mx-auto mt-8 max-w-xl space-y-5 text-base leading-7 text-stone-600 sm:text-lg sm:leading-8">
             <p>
-              See what's in stock at stores near you before you make the trip. Post a bounty if you can't find it.
-            </p>
-          </div>
-          <div className="mx-auto mt-7 max-w-xl rounded-xl border-2 border-brand-300 bg-brand-50 px-5 py-4 text-left">
-            <p className="text-sm font-bold text-brand-800">Launch special: 3 months free Pro!</p>
-            <p className="mt-1 text-sm text-brand-700">
-              Sign up during launch and get 3 months of Pro features free. Refer friends and earn up to 9 more months — a full year free.
+              See what's in stock at stores near you before you make the trip. Snacks, collectibles, trending toys — post a bounty if you can't find it.
             </p>
           </div>
 
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
             <Link
               to="/auth"
               className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-brand-500 px-6 py-3.5 text-base font-bold text-stone-950 ${TOY_SHADOW} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#1c1917] focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50 motion-reduce:transition-none motion-reduce:hover:translate-x-0 motion-reduce:hover:translate-y-0`}
@@ -58,6 +52,18 @@ export default function EarlyAccess() {
             >
               Browse sightings
             </Link>
+            <Link
+              to="/sightings/new"
+              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-300 bg-stone-50 px-5 py-3.5 text-base font-bold text-stone-700 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50`}
+            >
+              Report a sighting
+            </Link>
+          </div>
+
+          <div className="mx-auto mt-6 max-w-xl rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-left">
+            <p className="text-xs font-medium text-brand-700">
+              Free during beta. Sign up now and get 3 months of Pro features free — refer friends for up to a full year.
+            </p>
           </div>
         </section>
       </main>

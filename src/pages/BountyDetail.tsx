@@ -305,6 +305,12 @@ export default function BountyDetail() {
         </button>
       )}
 
+      {!isOwner && user && bounty.status !== 'open' && (
+        <p className="card text-sm text-gray-500">
+          This bounty is {bounty.status}. <Link to="/bounties" className="text-brand-600 hover:text-brand-700 font-medium">Browse other bounties →</Link>
+        </p>
+      )}
+
       {!isOwner && user && bounty.status === 'open' && showClaimForm && (
         <form onSubmit={handleClaimSubmit} className="card space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Claim this bounty</h2>
