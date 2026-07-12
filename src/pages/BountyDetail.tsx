@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Bounty, BountyClaim, ProfileContact } from '../types/database'
 import { formatReward, timeAgo, statusColor, statusLabel } from '../lib/utils'
+import { trackEvent } from '../lib/analytics'
 import EmptyState from '../components/EmptyState'
 
 export default function BountyDetail() {
@@ -134,6 +135,7 @@ export default function BountyDetail() {
     )
 
     if (error) return
+    if (action === 'accepted') trackEvent('accept_claim')
     await reloadBountyAndClaims()
   }
 

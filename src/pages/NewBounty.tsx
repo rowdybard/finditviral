@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { trackEvent } from '../lib/analytics'
 import type { Product, Trend } from '../types/database'
 
 export default function NewBounty() {
@@ -69,6 +70,7 @@ export default function NewBounty() {
       setError(insertError.message)
       return
     }
+    trackEvent('post_bounty', { reward_amount: reward })
     navigate(`/bounties/${data.id}`)
   }
 

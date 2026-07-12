@@ -38,12 +38,18 @@ export default function Navbar() {
           </NavLink>
           {user ? (
             <div className="flex items-center gap-2">
-              <Link
-                to={`/profile/${profile?.username ?? ''}`}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
-              >
-                {profile?.username ?? 'Profile'}
-              </Link>
+              {profile?.username ? (
+                <Link
+                  to={`/profile/${profile.username}`}
+                  className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
+                >
+                  {profile.username}
+                </Link>
+              ) : (
+                <span className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-400">
+                  Profile
+                </span>
+              )}
               <button onClick={signOut} className="btn-ghost px-3 py-1.5 text-sm">
                 Logout
               </button>

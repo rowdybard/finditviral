@@ -7,6 +7,7 @@ import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { buildReferralLink } from '../lib/referral'
+import { trackEvent } from '../lib/analytics'
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
@@ -161,6 +162,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(buildReferralLink(profile.username)).then(() => {
+                  trackEvent('share_referral')
                   setCopied(true)
                   setTimeout(() => setCopied(false), 2000)
                 })

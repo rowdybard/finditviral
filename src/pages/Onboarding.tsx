@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { validateUsername, normalizeUsername } from '../lib/username'
 import { getStoredReferrer, clearStoredReferrer, buildReferralLink } from '../lib/referral'
+import { trackEvent } from '../lib/analytics'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -11,7 +12,7 @@ const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 const STEPS = ['Username', 'Location', 'Interests', 'Referral'] as const
 
 export default function Onboarding() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [username, setUsername] = useState('')
@@ -94,6 +95,7 @@ export default function Onboarding() {
       }
 
       await refreshProfile()
+      trackEvent('complete_onboarding', { has_referrer: !!referrer, has_zip: !!zipCode.trim() })
       clearStoredReferrer()
       navigate('/home', { replace: true })
     } catch {
@@ -137,21 +139,21 @@ export default function Onboarding() {
     }
   }
 
-  const referralLink = profile?.username
-    ? buildReferralLink(profile.username)
-    : buildReferralLink(normalizeUsername(username) || 'your-username')
+  const referralLink = buildReferralLink(normalizeUsername(username) || 'your-username')
 
   function copyReferralLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
+      trackEvent('share_referral')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
   }
 
-  if (!user) {
-    navigate('/auth', { replace: true })
-    return null
-  }
+  useEffect(() => {
+    if (!user) navigate('/auth', { replace: true })
+  }, [user, navigate])
+
+  if (!user) return null
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900">
@@ -276,6 +278,9 @@ export default function Onboarding() {
               )}
 
               <div className="flex gap-3">
+                <button type="button" onClick={() => { setStep(step - 1); setError(null) }} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
+                  Back
+                </button>
                 <button type="button" onClick={handleSkip} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
                   Skip for now
                 </button>
@@ -321,6 +326,9 @@ export default function Onboarding() {
               )}
 
               <div className="flex gap-3">
+                <button type="button" onClick={() => { setStep(step - 1); setError(null) }} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
+                  Back
+                </button>
                 <button type="button" onClick={handleSkip} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
                   Skip for now
                 </button>
@@ -380,14 +388,21 @@ export default function Onboarding() {
                 </p>
               )}
 
-              <button
-                type="button"
-                onClick={handleFinish}
-                disabled={submitting}
-                className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-                {submitting ? 'Setting up your account...' : 'Go to dashboard'}
-              </button>
+              <div className="flex gap-3">
+                {step > 0 && (
+                  <button type="button" onClick={() => { setStep(step - 1); setError(null) }} className="flex-1 rounded-lg border-2 border-stone-300 bg-white px-4 py-3 text-sm font-bold text-stone-600 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2">
+                    Back
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleFinish}
+                  disabled={submitting}
+                  className={`flex-1 rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {submitting ? 'Setting up...' : 'Go to dashboard'}
+                </button>
+              </div>
             </div>
           )}
         </div>

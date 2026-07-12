@@ -50,15 +50,15 @@ function createContentSecurityPolicy(nonce) {
   return [
     "default-src 'self'",
     "base-uri 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com https://www.google-analytics.com",
     "font-src 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "frame-src https://challenges.cloudflare.com",
-    "img-src 'self' data: https://images.unsplash.com",
+    "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com",
     "manifest-src 'self'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' https://static.cloudflareinsights.com https://challenges.cloudflare.com`,
+    `script-src 'self' 'nonce-${nonce}' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com`,
     "style-src 'self'",
     'upgrade-insecure-requests',
   ].join('; ')

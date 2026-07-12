@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getStoredReferrer } from '../lib/referral'
+import { trackEvent } from '../lib/analytics'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -35,6 +36,7 @@ export default function Auth() {
         setError(signUpError)
         setLoading(false)
         return
+      trackEvent('sign_up', { method: 'email' })
       }
       setSuccessMessage('Account created! Check your email to confirm, then sign in.')
       setMode('signin')
@@ -45,6 +47,7 @@ export default function Auth() {
       if (signInError) {
         setError(signInError)
         setLoading(false)
+      trackEvent('login', { method: 'email' })
         return
       }
       navigate('/home', { replace: true })
