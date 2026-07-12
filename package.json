@@ -15,15 +15,6 @@
     "deploy": "npm run build && wrangler pages deploy ./dist --project-name finditviral --branch main"
   },
   "dependencies": {
-    "@fontsource-variable/baloo-2": "^5.2.7",
-    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
-    "@fontsource-variable/fredoka": "^5.2.10",
-    "@fontsource-variable/gabarito": "^5.2.8",
-    "@fontsource-variable/inter": "^5.2.8",
-    "@fontsource-variable/manrope": "^5.2.8",
-    "@fontsource-variable/nunito": "^5.2.7",
-    "@fontsource-variable/quicksand": "^5.2.10",
-    "@fontsource-variable/sora": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
     "@supabase/supabase-js": "^2.110.2",
     "react": "^18.3.1",

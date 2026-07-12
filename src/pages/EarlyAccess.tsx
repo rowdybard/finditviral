@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import FontPicker from '../components/FontPicker'
 import TurnstileWidget, { resetTurnstile } from '../components/TurnstileWidget'
 import {
   EarlyAccessConfigurationError,
@@ -261,7 +260,6 @@ export default function EarlyAccess() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span>FindItViral &middot; Building a better way to find the hard-to-find.</span>
           <span className="flex flex-wrap items-center gap-4">
-            <FontPicker />
             <a href="mailto:contact@finditviral.com" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">
               contact@finditviral.com
             </a>
