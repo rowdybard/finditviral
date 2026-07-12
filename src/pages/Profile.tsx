@@ -6,6 +6,7 @@ import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import { buildReferralLink } from '../lib/referral'
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [savedContactInfo, setSavedContactInfo] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const isOwnProfile = user?.id === profile?.id
 
@@ -28,7 +30,7 @@ export default function ProfilePage() {
     async function load() {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, username, karma, is_pro, created_at')
+        .select('id, username, karma, is_pro, created_at, referral_count, looking_for, onboarding_completed')
         .eq('username', username)
         .single()
       if (!profileData) {
@@ -140,6 +142,55 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {isOwnProfile && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">Your referral link</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Get 1 month free Pro for each friend who signs up (up to 9 months).
+          </p>
+          <div className="mt-3 flex gap-2">
+            <input
+              className="input flex-1 text-sm"
+              type="text"
+              value={buildReferralLink(profile.username)}
+              readOnly
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(buildReferralLink(profile.username)).then(() => {
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                })
+              }}
+              className="btn-secondary text-sm whitespace-nowrap"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          {(profile.referral_count ?? 0) > 0 && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>{profile.referral_count} friend{(profile.referral_count ?? 0) === 1 ? '' : 's'} referred</span>
+                <span>{profile.referral_count} / 9</span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-all"
+                  style={{ width: `${Math.min(((profile.referral_count ?? 0) / 9) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {profile.is_pro && (
+            <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs font-medium text-brand-700">
+              ✓ You have 3 months free Pro from the launch promo!
+            </p>
+          )}
+        </div>
+      )}
 
       {isOwnProfile && (
         <div className="card">

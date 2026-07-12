@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /home
+Disallow: /auth
+Disallow: /onboarding
 Disallow: /trends/
 Disallow: /products/
 Disallow: /bounties

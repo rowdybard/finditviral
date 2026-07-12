@@ -10,6 +10,8 @@ const UPSTREAM_TIMEOUT_MS = 10_000
 
 const SPA_ROUTES = [
   /^\/privacy\/?$/,
+  /^\/auth\/?$/,
+  /^\/onboarding\/?$/,
   /^\/home\/?$/,
   /^\/trends\//,
   /^\/products\//,

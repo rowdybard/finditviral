@@ -26,6 +26,20 @@ const PRIVATE_METADATA: PageMetadata = {
   robots: 'noindex, nofollow',
 }
 
+const AUTH_METADATA: PageMetadata = {
+  title: 'Sign In or Create Account - FindItViral',
+  description: 'Sign in to FindItViral or create a new account to start posting bounties and sightings.',
+  canonicalUrl: 'https://finditviral.com/auth',
+  robots: 'noindex, nofollow',
+}
+
+const ONBOARDING_METADATA: PageMetadata = {
+  title: 'Welcome to FindItViral',
+  description: 'Set up your FindItViral account in a few quick steps.',
+  canonicalUrl: 'https://finditviral.com/onboarding',
+  robots: 'noindex, nofollow',
+}
+
 function normalizePathname(pathname: string) {
   if (pathname === '/') return pathname
   return pathname.replace(/\/+$/, '') || '/'
@@ -35,6 +49,8 @@ export function getPageMetadata(pathname: string): PageMetadata {
   const normalizedPathname = normalizePathname(pathname)
   if (normalizedPathname === '/') return ROOT_METADATA
   if (normalizedPathname === '/privacy') return PRIVACY_METADATA
+  if (normalizedPathname === '/auth') return AUTH_METADATA
+  if (normalizedPathname === '/onboarding') return ONBOARDING_METADATA
   return {
     ...PRIVATE_METADATA,
     canonicalUrl: `https://finditviral.com${normalizedPathname}`,

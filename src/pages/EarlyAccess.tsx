@@ -8,6 +8,7 @@ import {
   getTurnstileSiteKey,
   submitEarlyAccess,
 } from '../lib/earlyAccess'
+import { captureReferrer } from '../lib/referral'
 
 type SubmissionState = 'idle' | 'submitting' | 'success' | 'error'
 
@@ -39,6 +40,10 @@ export default function EarlyAccess() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const [turnstileUnavailable, setTurnstileUnavailable] = useState(false)
   const turnstileSiteKey = getTurnstileSiteKey()
+
+  useEffect(() => {
+    captureReferrer()
+  }, [])
 
   useEffect(() => {
     if (status === 'success') successHeadingRef.current?.focus()
@@ -125,14 +130,29 @@ export default function EarlyAccess() {
               We are keeping the product private while we make it genuinely useful. Join the early-access list if you want to help shape the first release and be among the first invited in.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={scrollToForm}
-            className={`mt-9 inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#1c1917] focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50 motion-reduce:transition-none motion-reduce:hover:translate-x-0 motion-reduce:hover:translate-y-0`}
-          >
-            Sign up for early access
-            <span aria-hidden="true">&rarr;</span>
-          </button>
+          <div className="mt-7 rounded-xl border-2 border-brand-300 bg-brand-50 px-5 py-4">
+            <p className="text-sm font-bold text-brand-800">Launch special: 3 months free Pro!</p>
+            <p className="mt-1 text-sm text-brand-700">
+              Sign up during launch and get 3 months of Pro features free. Refer friends and earn up to 9 more months — a full year free.
+            </p>
+          </div>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={scrollToForm}
+              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#1c1917] focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50 motion-reduce:transition-none motion-reduce:hover:translate-x-0 motion-reduce:hover:translate-y-0`}
+            >
+              Join the early list
+              <span aria-hidden="true">&rarr;</span>
+            </button>
+            <Link
+              to="/auth"
+              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-white px-5 py-3 text-sm font-bold text-stone-900 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50`}
+            >
+              Create an account
+            </Link>
+          </div>
         </section>
 
         <section

@@ -22,6 +22,10 @@ export type Profile = {
   karma: number
   is_pro: boolean
   created_at: string
+  onboarding_completed?: boolean
+  referred_by?: string | null
+  referral_count?: number
+  looking_for?: string | null
 }
 
 export type ProfileContact = {
