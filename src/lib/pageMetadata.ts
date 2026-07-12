@@ -1,4 +1,4 @@
-import { activeMarket } from './market'
+﻿import { activeMarket } from './market'
 
 export type PageMetadata = {
   title: string
@@ -29,15 +29,15 @@ const PRIVATE_METADATA: PageMetadata = {
 }
 
 const AUTH_METADATA: PageMetadata = {
-  title: 'Sign In or Create Account - FindItViral | Greater Lansing Beta',
-  description: 'Sign in to FindItViral or create a new account to start posting bounties and sightings around Greater Lansing.',
+  title: 'Owner Sign In - FindItViral',
+  description: 'Owner sign in for the private FindItViral closed-beta workspace.',
   canonicalUrl: 'https://finditviral.com/auth',
   robots: 'noindex, nofollow',
 }
 
 const ONBOARDING_METADATA: PageMetadata = {
-  title: 'Join the Greater Lansing Beta - FindItViral',
-  description: 'Help Greater Lansing shoppers find products without driving from store to store. Set up your account in a few quick steps.',
+  title: 'Owner Setup - FindItViral',
+  description: 'Set up the private FindItViral closed-beta workspace.',
   canonicalUrl: 'https://finditviral.com/onboarding',
   robots: 'noindex, nofollow',
 }

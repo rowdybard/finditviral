@@ -12,6 +12,12 @@ export type Product = {
   trend_id: string
   name: string
   slug: string
+  availability_status: 'available' | 'backorder' | 'preorder' | 'announced' | 'limited' | 'retired'
+  source_url: string | null
+  retailer: string | null
+  release_date: string | null
+  verified_at: string | null
+  is_active: boolean
   created_at: string
   trend?: Trend
 }

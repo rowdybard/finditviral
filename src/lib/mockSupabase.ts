@@ -166,6 +166,14 @@ const initialData = {
 }
 
 const store: Record<string, any[]> = JSON.parse(JSON.stringify(initialData))
+store.products.forEach((product) => Object.assign(product, {
+  availability_status: 'available',
+  source_url: 'https://example.com/mock-product',
+  retailer: 'Mock retailer',
+  release_date: null,
+  verified_at: new Date().toISOString(),
+  is_active: true,
+}))
 let mockSession: any = null
 const listeners: ((event: string, session: any) => void)[] = []
 
@@ -201,6 +209,7 @@ class Builder {
   order(c: string, o?: { ascending?: boolean }) { this.oc = c; this.oa = o?.ascending ?? true; return this }
   limit(n: number) { this.ln = n; return this }
   single() { this.isSingle = true; return this }
+  maybeSingle() { this.isSingle = true; return this }
   insert(d: any) { this.ins = d; return this }
   upsert(d: any) { this.ups = d; return this }
   update(d: any) { this.upd = d; return this }
@@ -253,6 +262,25 @@ export const mockSupabase = {
     const currentUserId = mockSession?.user?.id
     if (!currentUserId) {
       return Promise.resolve({ data: null, error: { message: 'Authentication required' } })
+    }
+
+    if (name === 'is_app_owner') {
+      return Promise.resolve({ data: currentUserId === 'u1', error: null })
+    }
+
+    if (name === 'complete_onboarding') {
+      if (currentUserId !== 'u1') {
+        return Promise.resolve({ data: null, error: { message: 'Owner access required' } })
+      }
+      const profile = store.profiles.find(p => p.id === currentUserId)
+      if (!profile) return Promise.resolve({ data: null, error: { message: 'Profile not found' } })
+      Object.assign(profile, {
+        username: args.p_username,
+        onboarding_completed: true,
+        looking_for: args.p_looking_for,
+        preferred_cities: args.p_preferred_cities,
+      })
+      return Promise.resolve({ data: null, error: null })
     }
 
     if (name === 'submit_bounty_claim') {

@@ -1,15 +1,75 @@
-import { useEffect } from 'react'
+﻿import { useCallback, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { captureReferrer } from '../lib/referral'
+import TurnstileWidget from '../components/TurnstileWidget'
+import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
+
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid_request: 'Check your email and tell us a little more about what interests you.',
+  verification_required: 'Complete the verification before submitting.',
+  verification_failed: 'Verification expired or failed. Please try again.',
+  rate_limited: 'Too many attempts. Please wait a few minutes and try again.',
+  unavailable: 'Early access is temporarily unavailable. Please try again later.',
+}
 
 export default function EarlyAccess() {
-  useEffect(() => {
-    captureReferrer()
+  const [email, setEmail] = useState('')
+  const [reason, setReason] = useState('')
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleToken = useCallback((token: string | null) => {
+    setTurnstileToken(token)
+    if (token) setError(null)
   }, [])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+
+    if (!turnstileToken) {
+      setError(ERROR_MESSAGES.verification_required)
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/early-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          reason: reason.trim(),
+          turnstileToken,
+        }),
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ error: 'unavailable' }))
+        const code = typeof body?.error === 'string' ? body.error : 'unavailable'
+        setError(ERROR_MESSAGES[code] ?? ERROR_MESSAGES.unavailable)
+        setTurnstileToken(null)
+        setTurnstileResetKey((value) => value + 1)
+        return
+      }
+
+      trackEvent('generate_lead', { method: 'early_access' })
+      setSubmitted(true)
+    } catch {
+      setError(ERROR_MESSAGES.unavailable)
+      setTurnstileToken(null)
+      setTurnstileResetKey((value) => value + 1)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900">
@@ -27,44 +87,88 @@ export default function EarlyAccess() {
         </span>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:px-12">
-        <section className="max-w-2xl text-center" aria-labelledby="early-access-title">
-          <h1 id="early-access-title" className="text-4xl font-extrabold tracking-tight text-stone-900 sm:text-6xl lg:text-7xl">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1.1fr_0.9fr] lg:px-12">
+        <section aria-labelledby="early-access-title">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Closed beta</p>
+          <h1 id="early-access-title" className="mt-3 text-4xl font-extrabold tracking-tight text-stone-900 sm:text-6xl">
             Find viral products around <span className="text-brand-600">{activeMarket.name}</span>.
           </h1>
-          <div className="mx-auto mt-8 max-w-xl space-y-5 text-base leading-7 text-stone-600 sm:text-lg sm:leading-8">
+          <div className="mt-7 max-w-2xl space-y-4 text-base leading-7 text-stone-600 sm:text-lg sm:leading-8">
             <p>
-              See what's in stock at stores near you before you make the trip. Snacks, collectibles, trending toys — post a bounty if you can't find it.
+              FindItViral helps local shoppers share recent sightings for viral, limited, and hard-to-find retail products before someone drives across town.
+            </p>
+            <p>
+              During the closed beta, we are starting with shoppers around Lansing, East Lansing, Okemos, Holt, and nearby communities. Early members will help shape the products, stores, and alerts we support first.
+            </p>
+            <p>
+              Join the early-access list and tell us what you want to find. We will reach out as space opens.
             </p>
           </div>
+        </section>
 
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
-            <Link
-              to="/auth"
-              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-brand-500 px-6 py-3.5 text-base font-bold text-stone-950 ${TOY_SHADOW} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#1c1917] focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50 motion-reduce:transition-none motion-reduce:hover:translate-x-0 motion-reduce:hover:translate-y-0`}
-            >
-              Create an account
-              <span aria-hidden="true">&rarr;</span>
-            </Link>
-            <Link
-              to="/sightings"
-              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-900 bg-white px-5 py-3.5 text-base font-bold text-stone-900 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50`}
-            >
-              Browse sightings
-            </Link>
-            <Link
-              to="/sightings/new"
-              className={`inline-flex items-center gap-2 rounded-lg border-2 border-stone-300 bg-stone-50 px-5 py-3.5 text-base font-bold text-stone-700 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-stone-50`}
-            >
-              Report a sighting
-            </Link>
-          </div>
+        <section className={`rounded-2xl border-2 border-stone-900 bg-white p-6 sm:p-8 ${TOY_SHADOW}`} aria-labelledby="join-title">
+          {submitted ? (
+            <div role="status" aria-live="polite" className="py-8 text-center">
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
+              <h2 id="join-title" className="mt-5 text-2xl font-extrabold text-stone-900">You’re on the list.</h2>
+              <p className="mt-2 text-sm leading-6 text-stone-600">Thanks for helping us build the {activeMarket.name} beta. We’ll be in touch as access opens.</p>
+            </div>
+          ) : (
+            <>
+              <h2 id="join-title" className="text-2xl font-extrabold text-stone-900">Request early access</h2>
+              <p className="mt-2 text-sm leading-6 text-stone-600">Tell us what brought you here. Both fields are required.</p>
 
-          <div className="mx-auto mt-6 max-w-xl rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-left">
-            <p className="text-xs font-medium text-brand-700">
-              Free during beta. Sign up now and get 3 months of Pro features free — refer friends for up to a full year.
-            </p>
-          </div>
+              <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+                <div>
+                  <label htmlFor="early-access-email" className="mb-2 block text-sm font-semibold text-stone-800">Email address</label>
+                  <input
+                    id="early-access-email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={320}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="early-access-reason" className="mb-2 block text-sm font-semibold text-stone-800">Why are you interested?</label>
+                  <textarea
+                    id="early-access-reason"
+                    required
+                    minLength={10}
+                    maxLength={1200}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="What products are you trying to find, or how would you use FindItViral?"
+                    className="min-h-32 w-full resize-y rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                  <p className="mt-1 text-right text-xs text-stone-400">{reason.length}/1200</p>
+                </div>
+
+                {TURNSTILE_SITE_KEY ? (
+                  <TurnstileWidget siteKey={TURNSTILE_SITE_KEY} resetKey={turnstileResetKey} onToken={handleToken} />
+                ) : (
+                  <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
+                )}
+
+                {error && (
+                  <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={submitting || !TURNSTILE_SITE_KEY}
+                  className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3.5 text-base font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {submitting ? 'Submitting…' : 'Join the early-access list'}
+                </button>
+              </form>
+            </>
+          )}
         </section>
       </main>
 
@@ -72,12 +176,9 @@ export default function EarlyAccess() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span>FindItViral &middot; {activeMarket.footerTagline}</span>
           <span className="flex flex-wrap items-center gap-4">
-            <a href="mailto:contact@finditviral.com" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">
-              contact@finditviral.com
-            </a>
-            <Link to="/privacy" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">
-              Privacy
-            </Link>
+            <a href="mailto:contact@finditviral.com" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">contact@finditviral.com</a>
+            <Link to="/privacy" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Privacy</Link>
+            <Link to="/auth" className="font-medium text-stone-500 underline-offset-4 hover:text-stone-800 hover:underline">Owner sign in</Link>
           </span>
         </div>
       </footer>

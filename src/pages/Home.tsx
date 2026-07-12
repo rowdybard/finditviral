@@ -18,7 +18,7 @@ export default function Home() {
     async function load() {
       const [trendsRes, productsRes, bountiesRes, sightingsRes] = await Promise.all([
         supabase.from('trends').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-        supabase.from('products').select('*, trend(*)').order('name'),
+        supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name'),
         supabase
           .from('bounties')
           .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')

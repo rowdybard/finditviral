@@ -7,10 +7,11 @@ export default defineConfig(({ mode }) => {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+  const turnstileSiteKey = process.env.VITE_TURNSTILE_SITE_KEY || env.VITE_TURNSTILE_SITE_KEY
 
-  if (mode === 'production' && (!supabaseUrl || !supabaseKey)) {
+  if (mode === 'production' && (!supabaseUrl || !supabaseKey || !turnstileSiteKey)) {
     throw new Error(
-      'Production builds require VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
+      'Production builds require VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_TURNSTILE_SITE_KEY.',
     )
   }
 

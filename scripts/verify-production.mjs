@@ -1,4 +1,4 @@
-const args = new Set(process.argv.slice(2))
+﻿const args = new Set(process.argv.slice(2))
 const webOnly = args.has('--web-only')
 const baseUrl = new URL(process.env.LAUNCH_BASE_URL || 'https://finditviral.com')
 const isCanonicalProduction = baseUrl.origin === 'https://finditviral.com'
@@ -69,7 +69,7 @@ await check('landing page returns HTML', async () => {
   rootHtml = await rootResponse.text()
   assert(rootResponse.status === 200, `expected 200, received ${rootResponse.status}`)
   assert(rootResponse.headers.get('content-type')?.includes('text/html'), 'missing HTML content type')
-  assert(getTitle(rootHtml) === 'FindItViral - Early Access', 'unexpected landing title')
+  assert(getTitle(rootHtml) === 'FindItViral - Greater Lansing Early Access', 'unexpected landing title')
   assert(getCanonical(rootHtml) === 'https://finditviral.com/', 'unexpected landing canonical URL')
 })
 

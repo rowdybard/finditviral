@@ -20,6 +20,12 @@ create table if not exists products (
   trend_id uuid not null references trends(id) on delete cascade,
   name text not null,
   slug text not null unique,
+  availability_status text not null default 'retired' check (availability_status in ('available', 'backorder', 'preorder', 'announced', 'limited', 'retired')),
+  source_url text check (source_url is null or source_url ~ '^https://'),
+  retailer text,
+  release_date date,
+  verified_at timestamptz,
+  is_active boolean not null default false,
   created_at timestamptz not null default now()
 );
 

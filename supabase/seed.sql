@@ -1,21 +1,23 @@
 -- FindItViral — Seed Data
 -- Run this in the Supabase SQL Editor after schema.sql and rls.sql
--- 5 trends, 97 products
+-- Legacy development catalog plus Greater Lansing ZIP centroids.
+-- Legacy products are retired by default; the verified active catalog is
+-- maintained by 20260712224326_curate_verified_product_catalog.sql.
 
 -- ============================================
 -- Trends
 -- ============================================
 
 insert into trends (name, slug, description, is_active) values
-  ('NeeDoh', 'needoh', 'Schylling sensory fidget toys — 50+ styles of squishy, squeezy, stretchy stress balls. TikTok viral 2025-2026.', true),
-  ('Mystery Squishy Dumpling', 'mystery-squishy-dumpling', 'RMS USA blind-box bao bun squishies with rarity tiers. 500M+ TikTok views. Sells out within an hour.', true),
-  ('Sunny Days Squeezy', 'sunny-days-squeezy', 'Jumbo food-shaped slow-rising foam squishies at Target. Banana, butter, cheese, carrot & more.', true),
-  ('Taba Squishy', 'taba-squishy', 'Handmade food-grade silicone animal squishies. Capybara, hamster, duck & more. TikTok ASMR viral.', true),
-  ('Magic Jellykins', 'magic-jellykins', 'Spin Master water-activated reveal plushies. 20 food-themed animals to collect. Summer 2026 viral.', true)
+  ('NeeDoh', 'needoh', 'Legacy development catalog retained for historical references.', false),
+  ('Mystery Squishy Dumpling', 'mystery-squishy-dumpling', 'Legacy development catalog retained for historical references.', false),
+  ('Sunny Days Squeezy', 'sunny-days-squeezy', 'Legacy development catalog retained for historical references.', false),
+  ('Taba Squishy', 'taba-squishy', 'Legacy development catalog retained for historical references.', false),
+  ('Magic Jellykins', 'magic-jellykins', 'Legacy development catalog retained for historical references.', false)
 on conflict (slug) do nothing;
 
 -- ============================================
--- Products: NeeDoh (49)
+-- Retired legacy products: NeeDoh (48)
 -- ============================================
 
 do $$
@@ -181,12 +183,24 @@ begin
 end $$;
 
 -- ============================================
--- Seed: Sample US Zip Codes (lat/long)
--- For production, import the full USPS dataset.
--- This sample covers major metro areas.
+-- Seed: Greater Lansing ZIP centroids plus legacy development samples.
 -- ============================================
 
 insert into zip_codes (zip_code, latitude, longitude, city, state) values
+  ('48906', 42.7635, -84.5580, 'Lansing', 'MI'),
+  ('48910', 42.7008, -84.5490, 'Lansing', 'MI'),
+  ('48911', 42.6797, -84.5772, 'Lansing', 'MI'),
+  ('48912', 42.7371, -84.5244, 'Lansing', 'MI'),
+  ('48915', 42.7391, -84.5704, 'Lansing', 'MI'),
+  ('48917', 42.7376, -84.6244, 'Lansing', 'MI'),
+  ('48823', 42.7388, -84.4764, 'East Lansing', 'MI'),
+  ('48824', 42.7283, -84.4882, 'East Lansing', 'MI'),
+  ('48864', 42.7053, -84.4187, 'Okemos', 'MI'),
+  ('48840', 42.7531, -84.3989, 'Haslett', 'MI'),
+  ('48842', 42.6394, -84.5242, 'Holt', 'MI'),
+  ('48820', 42.8428, -84.5797, 'DeWitt', 'MI'),
+  ('48837', 42.7529, -84.7373, 'Grand Ledge', 'MI'),
+  ('48854', 42.5796, -84.4561, 'Mason', 'MI'),
   ('01001', 42.0675, -72.6019, 'Agawam', 'MA'),
   ('02101', 42.3601, -71.0589, 'Boston', 'MA'),
   ('02801', 41.4792, -71.3131, 'Newport', 'RI'),

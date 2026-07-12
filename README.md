@@ -22,6 +22,7 @@ Set the public Supabase project values in `.env`:
 ```text
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-publishable-or-anon-key
+VITE_TURNSTILE_SITE_KEY=your-cloudflare-turnstile-site-key
 ```
 
 The publishable/anon key is intentionally used in the browser. Never put a Supabase secret or `service_role` key in a `VITE_` variable.
@@ -43,7 +44,11 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
+<<<<<<< HEAD
+The CLI prompts for database credentials when needed; do not put the database password in source control or a command committed to shell history. The migrations create the protected `early_access_requests` table and a service-role-only `request_early_access` RPC. Anonymous visitors submit through `/api/early-access`; the Cloudflare Worker verifies Turnstile, enforces KV-backed rate limits, and calls Supabase with a server-side secret. Browsers cannot read or write the waitlist table or invoke its RPC directly. New and duplicate submissions return the same response.
+=======
 The CLI prompts for database credentials when needed; do not put the database password in source control or a command committed to shell history. The migration creates the protected `early_access_requests` table and a public `request_early_access` RPC. Anonymous visitors can execute the validated RPC, but they cannot read, update, delete, or insert directly into the table. New and duplicate submissions return the same response.
+>>>>>>> 9213111006a787ac3a201981942650ceb97325a8
 
 If the SQL Editor must be used instead, run `supabase/migrations/20260711000000_launch_waitlist.sql`, then run `supabase/verify/production_catalog.sql`. Record the manual change in migration history with `npx supabase migration repair 20260711000000 --status applied` after linking the project.
 
@@ -67,7 +72,11 @@ The private prototype is separate from the public launch. For a fresh project:
 3. Run `supabase/seed.sql` if demo catalog data is wanted.
 4. Run `supabase/rls.sql` once.
 5. Run `supabase/legacy-migrations/20260710000000_private_app_and_early_access.sql`.
+<<<<<<< HEAD
+6. Run the current files in `supabase/migrations` in timestamp order, ending with the closed-beta lockdown migration.
+=======
 6. Run `supabase/migrations/20260711000000_launch_waitlist.sql` last.
+>>>>>>> 9213111006a787ac3a201981942650ceb97325a8
 7. Add your owner user to the allow-list:
 
 ```sql

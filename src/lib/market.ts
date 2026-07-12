@@ -1,4 +1,4 @@
-export type MarketConfig = {
+﻿export type MarketConfig = {
   name: string
   state: string
   stateName: string
@@ -33,9 +33,9 @@ export const activeMarket: MarketConfig = {
   ],
   defaultZip: '48910',
   betaLabel: 'Greater Lansing Beta',
-  seoTitle: 'FindItViral | Find Viral Products Around Greater Lansing',
+  seoTitle: 'FindItViral - Greater Lansing Early Access',
   seoDescription:
-    'Find recent community-reported sightings for viral and hard-to-find products around Lansing, East Lansing, Okemos, Holt, and nearby communities.',
+    'Request early access to FindItViral, a closed beta for finding viral and hard-to-find products around Greater Lansing.',
   storeExamples: [
     'Meijer',
     'Target',

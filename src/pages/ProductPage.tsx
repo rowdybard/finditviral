@@ -5,6 +5,7 @@ import type { Product, Bounty, Sighting } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -20,6 +21,7 @@ export default function ProductPage() {
         .from('products')
         .select('*, trend(*)')
         .eq('slug', slug)
+        .eq('is_active', true)
         .single()
       if (!productData) {
         setLoading(false)
@@ -76,6 +78,19 @@ export default function ProductPage() {
           </Link>
         )}
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{product.name}</h1>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full bg-brand-50 px-3 py-1 font-semibold text-brand-700">
+            {availabilityLabel(product)}
+          </span>
+          {releaseLabel(product.release_date) && (
+            <span className="text-gray-600">Releases {releaseLabel(product.release_date)}</span>
+          )}
+          {product.source_url && (
+            <a href={product.source_url} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:text-brand-700">
+              Verify at {product.retailer ?? 'official source'} ↗
+            </a>
+          )}
+        </div>
       </div>
 
       <section>

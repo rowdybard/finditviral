@@ -5,6 +5,7 @@ import type { Sighting, Product, Trend } from '../types/database'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { haversineMiles } from '../lib/distance'
+import { activeMarket } from '../lib/market'
 
 export default function Sightings() {
   const [sightings, setSightings] = useState<Sighting[]>([])
@@ -13,14 +14,14 @@ export default function Sightings() {
   const [loading, setLoading] = useState(true)
   const [trendFilter, setTrendFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
-  const [zipFilter, setZipFilter] = useState('')
+  const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const [radiusFilter, setRadiusFilter] = useState('50')
 
   useEffect(() => {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])

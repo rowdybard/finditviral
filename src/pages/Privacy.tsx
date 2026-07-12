@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import { activeMarket } from '../lib/market'
 
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -31,7 +31,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-bold text-stone-900">What we collect</h2>
             <p className="mt-2">
-              When you create an account, we store your email address, username, ZIP code, and any preferences you share during onboarding. When you post a bounty, report a sighting, or submit a claim, we store the details you provide. If you add contact info for bounty coordination, it is stored separately and only revealed to the other party when a claim is accepted. Our hosting and database providers may also process standard technical information, such as an IP address, to deliver and protect the site.
+              When you request early access, we store your email address and the reason you provide. The private closed-beta workspace stores the owner account, ZIP code, location preferences, bounties, sightings, and related details. Our hosting, verification, and analytics providers may also process standard technical information such as an IP address, browser details, and page activity to deliver, protect, and understand use of the site.
             </p>
           </section>
 
@@ -45,14 +45,14 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-bold text-stone-900">Who processes it</h2>
             <p className="mt-2">
-              Cloudflare hosts the site and Supabase stores account and content data. They process information on our behalf under their own security and privacy terms. We do not otherwise share your data unless required by law.
+              Cloudflare hosts the site and provides Turnstile bot verification, Supabase stores early-access and account data, and Google Analytics measures page visits and successful early-access submissions. These providers process information on our behalf under their own security and privacy terms. Browser privacy tools or blockers may prevent analytics from loading. We do not sell your information or otherwise share it unless required by law.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">Retention and your choices</h2>
             <p className="mt-2">
-              You can delete your account or request data deletion at any time by emailing us. Bounties, sightings, and claims you have posted may be retained as needed for the service. If you refer friends, referral data is kept only as long as needed to track your referral rewards.
+              Early-access requests expire after two years and may be removed sooner when they are no longer needed. You can request deletion of your early-access request or account data at any time by emailing us. Closed-beta content may be retained as needed to operate and secure the service.
             </p>
           </section>
 

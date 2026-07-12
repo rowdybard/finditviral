@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -16,7 +16,7 @@ export default function NewSighting() {
   const [storeName, setStoreName] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('MI')
-  const [zipCode, setZipCode] = useState('')
+  const [zipCode, setZipCode] = useState(activeMarket.defaultZip)
   const [stockLevel, setStockLevel] = useState('in_stock')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -25,7 +25,7 @@ export default function NewSighting() {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])

@@ -5,6 +5,7 @@ import type { Bounty, Product, Trend } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import EmptyState from '../components/EmptyState'
 import { haversineMiles } from '../lib/distance'
+import { activeMarket } from '../lib/market'
 
 export default function Bounties() {
   const [bounties, setBounties] = useState<Bounty[]>([])
@@ -13,7 +14,7 @@ export default function Bounties() {
   const [loading, setLoading] = useState(true)
   const [trendFilter, setTrendFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
-  const [zipFilter, setZipFilter] = useState('')
+  const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const [radiusFilter, setRadiusFilter] = useState('50')
   const [sortBy, setSortBy] = useState<'newest' | 'reward'>('newest')
 
@@ -21,7 +22,7 @@ export default function Bounties() {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])

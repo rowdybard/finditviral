@@ -54,7 +54,11 @@ Evidence:
 - [ ] Apply `supabase/migrations/20260711000000_launch_waitlist.sql` to project `hsrfyiazliydrpgtwwul`.
 - [ ] Verify `public.early_access_requests` exists with RLS enabled.
 - [ ] Verify `anon` and `authenticated` cannot select, update, delete, or insert directly into the table.
+<<<<<<< HEAD
+- [x] Verify `request_early_access(text, text)` is executable only by `service_role`; the Worker is the sole public write path.
+=======
 - [ ] Verify only the `request_early_access(text, text)` RPC is executable publicly.
+>>>>>>> 9213111006a787ac3a201981942650ceb97325a8
 - [ ] Submit one launch-test request through the production UI.
 - [ ] Confirm the normalized email and reason appear in Supabase Table Editor.
 - [ ] Confirm submitting the same email again gives the same public response and creates no duplicate row.
@@ -82,7 +86,11 @@ where table_schema = 'public'
 
 select has_function_privilege(
   'anon',
+<<<<<<< HEAD
+  'public.request_early_access(text, text)', -- service_role only
+=======
   'public.request_early_access(text, text)',
+>>>>>>> 9213111006a787ac3a201981942650ceb97325a8
   'execute'
 ) as anon_can_request;
 ```

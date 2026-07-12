@@ -1,4 +1,4 @@
-const CANONICAL_HOST = 'finditviral.com'
+﻿const CANONICAL_HOST = 'finditviral.com'
 const REDIRECT_HOSTS = new Set(['finditviral.pages.dev', 'www.finditviral.com'])
 
 const EARLY_ACCESS_PATH = '/api/early-access'
@@ -21,8 +21,8 @@ const SPA_ROUTES = [
 ]
 
 const ROOT_METADATA = {
-  title: 'FindItViral | Find Viral Products Around Greater Lansing',
-  description: 'Find recent community-reported sightings for viral and hard-to-find products around Lansing, East Lansing, Okemos, Holt, and nearby communities.',
+  title: 'FindItViral - Greater Lansing Early Access',
+  description: 'Request early access to FindItViral, a closed beta for finding viral and hard-to-find products around Greater Lansing.',
   canonicalUrl: 'https://finditviral.com/',
   robots: 'index, follow',
 }

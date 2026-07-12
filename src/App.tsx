@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect } from 'react'
+﻿import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { applyPageMetadata, getPageMetadata } from './lib/pageMetadata'
+import { trackPageView } from './lib/analytics'
 import EarlyAccess from './pages/EarlyAccess'
 import Privacy from './pages/Privacy'
 
@@ -11,6 +12,7 @@ export default function App() {
 
   useEffect(() => {
     applyPageMetadata(document, getPageMetadata(pathname))
+    trackPageView(pathname)
   }, [pathname])
 
   return (

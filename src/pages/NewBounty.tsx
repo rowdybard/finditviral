@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
+import { activeMarket } from '../lib/market'
 import type { Product, Trend } from '../types/database'
 
 export default function NewBounty() {
@@ -13,7 +14,7 @@ export default function NewBounty() {
   const [selectedTrend, setSelectedTrend] = useState('')
   const [selectedProduct, setSelectedProduct] = useState('')
   const [rewardAmount, setRewardAmount] = useState('')
-  const [zipCode, setZipCode] = useState('')
+  const [zipCode, setZipCode] = useState(activeMarket.defaultZip)
   const [radiusMiles, setRadiusMiles] = useState('50')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +24,7 @@ export default function NewBounty() {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])

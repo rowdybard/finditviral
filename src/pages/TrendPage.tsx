@@ -5,6 +5,7 @@ import type { Trend, Product, Bounty, Sighting } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 
 export default function TrendPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -32,6 +33,7 @@ export default function TrendPage() {
         .from('products')
         .select('*')
         .eq('trend_id', trendData.id)
+        .eq('is_active', true)
         .order('name')
       const productList = productsData as Product[] ?? []
       const productIds = productList.map((p) => p.id)
@@ -98,6 +100,10 @@ export default function TrendPage() {
                 className="card transition-shadow hover:shadow-md"
               >
                 <h3 className="font-medium text-gray-900">{p.name}</h3>
+                <p className="mt-1 text-xs font-medium text-brand-600">
+                  {availabilityLabel(p)}
+                  {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
+                </p>
               </Link>
             ))}
           </div>

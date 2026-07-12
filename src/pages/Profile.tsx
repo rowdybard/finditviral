@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -71,7 +71,7 @@ export default function ProfilePage() {
         const [ownProfileRes, contactRes] = await Promise.all([
           supabase
             .from('profiles')
-            .select('id, username, karma, is_pro, created_at, referral_count, looking_for, onboarding_completed, preferred_cities')
+            .select('id, username, karma, is_pro, created_at, looking_for, onboarding_completed, preferred_cities')
             .eq('id', profileData.id)
             .single(),
           supabase
@@ -139,14 +139,7 @@ export default function ProfilePage() {
           {profile.username.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-gray-900">{profile.username}</h1>
-            {profile.is_pro && (
-              <span className="rounded bg-gradient-to-r from-brand-500 to-purple-500 px-1.5 py-0.5 text-xs font-bold text-white">
-                PRO
-              </span>
-            )}
-          </div>
+          <h1 className="text-xl font-bold text-gray-900">{profile.username}</h1>
           <div className="mt-1 flex items-center gap-3 text-sm text-gray-500">
             <span className="flex items-center gap-1">
               <svg className="h-4 w-4 text-brand-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -155,6 +148,24 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {isOwnProfile && profile.looking_for && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">What you're looking for</h2>
+          <p className="mt-2 text-sm text-gray-600">{profile.looking_for}</p>
+        </div>
+      )}
+
+      {isOwnProfile && profile.preferred_cities && profile.preferred_cities.length > 0 && (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">Your cities</h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {profile.preferred_cities.map((city) => (
+              <span key={city} className="badge bg-brand-100 text-brand-800">{city}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isOwnProfile && (
         <div className="card">
