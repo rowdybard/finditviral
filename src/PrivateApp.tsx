@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
-import OwnerGate from './components/OwnerGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Auth from './pages/Auth'
@@ -33,24 +32,22 @@ export default function PrivateApp() {
         <Route path="/auth" element={<Auth />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="*" element={
-          <OwnerGate>
-            <Layout>
-              <OnboardingRedirect>
-                <Routes>
-                  <Route path="/home" element={<Home />} />
-                  <Route path="/trends/:slug" element={<TrendPage />} />
-                  <Route path="/products/:slug" element={<ProductPage />} />
-                  <Route path="/bounties" element={<Bounties />} />
-                  <Route path="/bounties/new" element={<ProtectedRoute><NewBounty /></ProtectedRoute>} />
-                  <Route path="/bounties/:id" element={<BountyDetail />} />
-                  <Route path="/sightings" element={<Sightings />} />
-                  <Route path="/sightings/new" element={<ProtectedRoute><NewSighting /></ProtectedRoute>} />
-                  <Route path="/profile/:username" element={<Profile />} />
-                  <Route path="*" element={<Navigate to="/home" replace />} />
-                </Routes>
-              </OnboardingRedirect>
-            </Layout>
-          </OwnerGate>
+          <Layout>
+            <OnboardingRedirect>
+              <Routes>
+                <Route path="/home" element={<Home />} />
+                <Route path="/trends/:slug" element={<TrendPage />} />
+                <Route path="/products/:slug" element={<ProductPage />} />
+                <Route path="/bounties" element={<Bounties />} />
+                <Route path="/bounties/new" element={<ProtectedRoute><NewBounty /></ProtectedRoute>} />
+                <Route path="/bounties/:id" element={<BountyDetail />} />
+                <Route path="/sightings" element={<Sightings />} />
+                <Route path="/sightings/new" element={<ProtectedRoute><NewSighting /></ProtectedRoute>} />
+                <Route path="/profile/:username" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
+              </Routes>
+            </OnboardingRedirect>
+          </Layout>
         } />
       </Routes>
     </AuthProvider>
