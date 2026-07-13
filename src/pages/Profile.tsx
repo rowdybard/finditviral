@@ -217,24 +217,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {isOwnProfile && profile.looking_for && (
-        <div className="card">
-          <h2 className="font-semibold text-gray-900">What you're looking for</h2>
-          <p className="mt-2 text-sm text-gray-600">{profile.looking_for}</p>
-        </div>
-      )}
-
-      {isOwnProfile && profile.preferred_cities && profile.preferred_cities.length > 0 && (
-        <div className="card">
-          <h2 className="font-semibold text-gray-900">Your cities</h2>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {profile.preferred_cities.map((city) => (
-              <span key={city} className="badge bg-brand-100 text-brand-800">{city}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {isOwnProfile && (
         <div className="card">
           <div className="flex items-center justify-between">
