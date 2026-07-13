@@ -24,7 +24,7 @@ export default function NewBounty() {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])
@@ -64,7 +64,6 @@ export default function NewBounty() {
     const { data, error: insertError } = await supabase
       .from('bounties')
       .insert({
-        user_id: user.id,
         product_id: selectedProduct,
         reward_amount: reward,
         zip_code: zipCode,

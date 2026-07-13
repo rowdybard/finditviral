@@ -14,41 +14,47 @@ export default function TrendPage() {
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!slug) return
     async function load() {
-      const { data: trendData } = await supabase
+      const { data: trendData, error: trendError } = await supabase
         .from('trends')
         .select('*')
         .eq('slug', slug)
         .single()
-      if (!trendData) {
+      if (trendError || !trendData) {
         setLoading(false)
         return
       }
       setTrend(trendData as Trend)
 
-      const { data: productsData } = await supabase
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select('*')
+        .select('*, trend:trends(*)')
         .eq('trend_id', trendData.id)
         .eq('is_active', true)
         .order('name')
+      if (productsError) {
+        setError('Failed to load products. Please try again.')
+        setLoading(false)
+        return
+      }
       const productList = productsData as Product[] ?? []
       const productIds = productList.map((p) => p.id)
 
       const [bountiesRes, sightingsRes, sightingProductIdsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('status', 'open')
           .in('product_id', productIds)
           .order('created_at', { ascending: false })
           .limit(10),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('is_public', true)
           .in('product_id', productIds)
           .order('created_at', { ascending: false })
@@ -66,6 +72,9 @@ export default function TrendPage() {
       setProducts(productList.map((p) => ({ ...p, has_sightings: productsWithSightings.has(p.id) })))
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
+      if (bountiesRes.error || sightingsRes.error) {
+        setError('Some content failed to load.')
+      }
       setLoading(false)
     }
     load()
@@ -91,6 +100,9 @@ export default function TrendPage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
       <div>
         <Link to="/" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{trend.name}</h1>

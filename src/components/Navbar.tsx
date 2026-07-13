@@ -6,7 +6,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-2 px-3 sm:px-4">
+      <div className="mx-auto flex min-h-14 max-w-2xl flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2 sm:h-14 sm:flex-nowrap sm:py-0 sm:px-4">
         <Link to="/home" className="flex shrink-0 items-center gap-2 font-bold text-brand-600">
           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
@@ -16,7 +16,7 @@ export default function Navbar() {
           <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">Beta</span>
         </Link>
 
-        <nav className="flex items-center gap-0.5 sm:gap-1">
+        <nav className="flex w-full items-center justify-between gap-0.5 border-t border-stone-200 pt-2 sm:w-auto sm:justify-start sm:gap-1 sm:border-t-0 sm:pt-0">
           <NavLink
             to="/bounties"
             className={({ isActive }) =>

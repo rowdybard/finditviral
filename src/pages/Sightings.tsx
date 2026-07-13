@@ -16,12 +16,13 @@ export default function Sightings() {
   const [productFilter, setProductFilter] = useState('')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const [radiusFilter, setRadiusFilter] = useState('50')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])
@@ -35,7 +36,7 @@ export default function Sightings() {
       setLoading(true)
       let query = supabase
         .from('sightings')
-        .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+        .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
         .eq('is_public', true)
         .order('created_at', { ascending: false })
 
@@ -52,7 +53,14 @@ export default function Sightings() {
         }
       }
 
-      const { data } = await query
+      const { data, error: queryError } = await query
+      if (queryError) {
+        setError('Failed to load sightings. Please try again.')
+        setSightings([])
+        setLoading(false)
+        return
+      }
+      setError(null)
       let results = data as Sighting[] ?? []
 
       if (zipFilter.trim() && results.length > 0) {
@@ -66,16 +74,22 @@ export default function Sightings() {
           const radius = parseInt(radiusFilter) || 50
           const userLat = zipData.latitude
           const userLon = zipData.longitude
+          const sightingZipCodes = Array.from(
+            new Set(results.map((s) => s.zip_code).filter((z): z is string => Boolean(z))),
+          )
+          const { data: sightingZips } = await supabase
+            .from('zip_codes')
+            .select('zip_code, latitude, longitude')
+            .in('zip_code', sightingZipCodes)
+          const zipMap = new Map(
+            (sightingZips ?? []).map((z) => [(z as { zip_code: string }).zip_code, z as { latitude: number; longitude: number }]),
+          )
           const filtered: Sighting[] = []
           for (const s of results) {
             if (s.zip_code) {
-              const { data: sightingZip } = await supabase
-                .from('zip_codes')
-                .select('latitude, longitude')
-                .eq('zip_code', s.zip_code)
-                .single()
-              if (sightingZip) {
-                const dist = haversineMiles(userLat, userLon, sightingZip.latitude, sightingZip.longitude)
+              const sz = zipMap.get(s.zip_code)
+              if (sz) {
+                const dist = haversineMiles(userLat, userLon, sz.latitude, sz.longitude)
                 if (dist <= radius) {
                   filtered.push({ ...s, distance_miles: dist })
                 }
@@ -97,6 +111,9 @@ export default function Sightings() {
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Local Sightings</h1>
         <Link to="/sightings/new" className="btn-primary text-sm">

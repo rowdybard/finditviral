@@ -28,17 +28,17 @@ export function timeAgo(dateString: string): string {
 }
 
 export function formatReward(amount: number): string {
-  return `$${amount.toFixed(0)}`
+  return `$${amount.toFixed(2)}`
 }
 
 export function stockLevelLabel(level: string): string {
   switch (level) {
     case 'in_stock':
-      return 'In Stock'
+      return 'HIGH'
     case 'low':
-      return 'Low Stock'
+      return 'MEDIUM'
     case 'none':
-      return 'Out of Stock'
+      return 'LOW'
     default:
       return level
   }

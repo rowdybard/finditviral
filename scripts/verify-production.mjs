@@ -169,10 +169,11 @@ await check('public bundle contains only browser-safe Supabase configuration', a
     } catch { /* ignore fetch errors for preloaded chunks */ }
   }
 
-  const dynamicChunkMatch = assetText.match(/["'`](\/assets\/PrivateApp-[^"'`]+\.js)["'`]/)
+  const dynamicChunkMatch = assetText.match(/["'`]((?:\.\/|\/assets\/)PrivateApp-[^"'`]+\.js)["'`]/)
   if (dynamicChunkMatch) {
     try {
-      const resp = await fetchFromBase(dynamicChunkMatch[1])
+      const dynamicChunkUrl = new URL(dynamicChunkMatch[1], new URL(assetPath, baseUrl))
+      const resp = await fetch(dynamicChunkUrl)
       allJsTexts.push(await resp.text())
     } catch { /* ignore */ }
   }
@@ -181,9 +182,10 @@ await check('public bundle contains only browser-safe Supabase configuration', a
 
   supabaseUrl = combinedText.match(/https:\/\/[a-z0-9]+\.supabase\.co/)?.[0]
     || process.env.VITE_SUPABASE_URL
-    || 'https://hsrfyiazliydrpgtwwul.supabase.co'
+    || ''
   supabaseKey = combinedText.match(/sb_publishable_[A-Za-z0-9_-]+/)?.[0]
-    || 'sb_publishable_qxHwvA_Os8vKF7jOifwl8Q_AdNdrjQM'
+    || process.env.VITE_SUPABASE_ANON_KEY
+    || ''
   assert(Boolean(supabaseUrl), 'Supabase project URL is missing')
   assert(Boolean(supabaseKey), 'Supabase publishable key is missing')
   assert(!combinedText.includes('sb_secret_'), 'a Supabase secret key appears in the browser bundle')
@@ -206,6 +208,27 @@ if (isCanonicalProduction) {
 if (webOnly) {
   console.log('[skip] Supabase database and owner-auth gates (--web-only)')
 } else {
+  await check('listing embeds resolve through declared database relationships', async () => {
+    const relationQueries = [
+      ['products', '*,trend:trends(*)'],
+      ['bounties', '*,product:products(*),profile:profiles(id,username)'],
+      ['sightings', '*,product:products(*),profile:profiles(id,username)'],
+      ['bounty_claims', '*,bounty:bounties(*,product:products(*)),finder:profiles(id,username)'],
+    ]
+
+    for (const [table, select] of relationQueries) {
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/${table}?select=${encodeURIComponent(select)}&limit=1`,
+        { headers: { apikey: supabaseKey } },
+      )
+      const body = await response.json().catch(() => ({}))
+      assert(
+        body.code !== 'PGRST200',
+        `${table} has an unresolved embedded relationship: ${body.message ?? 'unknown error'}`,
+      )
+    }
+  })
+
   await check('waitlist RPC rejects anonymous calls', async () => {
     const response = await fetch(`${supabaseUrl}/rest/v1/rpc/request_early_access`, {
       method: 'POST',

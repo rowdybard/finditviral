@@ -13,25 +13,32 @@ export default function Home() {
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const [trendsRes, productsRes, bountiesRes, sightingsRes] = await Promise.all([
         supabase.from('trends').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-        supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name'),
+        supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name'),
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('status', 'open')
           .order('created_at', { ascending: false })
           .limit(5),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(5),
       ])
+
+      if (trendsRes.error || productsRes.error || bountiesRes.error || sightingsRes.error) {
+        setError('Failed to load content. Please try again.')
+        setLoading(false)
+        return
+      }
 
       setTrends(trendsRes.data as Trend[] ?? [])
       setProducts(productsRes.data as Product[] ?? [])
@@ -52,6 +59,9 @@ export default function Home() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
       <section className="text-center py-6">
         <span className="inline-block rounded-full border border-brand-200 bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
           {activeMarket.betaLabel}

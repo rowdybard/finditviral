@@ -23,8 +23,8 @@ sql_paths = []
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:5173"
-additional_redirect_urls = ["http://127.0.0.1:5173"]
+site_url = "https://finditviral.com"
+additional_redirect_urls = ["https://finditviral.com"]
 enable_signup = false
 enable_anonymous_sign_ins = false
 minimum_password_length = 8
@@ -32,8 +32,8 @@ minimum_password_length = 8
 [auth.email]
 enable_signup = false
 enable_confirmations = false
+secure_password_change = true
 
 [auth.sms]
 enable_signup = false
 enable_confirmations = false
-

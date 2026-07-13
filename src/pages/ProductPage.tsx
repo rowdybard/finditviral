@@ -13,17 +13,18 @@ export default function ProductPage() {
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!slug) return
     async function load() {
-      const { data: productData } = await supabase
+      const { data: productData, error: productError } = await supabase
         .from('products')
-        .select('*, trend(*)')
+        .select('*, trend:trends(*)')
         .eq('slug', slug)
         .eq('is_active', true)
         .single()
-      if (!productData) {
+      if (productError || !productData) {
         setLoading(false)
         return
       }
@@ -32,13 +33,13 @@ export default function ProductPage() {
       const [bountiesRes, sightingsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('product_id', productData.id)
           .eq('status', 'open')
           .order('created_at', { ascending: false }),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('product_id', productData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false }),
@@ -46,6 +47,9 @@ export default function ProductPage() {
 
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
+      if (bountiesRes.error || sightingsRes.error) {
+        setError('Some content failed to load.')
+      }
       setLoading(false)
     }
     load()
@@ -71,6 +75,9 @@ export default function ProductPage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
       <div>
         {product.trend && (
           <Link to={`/trends/${product.trend.slug}`} className="text-sm text-gray-500 hover:text-gray-700">

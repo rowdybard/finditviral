@@ -66,7 +66,7 @@ export default function BountyDetail() {
     if (!id) return
     const { data: bountyData } = await supabase
       .from('bounties')
-      .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+      .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
       .eq('id', id)
       .single()
     const nextBounty = bountyData as Bounty | null

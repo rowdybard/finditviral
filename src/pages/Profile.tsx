@@ -6,8 +6,6 @@ import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
-import { buildReferralLink } from '../lib/referral'
-import { trackEvent } from '../lib/analytics'
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
@@ -22,19 +20,19 @@ export default function ProfilePage() {
   const [savedContactInfo, setSavedContactInfo] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const isOwnProfile = user?.id === profile?.id
 
   useEffect(() => {
     if (!username) return
     async function load() {
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id, username, karma, is_pro, created_at')
         .eq('username', username)
         .single()
-      if (!profileData) {
+      if (profileError || !profileData) {
         setLoading(false)
         return
       }
@@ -44,20 +42,20 @@ export default function ProfilePage() {
       const [bountiesRes, sightingsRes, claimsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('user_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('sightings')
-          .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('bounty_claims')
-          .select('*, bounty:bounties(*, product(*)), finder:profiles(id, username, karma, is_pro, created_at)')
+          .select('*, bounty:bounties(*, product:products(*)), finder:profiles(id, username, karma, is_pro, created_at)')
           .eq('finder_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
@@ -66,6 +64,9 @@ export default function ProfilePage() {
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
       setClaims(claimsRes.data as BountyClaim[] ?? [])
+      if (bountiesRes.error || sightingsRes.error || claimsRes.error) {
+        setError('Some content failed to load.')
+      }
 
       if (ownProfile) {
         const [ownProfileRes, contactRes] = await Promise.all([
@@ -73,7 +74,7 @@ export default function ProfilePage() {
             .from('profiles')
             .select('id, username, karma, is_pro, created_at, looking_for, onboarding_completed, preferred_cities')
             .eq('id', profileData.id)
-            .single(),
+            .maybeSingle(),
           supabase
             .from('profile_contacts')
             .select('user_id, contact_info, created_at, updated_at')
@@ -134,6 +135,9 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
       <div className="flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-bold text-brand-700">
           {profile.username.charAt(0).toUpperCase()}
@@ -167,53 +171,11 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {isOwnProfile && (
+      {isOwnProfile && profile.is_pro && (
         <div className="card">
-          <h2 className="font-semibold text-gray-900">Your referral link</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Get 1 month free Pro for each friend who signs up (up to 9 months).
+          <p className="text-sm font-medium text-brand-700">
+            ✓ You have 3 months free Pro from the launch promo!
           </p>
-          <div className="mt-3 flex gap-2">
-            <input
-              className="input flex-1 text-sm"
-              type="text"
-              value={buildReferralLink(profile.username)}
-              readOnly
-              onFocus={(e) => e.target.select()}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(buildReferralLink(profile.username)).then(() => {
-                  trackEvent('share_referral')
-                  setCopied(true)
-                  setTimeout(() => setCopied(false), 2000)
-                })
-              }}
-              className="btn-secondary text-sm whitespace-nowrap"
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-          {(profile.referral_count ?? 0) > 0 && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-sm text-gray-600">
-                <span>{profile.referral_count} friend{(profile.referral_count ?? 0) === 1 ? '' : 's'} referred</span>
-                <span>{profile.referral_count} / 9</span>
-              </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full rounded-full bg-brand-500 transition-all"
-                  style={{ width: `${Math.min(((profile.referral_count ?? 0) / 9) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {profile.is_pro && (
-            <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs font-medium text-brand-700">
-              ✓ You have 3 months free Pro from the launch promo!
-            </p>
-          )}
         </div>
       )}
 

@@ -25,7 +25,7 @@ export default function NewSighting() {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
       setTrends(data as Trend[] ?? [])
     })
-    supabase.from('products').select('*, trend(*)').eq('is_active', true).order('name').then(({ data }) => {
+    supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name').then(({ data }) => {
       setProducts(data as Product[] ?? [])
     })
   }, [])
@@ -63,7 +63,6 @@ export default function NewSighting() {
     const { error: insertError } = await supabase
       .from('sightings')
       .insert({
-        user_id: user.id,
         product_id: selectedProduct,
         store_name: storeName.trim(),
         city: city.trim() || null,
