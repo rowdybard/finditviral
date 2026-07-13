@@ -38,7 +38,7 @@ export default function TrendPage() {
       const productList = productsData as Product[] ?? []
       const productIds = productList.map((p) => p.id)
 
-      const [bountiesRes, sightingsRes] = await Promise.all([
+      const [bountiesRes, sightingsRes, sightingProductIdsRes] = await Promise.all([
         supabase
           .from('bounties')
           .select('*, product(*), profile:profiles(id, username, karma, is_pro, created_at)')
@@ -53,9 +53,17 @@ export default function TrendPage() {
           .in('product_id', productIds)
           .order('created_at', { ascending: false })
           .limit(10),
+        supabase
+          .from('sightings')
+          .select('product_id')
+          .eq('is_public', true)
+          .in('product_id', productIds),
       ])
 
-      setProducts(productList)
+      const productsWithSightings = new Set(
+        (sightingProductIdsRes.data ?? []).map((s) => (s as { product_id: string }).product_id)
+      )
+      setProducts(productList.map((p) => ({ ...p, has_sightings: productsWithSightings.has(p.id) })))
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
       setLoading(false)
@@ -93,19 +101,32 @@ export default function TrendPage() {
         <section>
           <h2 className="mb-3 text-lg font-semibold text-gray-900">Products</h2>
           <div className="grid grid-cols-2 gap-3">
-            {products.map((p) => (
-              <Link
-                key={p.id}
-                to={`/products/${p.slug}`}
-                className="card transition-shadow hover:shadow-md"
-              >
-                <h3 className="font-medium text-gray-900">{p.name}</h3>
-                <p className="mt-1 text-xs font-medium text-brand-600">
-                  {availabilityLabel(p)}
-                  {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
-                </p>
-              </Link>
-            ))}
+            {products.map((p) => {
+              if (!p.has_sightings) {
+                return (
+                  <div key={p.id} className="card opacity-60">
+                    <h3 className="font-medium text-gray-900">{p.name}</h3>
+                    <p className="mt-1 text-xs font-medium text-gray-400">
+                      No sightings yet
+                      {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <Link
+                  key={p.id}
+                  to={`/products/${p.slug}`}
+                  className="card transition-shadow hover:shadow-md"
+                >
+                  <h3 className="font-medium text-gray-900">{p.name}</h3>
+                  <p className="mt-1 text-xs font-medium text-brand-600">
+                    {availabilityLabel(p)}
+                    {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
+                  </p>
+                </Link>
+              )
+            })}
           </div>
         </section>
       )}

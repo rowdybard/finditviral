@@ -20,6 +20,7 @@ export type Product = {
   is_active: boolean
   created_at: string
   trend?: Trend
+  has_sightings?: boolean
 }
 
 export type Profile = {
