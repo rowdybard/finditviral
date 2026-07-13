@@ -187,7 +187,17 @@ grant execute on function public.request_early_access(text, text) to anon, authe
 -- ─── Revoke rls_auto_enable from public ─────────────────────────────
 -- This administrative function must not be callable by anon/authenticated.
 
-revoke execute on function pg_catalog.rls_auto_enable() from public, anon, authenticated;
+do $$
+begin
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'pg_catalog' and p.proname = 'rls_auto_enable'
+  ) then
+    revoke execute on function pg_catalog.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end
+$$;
 
 -- ─── Input constraints ──────────────────────────────────────────────
 

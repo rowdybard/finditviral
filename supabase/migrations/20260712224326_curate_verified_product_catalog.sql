@@ -9,6 +9,10 @@ alter table public.products
   add column if not exists verified_at timestamptz,
   add column if not exists is_active boolean not null default false;
 
+-- Nothing is deleted: old links and any future references remain valid.
+update public.products
+set is_active = false, availability_status = 'retired';
+
 alter table public.products drop constraint if exists products_availability_status_check;
 alter table public.products add constraint products_availability_status_check
   check (availability_status in ('available', 'backorder', 'preorder', 'announced', 'retired'));
@@ -24,10 +28,6 @@ alter table public.products add constraint products_active_verification_check
       and verified_at is not null
     )
   );
-
--- Nothing is deleted: old links and any future references remain valid.
-update public.products
-set is_active = false, availability_status = 'retired';
 
 update public.trends set is_active = false;
 
