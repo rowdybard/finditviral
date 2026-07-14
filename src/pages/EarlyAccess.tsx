@@ -89,7 +89,7 @@ export default function EarlyAccess() {
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1.1fr_0.9fr] lg:px-12">
         <section aria-labelledby="early-access-title">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Closed beta</p>
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Open local beta</p>
           <h1 id="early-access-title" className="mt-3 text-4xl font-extrabold tracking-tight text-stone-900 sm:text-6xl">
             Find viral products around <span className="text-brand-600">{activeMarket.name}</span>.
           </h1>
@@ -98,11 +98,22 @@ export default function EarlyAccess() {
               FindItViral helps local shoppers share recent sightings for viral, limited, and hard-to-find retail products before someone drives across town.
             </p>
             <p>
-              During the closed beta, we are starting with shoppers around Lansing, East Lansing, Okemos, Holt, and nearby communities. Early members will help shape the products, stores, and alerts we support first.
+              We are starting with shoppers around Lansing, East Lansing, Okemos, Holt, and nearby communities. Create an account to browse the local catalog, post what you are hunting, and report what is actually on shelves.
             </p>
             <p>
-              Join the early-access list and tell us what you want to find. We will reach out as space opens.
+              The beta is open now to Greater Lansing shoppers. Your reports help make the next person’s trip across town worth it.
             </p>
+          </div>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link
+              to="/auth?mode=signup"
+              className={`rounded-lg border-2 border-stone-900 bg-brand-500 px-6 py-3.5 text-center text-base font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2`}
+            >
+              Create a free beta account
+            </Link>
+            <Link to="/auth" className="px-4 py-3 text-center text-sm font-bold text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">
+              Already a member? Sign in
+            </Link>
           </div>
         </section>
 
@@ -111,12 +122,12 @@ export default function EarlyAccess() {
             <div role="status" aria-live="polite" className="py-8 text-center">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
               <h2 id="join-title" className="mt-5 text-2xl font-extrabold text-stone-900">You’re on the list.</h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">Thanks for helping us build the {activeMarket.name} beta. We’ll be in touch as access opens.</p>
+              <p className="mt-2 text-sm leading-6 text-stone-600">Thanks for helping us build the {activeMarket.name} beta. We’ll keep you posted as it grows.</p>
             </div>
           ) : (
             <>
-              <h2 id="join-title" className="text-2xl font-extrabold text-stone-900">Request early access</h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">Tell us what brought you here. Both fields are required.</p>
+              <h2 id="join-title" className="text-2xl font-extrabold text-stone-900">Get beta updates</h2>
+              <p className="mt-2 text-sm leading-6 text-stone-600">Not ready to make an account? Tell us what you are hunting and we will keep you in the loop.</p>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-5">
                 <div>
@@ -164,7 +175,7 @@ export default function EarlyAccess() {
                   disabled={submitting || !TURNSTILE_SITE_KEY}
                   className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3.5 text-base font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
-                  {submitting ? 'Submitting…' : 'Join the early-access list'}
+                  {submitting ? 'Submitting…' : 'Send me beta updates'}
                 </button>
               </form>
             </>
@@ -178,7 +189,7 @@ export default function EarlyAccess() {
           <span className="flex flex-wrap items-center gap-4">
             <a href="mailto:contact@finditviral.com" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">contact@finditviral.com</a>
             <Link to="/privacy" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Privacy</Link>
-            <Link to="/auth" className="font-medium text-stone-500 underline-offset-4 hover:text-stone-800 hover:underline">Owner sign in</Link>
+            <Link to="/auth" className="font-medium text-stone-500 underline-offset-4 hover:text-stone-800 hover:underline">Sign in</Link>
           </span>
         </div>
       </footer>

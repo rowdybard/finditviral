@@ -6,6 +6,7 @@ import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
+import { mapProductHeat, trackProductOpen, type ProductHeat } from '../lib/productHeat'
 
 export default function TrendPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -13,12 +14,17 @@ export default function TrendPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
+  const [heatByProduct, setHeatByProduct] = useState<Record<string, ProductHeat>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!slug) return
     async function load() {
+      setLoading(true)
+      setError(null)
+      setHeatByProduct({})
+
       const { data: trendData, error: trendError } = await supabase
         .from('trends')
         .select('*')
@@ -44,7 +50,7 @@ export default function TrendPage() {
       const productList = productsData as Product[] ?? []
       const productIds = productList.map((p) => p.id)
 
-      const [bountiesRes, sightingsRes, sightingProductIdsRes] = await Promise.all([
+      const [bountiesRes, sightingsRes, sightingProductIdsRes, heatRes] = await Promise.all([
         supabase
           .from('bounties')
           .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
@@ -64,6 +70,7 @@ export default function TrendPage() {
           .select('product_id')
           .eq('is_public', true)
           .in('product_id', productIds),
+        supabase.rpc('get_trend_click_heat', { p_trend_id: trendData.id }),
       ])
 
       const productsWithSightings = new Set(
@@ -72,6 +79,7 @@ export default function TrendPage() {
       setProducts(productList.map((p) => ({ ...p, has_sightings: productsWithSightings.has(p.id) })))
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
+      setHeatByProduct(heatRes.error ? {} : mapProductHeat(heatRes.data))
       if (bountiesRes.error || sightingsRes.error) {
         setError('Some content failed to load.')
       }
@@ -111,31 +119,59 @@ export default function TrendPage() {
 
       {products.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold text-gray-900">Products</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <h2 className="text-lg font-semibold text-gray-900">Products</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-stone-500">
+              <span className="text-brand-700">FiV Heat</span> · relative interest
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {products.map((p) => {
-              if (!p.has_sightings) {
-                return (
-                  <div key={p.id} className="card opacity-60">
-                    <h3 className="font-medium text-gray-900">{p.name}</h3>
-                    <p className="mt-1 text-xs font-medium text-gray-400">
-                      No sightings yet
-                      {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
-                    </p>
-                  </div>
-                )
-              }
+              const heat = heatByProduct[p.id]
+              const hasHeatSignal = heat?.hasSignal === true
+              const heatPercent = hasHeatSignal ? heat.heatPercent : 0
+
               return (
                 <Link
                   key={p.id}
                   to={`/products/${p.slug}`}
-                  className="card transition-shadow hover:shadow-md"
+                  onClick={() => { void trackProductOpen(p.id) }}
+                  className="group grid min-h-28 grid-cols-[minmax(0,1fr)_5rem] overflow-hidden rounded-2xl border-2 border-stone-900 bg-white shadow-[4px_4px_0_0_#1c1917] transition duration-150 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_0_#1c1917] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-300"
                 >
-                  <h3 className="font-medium text-gray-900">{p.name}</h3>
-                  <p className="mt-1 text-xs font-medium text-brand-600">
-                    {availabilityLabel(p)}
-                    {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
-                  </p>
+                  <div className="min-w-0 p-4">
+                    <h3 className="font-bold leading-snug text-stone-900 group-hover:text-brand-700">
+                      {p.name}
+                    </h3>
+                    <p className={`mt-2 text-xs font-bold ${p.has_sightings ? 'text-brand-700' : 'text-stone-500'}`}>
+                      {p.has_sightings ? availabilityLabel(p) : 'No sightings yet'}
+                      {releaseLabel(p.release_date) ? ` · ${releaseLabel(p.release_date)}` : ''}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center gap-2 border-l-2 border-stone-900 bg-brand-50 px-2 py-3 text-center">
+                    <span className="text-xs font-extrabold uppercase leading-none tracking-[0.06em] text-brand-800">
+                      FiV Heat
+                    </span>
+                    <span className="text-lg font-black tabular-nums text-stone-900">
+                      {hasHeatSignal ? heatPercent : '—'}
+                    </span>
+                    {hasHeatSignal ? (
+                      <meter
+                        className="fiv-heat-meter"
+                        min={0}
+                        value={heatPercent}
+                        max={100}
+                        aria-label={`FiV Heat score ${heatPercent} out of 100, based on product opens within ${trend.name}`}
+                      >
+                        {heatPercent} out of 100
+                      </meter>
+                    ) : (
+                      <>
+                        <span aria-hidden="true" className="h-3 w-full rounded-full border-2 border-stone-900 bg-white" />
+                        <span className="sr-only">No product opens recorded for this trend yet.</span>
+                      </>
+                    )}
+                  </div>
                 </Link>
               )
             })}

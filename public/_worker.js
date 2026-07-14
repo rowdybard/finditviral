@@ -2,8 +2,15 @@
 const REDIRECT_HOSTS = new Set(['finditviral.pages.dev', 'www.finditviral.com'])
 
 const EARLY_ACCESS_PATH = '/api/early-access'
+const PRODUCT_CLICK_PATH = '/api/product-click'
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const PRODUCT_CLICK_COOKIE = '__Host-fiv_heat'
+const PRODUCT_CLICK_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+const PRODUCT_CLICK_RATE_LIMIT_MAX = 60
+const PRODUCT_CLICK_RATE_LIMIT_WINDOW_SECONDS = 600
+const PRODUCT_CLICK_MAX_BODY_LENGTH = 256
 const RATE_LIMIT_MAX_REQUESTS = 5
 const RATE_LIMIT_WINDOW_SECONDS = 600
 const UPSTREAM_TIMEOUT_MS = 10_000
@@ -21,8 +28,8 @@ const SPA_ROUTES = [
 ]
 
 const ROOT_METADATA = {
-  title: 'FindItViral - Greater Lansing Early Access',
-  description: 'Request early access to FindItViral, a closed beta for finding viral and hard-to-find products around Greater Lansing.',
+  title: 'FindItViral - Find Viral Products in Greater Lansing',
+  description: 'Join the FindItViral beta to find and report viral, limited, and hard-to-find retail products around Greater Lansing.',
   canonicalUrl: 'https://finditviral.com/',
   robots: 'index, follow',
 }
@@ -35,8 +42,8 @@ const PRIVACY_METADATA = {
 }
 
 const PRIVATE_METADATA = {
-  title: 'Private Access - FindItViral',
-  description: 'Owner-only FindItViral workspace.',
+  title: 'Greater Lansing Beta - FindItViral',
+  description: 'The signed-in FindItViral beta for Greater Lansing shoppers.',
   canonicalUrl: 'https://finditviral.com/',
   robots: 'noindex, nofollow',
 }
@@ -78,6 +85,14 @@ function createApiResponse(status, body, extraHeaders = {}) {
   })
 }
 
+function createSupabaseServerHeaders(apiKey) {
+  return {
+    apikey: apiKey,
+    ...(apiKey.startsWith('eyJ') ? { Authorization: `Bearer ${apiKey}` } : {}),
+    'Content-Type': 'application/json',
+  }
+}
+
 function logApiEvent(level, message, details = {}) {
   const entry = JSON.stringify({ message, ...details })
   if (level === 'error') console.error(entry)
@@ -102,6 +117,170 @@ async function enforceRateLimit(env, clientIp) {
     })
     return 'allowed'
   }
+}
+
+async function createSha256Hex(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function enforceProductClickRateLimit(env, clientIp) {
+  if (!clientIp) return 'allowed'
+
+  try {
+    const clientKey = await createSha256Hex(`${env.SUPABASE_SECRET_KEY}:${clientIp}`)
+    const key = `product-click-rate:${clientKey}`
+    const currentCount = Number((await env.EARLY_ACCESS_RATE_LIMIT.get(key)) ?? '0')
+    if (!Number.isFinite(currentCount)) return 'unavailable'
+    if (currentCount >= PRODUCT_CLICK_RATE_LIMIT_MAX) return 'limited'
+    await env.EARLY_ACCESS_RATE_LIMIT.put(key, String(currentCount + 1), {
+      expirationTtl: PRODUCT_CLICK_RATE_LIMIT_WINDOW_SECONDS,
+    })
+    return 'allowed'
+  } catch (error) {
+    logApiEvent('error', 'product click rate limit unavailable', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return 'unavailable'
+  }
+}
+
+function getCookie(request, name) {
+  const cookieHeader = request.headers.get('Cookie') ?? ''
+  const prefix = `${name}=`
+  const match = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+  return match ? match.slice(prefix.length) : ''
+}
+
+function createProductClickCookie(visitorId) {
+  return [
+    `${PRODUCT_CLICK_COOKIE}=${visitorId}`,
+    'Path=/',
+    `Max-Age=${PRODUCT_CLICK_COOKIE_MAX_AGE}`,
+    'Secure',
+    'HttpOnly',
+    'SameSite=Lax',
+  ].join('; ')
+}
+
+async function readJsonWithByteLimit(request, maxBytes) {
+  const contentLength = Number(request.headers.get('Content-Length') ?? '0')
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return null
+  if (!request.body) return null
+
+  const reader = request.body.getReader()
+  const chunks = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        return null
+      }
+      chunks.push(value)
+    }
+
+    const body = new Uint8Array(totalBytes)
+    let offset = 0
+    for (const chunk of chunks) {
+      body.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    return JSON.parse(new TextDecoder().decode(body))
+  } catch {
+    try {
+      await reader.cancel()
+    } catch {
+      // The stream may already be closed or errored.
+    }
+    return null
+  }
+}
+
+export async function handleProductClick(request, env, fetchImpl = fetch) {
+  if (request.method !== 'POST') {
+    return createApiResponse(405, { error: 'method_not_allowed' }, { Allow: 'POST' })
+  }
+
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY || !env.EARLY_ACCESS_RATE_LIMIT) {
+    logApiEvent('error', 'product click endpoint is missing server configuration', {
+      hasSupabaseUrl: Boolean(env.SUPABASE_URL),
+      hasSupabaseSecret: Boolean(env.SUPABASE_SECRET_KEY),
+      hasRateLimit: Boolean(env.EARLY_ACCESS_RATE_LIMIT),
+    })
+    return createApiResponse(503, { error: 'unavailable' }, { 'Retry-After': '300' })
+  }
+
+  const requestUrl = new URL(request.url)
+  if (request.headers.get('Origin') !== requestUrl.origin) {
+    return createApiResponse(403, { error: 'forbidden' })
+  }
+
+  if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) {
+    return createApiResponse(400, { error: 'invalid_request' })
+  }
+
+  const payload = await readJsonWithByteLimit(request, PRODUCT_CLICK_MAX_BODY_LENGTH)
+  if (!payload) return createApiResponse(400, { error: 'invalid_request' })
+
+  const productId = typeof payload?.productId === 'string' ? payload.productId.trim().toLowerCase() : ''
+  if (!UUID_PATTERN.test(productId)) {
+    return createApiResponse(400, { error: 'invalid_request' })
+  }
+
+  const existingVisitorId = getCookie(request, PRODUCT_CLICK_COOKIE)
+  const hasValidVisitorId = UUID_PATTERN.test(existingVisitorId)
+  const visitorId = hasValidVisitorId ? existingVisitorId.toLowerCase() : crypto.randomUUID()
+  const cookieHeaders = hasValidVisitorId
+    ? {}
+    : { 'Set-Cookie': createProductClickCookie(visitorId) }
+
+  const clientIp = request.headers.get('CF-Connecting-IP') ?? ''
+  const rateLimit = await enforceProductClickRateLimit(env, clientIp)
+  if (rateLimit !== 'allowed') {
+    return createApiResponse(204, null, cookieHeaders)
+  }
+
+  const clickKey = await createSha256Hex(`${visitorId}:${productId}`)
+
+  try {
+    const rpcResponse = await fetchImpl(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/record_product_click`,
+      {
+        method: 'POST',
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
+        body: JSON.stringify({
+          p_product_id: productId,
+          p_click_key: clickKey,
+        }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
+    )
+
+    if (!rpcResponse.ok) {
+      logApiEvent('error', 'product click persistence failed', { status: rpcResponse.status })
+      return rpcResponse.status === 400
+        ? createApiResponse(400, { error: 'invalid_request' }, cookieHeaders)
+        : createApiResponse(502, { error: 'unavailable' }, cookieHeaders)
+    }
+  } catch (error) {
+    logApiEvent('error', 'product click persistence unreachable', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return createApiResponse(502, { error: 'unavailable' }, cookieHeaders)
+  }
+
+  return createApiResponse(204, null, cookieHeaders)
 }
 
 async function verifyTurnstileToken(env, token, clientIp, fetchImpl) {
@@ -181,11 +360,7 @@ export async function handleEarlyAccess(request, env, fetchImpl = fetch) {
       `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/request_early_access`,
       {
         method: 'POST',
-        headers: {
-          apikey: env.SUPABASE_SECRET_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-        },
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
         body: JSON.stringify({ p_email: email, p_reason: reason }),
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
@@ -290,6 +465,10 @@ export default {
 
     if (url.pathname === EARLY_ACCESS_PATH) {
       return handleEarlyAccess(request, env)
+    }
+
+    if (url.pathname === PRODUCT_CLICK_PATH) {
+      return handleProductClick(request, env)
     }
 
     try {

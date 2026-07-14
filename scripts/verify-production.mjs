@@ -69,7 +69,7 @@ await check('landing page returns HTML', async () => {
   rootHtml = await rootResponse.text()
   assert(rootResponse.status === 200, `expected 200, received ${rootResponse.status}`)
   assert(rootResponse.headers.get('content-type')?.includes('text/html'), 'missing HTML content type')
-  assert(getTitle(rootHtml) === 'FindItViral - Greater Lansing Early Access', 'unexpected landing title')
+  assert(getTitle(rootHtml) === 'FindItViral - Find Viral Products in Greater Lansing', 'unexpected landing title')
   assert(getCanonical(rootHtml) === 'https://finditviral.com/', 'unexpected landing canonical URL')
 })
 
@@ -108,6 +108,20 @@ await check('unknown route returns a real 404', async () => {
 await check('missing JavaScript asset returns a real 404', async () => {
   const response = await fetchFromBase('/assets/definitely-missing.js')
   assert(response.status === 404, `expected 404, received ${response.status}`)
+})
+
+await check('FiV Heat endpoint validates product clicks without recording one', async () => {
+  const response = await fetchFromBase('/api/product-click', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: baseUrl.origin,
+    },
+    body: JSON.stringify({ productId: 'invalid-smoke-probe' }),
+  })
+  const body = await response.json().catch(() => ({}))
+  assert(response.status === 400, `expected 400, received ${response.status}`)
+  assert(body.error === 'invalid_request', `unexpected response: ${JSON.stringify(body)}`)
 })
 
 await check('crawler files are real static resources', async () => {
@@ -246,22 +260,57 @@ if (webOnly) {
     assert(response.status === 401 || response.status === 403, `expected 401/403, received ${response.status}/${body.code ?? 'no-code'}`)
   })
 
-  await check('public Supabase Auth signup is disabled', async () => {
+  await check('public Supabase Auth signup is enabled', async () => {
     const response = await fetch(`${supabaseUrl}/auth/v1/settings`, { headers: { apikey: supabaseKey } })
     const body = await response.json()
     assert(response.status === 200, `expected 200, received ${response.status}`)
-    assert(body.disable_signup === true, 'disable_signup is not true')
+    assert(body.disable_signup === false, 'disable_signup is not false')
   })
 
-  await check('owner gate RPC exists but is not anonymous', async () => {
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/is_app_owner`, {
-      method: 'POST',
-      headers: { apikey: supabaseKey, 'content-type': 'application/json' },
-      body: '{}',
-    })
-    const body = await response.json().catch(() => ({}))
-    assert(!(response.status === 404 && body.code === 'PGRST202'), 'owner RPC is missing')
-    assert(response.status === 401 || response.status === 403, `expected 401/403, received ${response.status}/${body.code ?? 'no-code'}`)
+  await check('account RPCs reject anonymous callers', async () => {
+    for (const [name, body] of [
+      ['get_my_profile', '{}'],
+      ['is_username_available', JSON.stringify({ p_username: 'anonymous_probe' })],
+    ]) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers: { apikey: supabaseKey, 'content-type': 'application/json' },
+        body,
+      })
+      const responseBody = await response.json().catch(() => ({}))
+      assert(!(response.status === 404 && responseBody.code === 'PGRST202'), `${name} RPC is missing`)
+      assert(response.status === 401 || response.status === 403, `${name}: expected 401/403, received ${response.status}/${responseBody.code ?? 'no-code'}`)
+    }
+  })
+
+  await check('FiV Heat database writes and reads reject anonymous callers', async () => {
+    for (const [name, body] of [
+      ['record_product_click', JSON.stringify({
+        p_product_id: '00000000-0000-4000-8000-000000000000',
+        p_click_key: '0'.repeat(64),
+      })],
+      ['get_trend_click_heat', JSON.stringify({
+        p_trend_id: '00000000-0000-4000-8000-000000000000',
+      })],
+    ]) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers: { apikey: supabaseKey, 'content-type': 'application/json' },
+        body,
+      })
+      const responseBody = await response.json().catch(() => ({}))
+      assert(!(response.status === 404 && responseBody.code === 'PGRST202'), `${name} RPC is missing`)
+      assert(response.status === 401 || response.status === 403, `${name}: expected 401/403, received ${response.status}/${responseBody.code ?? 'no-code'}`)
+    }
+  })
+
+  await check('FiV Heat private tables are absent from the Data API', async () => {
+    for (const table of ['product_click_receipts', 'product_click_totals']) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=*&limit=1`, {
+        headers: { apikey: supabaseKey },
+      })
+      assert(response.status === 404, `${table}: expected 404, received ${response.status}`)
+    }
   })
 }
 

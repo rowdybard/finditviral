@@ -11,7 +11,7 @@ const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 const STEPS = ['Username', 'Location', 'Interests'] as const
 
 export default function Onboarding() {
-  const { user, isOwner, refreshProfile } = useAuth()
+  const { user, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [username, setUsername] = useState('')
@@ -34,20 +34,16 @@ export default function Onboarding() {
     }
 
     setUsernameStatus('checking')
-    const { data, error: queryError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', clean)
-      .maybeSingle()
+    const { data, error: queryError } = await supabase.rpc('is_username_available', {
+      p_username: clean,
+    })
 
     if (queryError) {
       setUsernameStatus('idle')
-    } else if (data && data.id !== user?.id) {
-      setUsernameStatus('taken')
     } else {
-      setUsernameStatus('available')
+      setUsernameStatus(data === true ? 'available' : 'taken')
     }
-  }, [user?.id])
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => void checkUsername(username), 400)
@@ -55,11 +51,11 @@ export default function Onboarding() {
   }, [username, checkUsername])
 
   useEffect(() => {
-    if (!user || !isOwner) navigate('/auth', { replace: true })
-  }, [user, isOwner, navigate])
+    if (!user) navigate('/auth', { replace: true })
+  }, [user, navigate])
 
   async function handleFinish() {
-    if (!user || !isOwner) return
+    if (!user) return
     setSubmitting(true)
     setError(null)
 
@@ -71,8 +67,8 @@ export default function Onboarding() {
       setStep(0)
       return
     }
-    if (zipCode.trim() && !/^[0-9]{5}$/.test(zipCode.trim())) {
-      setError('Please enter a valid 5-digit ZIP code.')
+    if (!/^[0-9]{5}$/.test(zipCode.trim())) {
+      setError('Enter a supported Greater Lansing ZIP code.')
       setSubmitting(false)
       setStep(1)
       return
@@ -86,7 +82,7 @@ export default function Onboarding() {
 
     const { error: rpcError } = await supabase.rpc('complete_onboarding', {
       p_username: cleanUsername,
-      p_zip_code: zipCode.trim() || null,
+      p_zip_code: zipCode.trim(),
       p_looking_for: lookingFor.trim() || null,
       p_referrer_username: null,
       p_preferred_cities: preferredCities,
@@ -103,7 +99,7 @@ export default function Onboarding() {
         setError('That username is taken. Try another one.')
         setStep(0)
       } else if (message.includes('ZIP')) {
-        setError('Please enter a valid 5-digit ZIP code.')
+        setError('That ZIP code is outside the Greater Lansing beta area.')
         setStep(1)
       } else if (message.includes('Greater Lansing city')) {
         setError('Please select at least one Greater Lansing city.')
@@ -120,7 +116,7 @@ export default function Onboarding() {
 
     await refreshProfile()
     trackEvent('complete_onboarding', {
-      has_zip: Boolean(zipCode.trim()),
+      has_zip: true,
       city_count: preferredCities.length,
     })
     navigate('/home', { replace: true })
@@ -140,8 +136,8 @@ export default function Onboarding() {
       }
     }
     if (step === 1) {
-      if (zipCode && !/^[0-9]{5}$/.test(zipCode)) {
-        setError('Please enter a valid 5-digit ZIP code.')
+      if (!/^[0-9]{5}$/.test(zipCode)) {
+        setError('Enter a supported Greater Lansing ZIP code.')
         return
       }
       if (preferredCities.length < 1) {
@@ -155,7 +151,7 @@ export default function Onboarding() {
     else void handleFinish()
   }
 
-  if (!user || !isOwner) return null
+  if (!user) return null
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900">
@@ -233,6 +229,7 @@ export default function Onboarding() {
                   onChange={(event) => setZipCode(event.target.value.replace(/\D/g, '').slice(0, 5))}
                   placeholder={activeMarket.defaultZip}
                   maxLength={5}
+                  required
                 />
               </div>
               <fieldset>
@@ -270,7 +267,7 @@ export default function Onboarding() {
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Step 3 of 3</p>
                 <h1 className="mt-2 text-2xl font-extrabold">What are you trying to find?</h1>
-                <p className="mt-2 text-sm leading-6 text-stone-600">This optional note helps organize the closed-beta workspace.</p>
+                <p className="mt-2 text-sm leading-6 text-stone-600">This optional note helps other local shoppers understand what you are hunting.</p>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold" htmlFor="onboarding-looking-for">Products of interest</label>

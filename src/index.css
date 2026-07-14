@@ -43,4 +43,27 @@
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
+
+  .fiv-heat-meter {
+    width: 100%;
+    height: 0.75rem;
+    overflow: hidden;
+    appearance: none;
+    border: 2px solid #1c1917;
+    border-radius: 9999px;
+    background: #fff;
+  }
+
+  .fiv-heat-meter::-webkit-meter-bar {
+    background: #fff;
+    border: 0;
+  }
+
+  .fiv-heat-meter::-webkit-meter-optimum-value {
+    background: linear-gradient(90deg, #f97316, #fb7185);
+  }
+
+  .fiv-heat-meter::-moz-meter-bar {
+    background: linear-gradient(90deg, #f97316, #fb7185);
+  }
 }

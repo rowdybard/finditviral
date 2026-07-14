@@ -33,9 +33,9 @@ export const activeMarket: MarketConfig = {
   ],
   defaultZip: '48910',
   betaLabel: 'Greater Lansing Beta',
-  seoTitle: 'FindItViral - Greater Lansing Early Access',
+  seoTitle: 'FindItViral - Find Viral Products in Greater Lansing',
   seoDescription:
-    'Request early access to FindItViral, a closed beta for finding viral and hard-to-find products around Greater Lansing.',
+    'Join the FindItViral beta to find and report viral, limited, and hard-to-find retail products around Greater Lansing.',
   storeExamples: [
     'Meijer',
     'Target',

@@ -70,19 +70,18 @@ export default function ProfilePage() {
 
       if (ownProfile) {
         const [ownProfileRes, contactRes] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('id, username, karma, is_pro, created_at, looking_for, onboarding_completed, preferred_cities')
-            .eq('id', profileData.id)
-            .maybeSingle(),
+          supabase.rpc('get_my_profile'),
           supabase
             .from('profile_contacts')
             .select('user_id, contact_info, created_at, updated_at')
             .eq('user_id', profileData.id)
             .single(),
         ])
-        if (ownProfileRes.data) {
-          setProfile(ownProfileRes.data as Profile)
+        const ownProfileData = Array.isArray(ownProfileRes.data)
+          ? ownProfileRes.data[0]
+          : ownProfileRes.data
+        if (ownProfileData) {
+          setProfile(ownProfileData as Profile)
         }
         setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
       }
@@ -168,14 +167,6 @@ export default function ProfilePage() {
               <span key={city} className="badge bg-brand-100 text-brand-800">{city}</span>
             ))}
           </div>
-        </div>
-      )}
-
-      {isOwnProfile && profile.is_pro && (
-        <div className="card">
-          <p className="text-sm font-medium text-brand-700">
-            ✓ You have 3 months free Pro from the launch promo!
-          </p>
         </div>
       )}
 

@@ -21,6 +21,7 @@ const realSupabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: true,
     },
     global: {
       fetch: (...args: Parameters<typeof fetch>) => {

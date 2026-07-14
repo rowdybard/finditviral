@@ -7,9 +7,12 @@ type AuthContextType = {
   session: Session | null
   user: User | null
   profile: Profile | null
-  isOwner: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  signUp: (email: string, password: string) => Promise<{
+    error: string | null
+    needsEmailConfirmation: boolean
+  }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -19,14 +22,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [isOwner, setIsOwner] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       if (data.session) {
-        void hydrateOwner(data.session.user.id)
+        void fetchProfile(data.session.user.id)
       } else {
         setLoading(false)
       }
@@ -37,10 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession)
         if (newSession) {
           setLoading(true)
-          setTimeout(() => void hydrateOwner(newSession.user.id), 0)
+          setTimeout(() => void fetchProfile(newSession.user.id), 0)
         } else {
           setProfile(null)
-          setIsOwner(false)
           setLoading(false)
         }
       },
@@ -51,48 +52,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  async function hydrateOwner(userId: string) {
-    const { data, error } = await supabase.rpc('is_app_owner')
-    const owner = !error && data === true
-    setIsOwner(owner)
-
-    if (!owner) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-
-    await fetchProfile(userId)
-  }
-
-  async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, username, karma, is_pro, created_at, onboarding_completed, looking_for, preferred_cities')
-      .eq('id', userId)
-      .single()
-    setProfile(data as Profile | null)
+  async function fetchProfile(_userId: string) {
+    const { data, error } = await supabase.rpc('get_my_profile')
+    const nextProfile = Array.isArray(data) ? data[0] : data
+    setProfile(error ? null : nextProfile as Profile | null)
     setLoading(false)
   }
 
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error: error.message }
-    const { data: owner, error: ownerError } = await supabase.rpc('is_app_owner')
-    if (ownerError || owner !== true) {
-      await supabase.auth.signOut()
-      return { error: 'This account is not authorized for the closed beta.' }
-    }
     setSession(data.session)
-    setIsOwner(true)
     await fetchProfile(data.user.id)
     return { error: null }
   }
 
+  async function signUp(email: string, password: string) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/onboarding`,
+      },
+    })
+
+    if (error) {
+      return { error: error.message, needsEmailConfirmation: false }
+    }
+
+    if (!data.session || !data.user) {
+      return { error: null, needsEmailConfirmation: true }
+    }
+
+    setSession(data.session)
+    await fetchProfile(data.user.id)
+    return { error: null, needsEmailConfirmation: false }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
+    setSession(null)
     setProfile(null)
-    setIsOwner(false)
   }
 
   async function refreshProfile() {
@@ -105,9 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         user: session?.user ?? null,
         profile,
-        isOwner,
         loading,
         signIn,
+        signUp,
         signOut,
         refreshProfile,
       }}

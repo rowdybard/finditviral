@@ -224,9 +224,9 @@ class Builder {
         const idx = store[this.t].findIndex(r => r[key] === id)
         if (idx >= 0) { Object.assign(store[this.t][idx], item); return store[this.t][idx] }
         const defaults = this.t === 'bounties'
-          ? { status: 'open' }
+          ? { status: 'open', user_id: mockSession?.user?.id }
           : this.t === 'sightings'
-            ? { stock_level: 'in_stock', is_public: true, bounty_id: null, photo_urls: null }
+            ? { stock_level: 'in_stock', is_public: true, bounty_id: null, photo_urls: null, user_id: mockSession?.user?.id }
             : {}
         const r = { ...defaults, ...item, [key]: id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
         store[this.t].push(r)
@@ -268,12 +268,40 @@ export const mockSupabase = {
       return Promise.resolve({ data: currentUserId === 'u1', error: null })
     }
 
+    if (name === 'get_my_profile') {
+      const profile = store.profiles.find(p => p.id === currentUserId) ?? null
+      return Promise.resolve({ data: profile ? [profile] : [], error: null })
+    }
+
+    if (name === 'get_trend_click_heat') {
+      const products = store.products.filter(
+        product => product.trend_id === args?.p_trend_id && product.is_active,
+      )
+      return Promise.resolve({
+        data: products.map(product => ({
+          product_id: product.id,
+          heat_percent: 0,
+          total_clicks: 0,
+          product_count: products.length,
+          has_signal: false,
+        })),
+        error: null,
+      })
+    }
+
+    if (name === 'is_username_available') {
+      const username = String(args?.p_username ?? '').trim().toLowerCase()
+      const available = /^[a-z0-9_]{3,20}$/.test(username)
+        && !store.profiles.some(p => p.id !== currentUserId && String(p.username).toLowerCase() === username)
+      return Promise.resolve({ data: available, error: null })
+    }
+
     if (name === 'complete_onboarding') {
-      if (currentUserId !== 'u1') {
-        return Promise.resolve({ data: null, error: { message: 'Owner access required' } })
-      }
       const profile = store.profiles.find(p => p.id === currentUserId)
       if (!profile) return Promise.resolve({ data: null, error: { message: 'Profile not found' } })
+      if (profile.onboarding_completed) {
+        return Promise.resolve({ data: null, error: { message: 'Onboarding has already been completed' } })
+      }
       Object.assign(profile, {
         username: args.p_username,
         onboarding_completed: true,
@@ -360,8 +388,17 @@ export const mockSupabase = {
     getSession: () => Promise.resolve({ data: { session: mockSession }, error: null }),
     signUp: ({ email, options }: any) => {
       const id = uid()
-      const username = options?.data?.username || 'DemoUser'
-      store.profiles.push({ id, username, karma: 0, is_pro: false, created_at: new Date().toISOString() })
+      const username = options?.data?.username || `user_${id.replace(/-/g, '').slice(0, 15)}`
+      store.profiles.push({
+        id,
+        username,
+        karma: 0,
+        is_pro: false,
+        onboarding_completed: false,
+        looking_for: null,
+        preferred_cities: [],
+        created_at: new Date().toISOString(),
+      })
       mockSession = { user: { id, email }, access_token: 'mock' }
       listeners.forEach(l => l('SIGNED_IN', mockSession))
       return Promise.resolve({ data: { user: { id, email }, session: mockSession }, error: null })

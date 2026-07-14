@@ -22,22 +22,22 @@ const PRIVACY_METADATA: PageMetadata = {
 }
 
 const PRIVATE_METADATA: PageMetadata = {
-  title: 'Private Access - FindItViral',
-  description: 'Owner-only FindItViral workspace.',
+  title: 'Greater Lansing Beta - FindItViral',
+  description: 'The signed-in FindItViral beta for Greater Lansing shoppers.',
   canonicalUrl: 'https://finditviral.com/',
   robots: 'noindex, nofollow',
 }
 
 const AUTH_METADATA: PageMetadata = {
-  title: 'Owner Sign In - FindItViral',
-  description: 'Owner sign in for the private FindItViral closed-beta workspace.',
+  title: 'Sign In or Join - FindItViral',
+  description: 'Create an account or sign in to the FindItViral Greater Lansing beta.',
   canonicalUrl: 'https://finditviral.com/auth',
   robots: 'noindex, nofollow',
 }
 
 const ONBOARDING_METADATA: PageMetadata = {
-  title: 'Owner Setup - FindItViral',
-  description: 'Set up the private FindItViral closed-beta workspace.',
+  title: 'Set Up Your Profile - FindItViral',
+  description: 'Set up your Greater Lansing shopping profile for the FindItViral beta.',
   canonicalUrl: 'https://finditviral.com/onboarding',
   robots: 'noindex, nofollow',
 }

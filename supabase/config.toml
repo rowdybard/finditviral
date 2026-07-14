@@ -24,13 +24,13 @@ sql_paths = []
 [auth]
 enabled = true
 site_url = "https://finditviral.com"
-additional_redirect_urls = ["https://finditviral.com"]
-enable_signup = false
+additional_redirect_urls = ["https://finditviral.com", "https://finditviral.com/onboarding"]
+enable_signup = true
 enable_anonymous_sign_ins = false
 minimum_password_length = 8
 
 [auth.email]
-enable_signup = false
+enable_signup = true
 enable_confirmations = false
 secure_password_change = true
 

@@ -18,13 +18,14 @@ describe('getPageMetadata', () => {
   })
 
   it('keeps auth and onboarding routes out of search results', () => {
+    expect(getPageMetadata('/auth').title).toBe('Sign In or Join - FindItViral')
     expect(getPageMetadata('/auth').robots).toBe('noindex, nofollow')
     expect(getPageMetadata('/auth').canonicalUrl).toBe('https://finditviral.com/auth')
     expect(getPageMetadata('/onboarding').robots).toBe('noindex, nofollow')
     expect(getPageMetadata('/onboarding').canonicalUrl).toBe('https://finditviral.com/onboarding')
   })
 
-  it('keeps private and unknown routes out of search results', () => {
+  it('keeps member and unknown routes out of search results', () => {
     expect(getPageMetadata('/home').robots).toBe('noindex, nofollow')
     expect(getPageMetadata('/home').canonicalUrl).toBe('https://finditviral.com/home')
     expect(getPageMetadata('/unrecognized').robots).toBe('noindex, nofollow')
