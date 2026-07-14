@@ -1,96 +1,91 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { listPublicBounties, listPublicSightings } from '../../lib/launchApi'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getPersonalNotifications } from '../../lib/launchApi'
+import type { PersonalNotification } from '../../types/database'
 import type { MascotNotification } from './MascotBubble'
 
-const POLL_INTERVAL = 30_000
-
+const POLL_INTERVAL = 180_000
 const HISTORY_LIMIT = 20
+const LAST_SEEN_KEY = 'fiv-mascot-last-seen'
+
+function loadLastSeen(): string {
+  try {
+    const stored = localStorage.getItem(LAST_SEEN_KEY)
+    if (stored) return stored
+  } catch {
+    // ignore
+  }
+  return new Date(0).toISOString()
+}
+
+function mapNotification(n: PersonalNotification): MascotNotification {
+  let type: MascotNotification['type'] = 'notification'
+  if (n.event_type === 'bounty_claim') {
+    type = 'bounty'
+  } else if (n.event_type === 'moderation' && n.title.includes('Sighting')) {
+    type = 'sighting'
+  }
+  return {
+    id: n.id,
+    type,
+    title: n.title,
+    subtitle: n.subtitle,
+    link: n.link,
+  }
+}
 
 export function useMascotFeed({ muted = false }: { muted?: boolean } = {}) {
   const [queue, setQueue] = useState<MascotNotification[]>([])
   const [history, setHistory] = useState<MascotNotification[]>([])
   const [unread, setUnread] = useState(0)
-  const lastSeenRef = useRef<string>(new Date().toISOString())
-  const mountedRef = useRef(true)
+  const lastSeenRef = useRef<string>(loadLastSeen())
   const mutedRef = useRef(muted)
   mutedRef.current = muted
 
-  useEffect(() => {
-    mountedRef.current = true
-    let timer: ReturnType<typeof setTimeout>
+  const poll = useCallback(async () => {
+    if (document.hidden) return
 
-    async function poll() {
-      if (!mountedRef.current) return
+    const result = await getPersonalNotifications(20)
+    if (result.error || !result.data) return
 
-      const since = lastSeenRef.current
+    const fresh = result.data
+      .filter((n) => n.occurred_at > lastSeenRef.current)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+      .slice(0, 5)
 
-      const [sightingsRes, bountiesRes] = await Promise.all([
-        listPublicSightings({ limit: 10 }),
-        listPublicBounties({ limit: 10 }),
-      ])
+    if (fresh.length === 0) return
 
-      if (!mountedRef.current) return
-
-      const newNotifs: MascotNotification[] = []
-      const newSightings = (sightingsRes.data ?? []).filter((sighting) => sighting.created_at > since).slice(0, 3)
-      const newBounties = (bountiesRes.data ?? []).filter((bounty) => bounty.created_at > since).slice(0, 3)
-
-      for (const s of newSightings) {
-        const productName = s.product_name ?? 'a product'
-        const productSlug = s.product_slug ?? ''
-        const storeName = s.store_name ?? 'a store'
-        newNotifs.push({
-          id: `sighting-${s.id}`,
-          type: 'sighting',
-          title: productName,
-          subtitle: `Spotted at ${storeName}`,
-          link: `/products/${productSlug}`,
-        })
-      }
-
-      for (const b of newBounties) {
-        const productName = b.product_name ?? 'a product'
-        const reward = b.reward_cents
-          ? ` $${(b.reward_cents / 100).toFixed(0)} reward`
-          : ''
-        const location = b.store_name ?? `ZIP ${b.zip_code ?? '48910'}`
-        newNotifs.push({
-          id: `bounty-${b.id}`,
-          type: 'bounty',
-          title: productName,
-          subtitle: `Bounty posted${reward} — ${location}`,
-          link: `/bounties/${b.id}`,
-        })
-      }
-
-      newNotifs.sort((a, b) => a.id.localeCompare(b.id))
-
-      const newest = [...newSightings, ...newBounties]
-        .map((item) => item.created_at)
-        .sort()
-        .at(-1)
-      if (newest) {
-        lastSeenRef.current = newest
-      }
-
-      if (newNotifs.length > 0) {
-        setHistory((prev) => [...newNotifs, ...prev].slice(0, HISTORY_LIMIT))
-        setUnread((u) => u + newNotifs.length)
-        if (!mutedRef.current) {
-          setQueue((prev) => [...prev, ...newNotifs])
-        }
-      }
-
-      timer = setTimeout(poll, POLL_INTERVAL)
+    lastSeenRef.current = new Date().toISOString()
+    try {
+      localStorage.setItem(LAST_SEEN_KEY, lastSeenRef.current)
+    } catch {
+      // ignore
     }
 
-    timer = setTimeout(poll, POLL_INTERVAL)
+    const mapped = fresh.map(mapNotification)
 
-    return () => {
-      mountedRef.current = false
-      clearTimeout(timer)
+    setHistory((prev) => [...mapped, ...prev].slice(0, HISTORY_LIMIT))
+    setUnread((u) => u + fresh.length)
+    if (!mutedRef.current) {
+      setQueue((prev) => [...prev, ...mapped])
     }
   }, [])
+
+  useEffect(() => {
+    poll()
+
+    const timer = setInterval(poll, POLL_INTERVAL)
+
+    function onVisibilityChange() {
+      if (!document.hidden) poll()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [poll])
 
   const dequeue = useCallback(() => {
     setQueue((prev) => prev.slice(1))

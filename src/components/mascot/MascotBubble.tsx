@@ -4,7 +4,7 @@ import './mascotAnimations.css'
 
 export type MascotNotification = {
   id: string
-  type: 'sighting' | 'bounty'
+  type: 'sighting' | 'bounty' | 'notification'
   title: string
   subtitle: string
   link: string
@@ -52,10 +52,14 @@ export default function MascotBubble({
   const accent =
     notification.type === 'sighting'
       ? 'border-green-600 bg-[#fffdf7]'
-      : 'border-red-600 bg-[#fffdf7]'
+      : notification.type === 'bounty'
+        ? 'border-red-600 bg-[#fffdf7]'
+        : 'border-brand-500 bg-[#fffdf7]'
 
   const label =
-    notification.type === 'sighting' ? 'New Sighting!' : 'New Bounty!'
+    notification.type === 'sighting' ? 'New Sighting!'
+      : notification.type === 'bounty' ? 'New Bounty!'
+      : 'Update'
 
   const vertical = placement.openUp ? 'bottom-full mb-2' : 'top-full mt-2'
   const horizontal = placement.openLeft ? 'right-0' : 'left-0'
@@ -67,7 +71,9 @@ export default function MascotBubble({
       <div className="mb-1 flex items-center justify-between">
         <span
           className={`text-[10px] font-black uppercase tracking-wider ${
-            notification.type === 'sighting' ? 'text-green-700' : 'text-red-600'
+            notification.type === 'sighting' ? 'text-green-700'
+              : notification.type === 'bounty' ? 'text-red-600'
+              : 'text-brand-600'
           }`}
         >
           {label}
@@ -97,7 +103,7 @@ export default function MascotBubble({
       {/* Speech tail */}
       <div
         className={`absolute ${placement.openUp ? '-bottom-2 border-r-2 border-b-2' : '-top-2 border-l-2 border-t-2'} ${placement.openLeft ? 'right-6' : 'left-6'} h-4 w-4 rotate-45`}
-        style={{ borderColor: notification.type === 'sighting' ? '#16a34a' : '#dc2626', background: '#fffdf7' }}
+        style={{ borderColor: notification.type === 'sighting' ? '#16a34a' : notification.type === 'bounty' ? '#dc2626' : '#e85d04', background: '#fffdf7' }}
       />
     </div>
   )

@@ -34,6 +34,33 @@ describe('digest email', () => {
   })
 })
 
+describe('onboarding interest events without email', () => {
+  it('omits the Email line when source is onboarding_looking_for and email is null', () => {
+    const onboardingClaim: DigestClaim = {
+      ...claim,
+      items: [{
+        eventId: '55555555-5555-4555-8555-555555555555',
+        source: 'onboarding_looking_for',
+        occurredAt: '2026-07-12T20:00:00.000Z',
+        email: null,
+        username: 'bargainhunter',
+        interest: 'Looking for viral snacks.',
+      }],
+    }
+    const email = renderDigestEmail(onboardingClaim)
+    expect(email.text).not.toContain('Email:')
+    expect(email.html).not.toContain('Email:')
+    expect(email.text).toContain('Username: bargainhunter')
+    expect(email.html).toContain('<strong>Username:</strong> bargainhunter')
+  })
+
+  it('still shows email for early_access items', () => {
+    const email = renderDigestEmail(claim)
+    expect(email.text).toContain('Email: shopper@example.com')
+    expect(email.html).toContain('<strong>Email:</strong> shopper@example.com')
+  })
+})
+
 describe('delivery failure handling', () => {
   it('classifies known platform failures narrowly', () => {
     expect(classifyDeliveryFailure({ code: 'E_RATE_LIMIT_EXCEEDED' })).toBe('transient_failure')

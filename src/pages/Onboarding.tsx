@@ -5,6 +5,7 @@ import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
 import { supabase } from '../lib/supabase'
 import { USERNAME_MAX, normalizeUsername, validateUsername } from '../lib/username'
+import { errorMap } from '../lib/errorMap'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -89,29 +90,15 @@ export default function Onboarding() {
     })
 
     if (rpcError) {
-      const message = rpcError.message
-      const usernameConflict = message === 'username_unavailable'
-        || rpcError.details?.includes('username_claim_policy') === true
-      if (message.includes('already been completed') || message.includes('55006')) {
+      console.error('complete_onboarding error:', rpcError)
+      const mapped = errorMap(rpcError)
+      if (mapped.code === 'ONBOARDING_ALREADY_COMPLETED') {
         await refreshProfile()
         navigate('/home', { replace: true })
         return
       }
-      if (usernameConflict) {
-        setError('That username is taken. Try another one.')
-        setStep(0)
-      } else if (message.includes('ZIP')) {
-        setError('That ZIP code is outside the Greater Lansing beta area.')
-        setStep(1)
-      } else if (message.includes('Greater Lansing city')) {
-        setError('Please select at least one Greater Lansing city.')
-        setStep(1)
-      } else if (message.includes('500 characters')) {
-        setError('Looking for must be 500 characters or fewer.')
-        setStep(2)
-      } else {
-        setError('Something went wrong. Please try again.')
-      }
+      setError(mapped.message)
+      if (mapped.step !== undefined) setStep(mapped.step)
       setSubmitting(false)
       return
     }
@@ -205,7 +192,7 @@ export default function Onboarding() {
                   {usernameStatus === 'checking' && <span className="text-stone-500">Checking availability…</span>}
                   {usernameStatus === 'available' && <span className="font-medium text-green-700">✓ Available</span>}
                   {usernameStatus === 'taken' && <span className="font-medium text-red-700">That username is taken.</span>}
-                  {usernameStatus === 'invalid' && <span className="font-medium text-red-700">Use 3–24 letters only.</span>}
+                  {usernameStatus === 'invalid' && <span className="font-medium text-red-700">Use 3–20 letters only.</span>}
                 </div>
               </div>
               {error && <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>}

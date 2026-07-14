@@ -13,6 +13,8 @@ const PRODUCT_CLICK_RATE_LIMIT_WINDOW_SECONDS = 600
 const PRODUCT_CLICK_MAX_BODY_LENGTH = 256
 const RATE_LIMIT_MAX_REQUESTS = 5
 const RATE_LIMIT_WINDOW_SECONDS = 600
+const RATE_LIMIT_DAILY_MAX_REQUESTS = 20
+const RATE_LIMIT_DAILY_WINDOW_SECONDS = 60 * 60 * 24
 const UPSTREAM_TIMEOUT_MS = 10_000
 
 const PUBLIC_SPA_ROUTES = [
@@ -123,21 +125,64 @@ function logApiEvent(level, message, details = {}) {
 async function enforceRateLimit(env, clientIp) {
   if (!env.EARLY_ACCESS_RATE_LIMIT || !clientIp) return 'allowed'
 
+  // Secondary coarse daily cap: max RATE_LIMIT_DAILY_MAX_REQUESTS per IP per day.
+  // This provides a backstop when the primary rolling-window counter is unavailable
+  // due to transient KV errors. The daily cap uses a separate KV key with a 24h TTL.
+  const dailyKey = `early-access-daily:${clientIp}`
+
+  let dailyCount = null
   try {
-    const key = `early-access:${clientIp}`
-    const currentCount = Number((await env.EARLY_ACCESS_RATE_LIMIT.get(key)) ?? '0')
-    if (!Number.isFinite(currentCount)) return 'allowed'
-    if (currentCount >= RATE_LIMIT_MAX_REQUESTS) return 'limited'
-    await env.EARLY_ACCESS_RATE_LIMIT.put(key, String(currentCount + 1), {
-      expirationTtl: RATE_LIMIT_WINDOW_SECONDS,
-    })
-    return 'allowed'
+    dailyCount = Number((await env.EARLY_ACCESS_RATE_LIMIT.get(dailyKey)) ?? '0')
+    if (!Number.isFinite(dailyCount)) dailyCount = null
   } catch (error) {
-    logApiEvent('error', 'rate limit storage unavailable', {
+    logApiEvent('error', 'rate_limit_kv_failure', {
+      event: 'daily_cap_kv_unavailable',
       error: error instanceof Error ? error.message : String(error),
     })
-    return 'allowed'
   }
+
+  if (dailyCount !== null && dailyCount >= RATE_LIMIT_DAILY_MAX_REQUESTS) {
+    return 'limited'
+  }
+
+  // Primary rolling-window rate limit.
+  // Fail-open design: if KV is temporarily unavailable, legitimate users should
+  // not be blocked. The daily cap above provides a secondary guard, and all KV
+  // failures are logged at high priority for operational visibility.
+  const key = `early-access:${clientIp}`
+  try {
+    const currentCount = Number((await env.EARLY_ACCESS_RATE_LIMIT.get(key)) ?? '0')
+    if (!Number.isFinite(currentCount)) {
+      logApiEvent('error', 'rate_limit_kv_failure', {
+        event: 'primary_counter_invalid',
+      })
+      // Fall through to daily cap check + allow
+    } else {
+      if (currentCount >= RATE_LIMIT_MAX_REQUESTS) return 'limited'
+      await env.EARLY_ACCESS_RATE_LIMIT.put(key, String(currentCount + 1), {
+        expirationTtl: RATE_LIMIT_WINDOW_SECONDS,
+      })
+    }
+  } catch (error) {
+    logApiEvent('error', 'rate_limit_kv_failure', {
+      event: 'primary_counter_kv_unavailable',
+      error: error instanceof Error ? error.message : String(error),
+    })
+    // KV failed — rely on daily cap as secondary guard
+  }
+
+  // Increment daily counter (best-effort)
+  if (dailyCount !== null) {
+    try {
+      await env.EARLY_ACCESS_RATE_LIMIT.put(dailyKey, String(dailyCount + 1), {
+        expirationTtl: RATE_LIMIT_DAILY_WINDOW_SECONDS,
+      })
+    } catch {
+      // Best-effort; daily cap is a secondary guard only
+    }
+  }
+
+  return 'allowed'
 }
 
 async function createSha256Hex(value) {
@@ -412,17 +457,85 @@ function isSpaRoute(pathname) {
   return SPA_ROUTES.some((pattern) => pattern.test(pathname))
 }
 
-export function getPageMetadata(pathname) {
+async function fetchPublicProduct(env, slug, fetchImpl = fetch) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return null
+  try {
+    const response = await fetchImpl(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/get_public_product`,
+      {
+        method: 'POST',
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
+        body: JSON.stringify({ p_slug: slug }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    return data && typeof data === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchPublicStore(env, slug, fetchImpl = fetch) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return null
+  try {
+    const response = await fetchImpl(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/get_public_store`,
+      {
+        method: 'POST',
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
+        body: JSON.stringify({ p_slug: slug }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    return data && typeof data === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
+export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
   const normalizedPathname = normalizePathname(pathname)
   if (normalizedPathname === '/') return ROOT_METADATA
   if (normalizedPathname === '/privacy') return PRIVACY_METADATA
   if (normalizedPathname.startsWith('/products/')) {
+    const slug = normalizedPathname.slice('/products/'.length)
+    const product = env ? await fetchPublicProduct(env, slug, fetchImpl) : null
+    if (product && product.name) {
+      return {
+        title: `${product.name} - FindItViral`,
+        description: `See fresh Greater Lansing sightings and open bounties for ${product.name}.`,
+        canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+        robots: 'index, follow',
+      }
+    }
     return {
       ...PUBLIC_PRODUCTS_METADATA,
       canonicalUrl: `https://finditviral.com${normalizedPathname}`,
     }
   }
-  if (normalizedPathname === '/stores' || normalizedPathname.startsWith('/stores/')) {
+  if (normalizedPathname === '/stores') {
+    return {
+      ...PUBLIC_STORES_METADATA,
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+    }
+  }
+  if (normalizedPathname.startsWith('/stores/')) {
+    const slug = normalizedPathname.slice('/stores/'.length)
+    const store = env ? await fetchPublicStore(env, slug, fetchImpl) : null
+    if (store && (store.store_name || store.retailer_name)) {
+      const storeName = store.store_name || store.retailer_name
+      const location = store.city && store.state ? ` in ${store.city}, ${store.state}` : ''
+      return {
+        title: `${storeName} - FindItViral`,
+        description: `See fresh, community-reported product sightings at ${storeName}${location}.`,
+        canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+        robots: 'index, follow',
+      }
+    }
     return {
       ...PUBLIC_STORES_METADATA,
       canonicalUrl: `https://finditviral.com${normalizedPathname}`,
@@ -523,7 +636,7 @@ export default {
         response = await env.ASSETS.fetch(new Request(indexUrl, request))
       }
 
-      return applyPageMetadata(response, getPageMetadata(url.pathname))
+      return applyPageMetadata(response, await getPageMetadata(url.pathname, env))
     } catch (error) {
       console.error(JSON.stringify({
         message: 'asset request failed',

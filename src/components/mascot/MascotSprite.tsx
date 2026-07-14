@@ -18,7 +18,7 @@ export default function MascotSprite({ mood = 'idle' }: { mood?: MascotMood }) {
   return (
     <svg
       viewBox="0 0 80 80"
-      className={`h-16 w-16 select-none ${bodyClass}`}
+      className={`h-20 w-20 select-none ${bodyClass}`}
       aria-hidden="true"
     >
       {/* Tail */}

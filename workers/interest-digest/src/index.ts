@@ -19,6 +19,10 @@ import {
 const SERVICE_NAME = 'finditviral-interest-digest'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+const ALLOWED_DIGEST_DESTINATIONS = [
+  'owner@finditviral.com',
+]
+
 interface RuntimeConfig {
   supabase: SupabaseRpcConfig
   toEmail: string
@@ -64,6 +68,9 @@ function requireSupabaseConfig(env: Env): SupabaseRpcConfig {
 function requireEmailConfig(env: Env): EmailConfig {
   if (!EMAIL_PATTERN.test(env.DIGEST_TO_EMAIL) || env.DIGEST_TO_EMAIL.length > 320) {
     throw new DigestConfigurationError('DIGEST_TO_EMAIL is missing or invalid')
+  }
+  if (!ALLOWED_DIGEST_DESTINATIONS.includes(env.DIGEST_TO_EMAIL)) {
+    throw new DigestConfigurationError('DIGEST_TO_EMAIL is not in the allowed destinations allowlist')
   }
   if (!EMAIL_PATTERN.test(env.DIGEST_FROM_EMAIL) || env.DIGEST_FROM_EMAIL.length > 320) {
     throw new DigestConfigurationError('DIGEST_FROM_EMAIL is missing or invalid')

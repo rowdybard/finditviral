@@ -4,8 +4,16 @@ import BountyCard from '../components/BountyCard'
 import EmptyState from '../components/EmptyState'
 import SightingCard from '../components/SightingCard'
 import { getPublicProduct, listPublicBounties, listPublicSightings } from '../lib/launchApi'
+import { applyPageMetadata, getPageMetadataForProduct } from '../lib/pageMetadata'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 import type { Bounty, PublicProduct, Sighting } from '../types/database'
+
+function freshnessBadge(status: Sighting['freshness_status']) {
+  if (!status) return null
+  if (status === 'fresh') return <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-800">Fresh</span>
+  if (status === 'possibly_outdated') return <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-800">Possibly outdated</span>
+  return null
+}
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -43,6 +51,12 @@ export default function ProductPage() {
     return () => { active = false }
   }, [slug])
 
+  useEffect(() => {
+    if (product) {
+      applyPageMetadata(document, getPageMetadataForProduct(window.location.pathname, product))
+    }
+  }, [product])
+
   if (loading) {
     return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
   }
@@ -57,7 +71,7 @@ export default function ProductPage() {
 
       <header className="overflow-hidden rounded-2xl border-2 border-stone-900 bg-[#fffdf7] shadow-[5px_5px_0_0_#0c251d]">
         {product.image_url && (
-          <img src={product.image_url} alt="" className="h-52 w-full border-b-2 border-stone-900 object-cover" />
+          <img src={product.image_url} alt={product.name + (product.trend_name ? ` - ${product.trend_name}` : '')} className="h-52 w-full border-b-2 border-stone-900 object-cover" />
         )}
         <div className="p-5">
           {product.trend_name && <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">{product.trend_name}</p>}
@@ -85,8 +99,14 @@ export default function ProductPage() {
           <Link to="/sightings/new" className="text-sm font-semibold text-brand-700">Report one →</Link>
         </div>
         {sightings.length > 0
-          ? <div className="space-y-3">{sightings.map((sighting) => <SightingCard key={sighting.id} sighting={sighting} />)}</div>
-          : <EmptyState title="No fresh sightings" message="Inventory reports expire quickly. Sign in to share what you find." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />}
+          ? <div className="space-y-3">{sightings.map((sighting) => (
+              <div key={sighting.id}>
+                {freshnessBadge(sighting.freshness_status) && <div className="mb-1">{freshnessBadge(sighting.freshness_status)}</div>}
+                <SightingCard sighting={sighting} />
+              </div>
+            ))}</div>
+          : <EmptyState title="No fresh sightings" message="Inventory reports expire quickly. Sign in to share what you find." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />
+        }
       </section>
 
       <section>

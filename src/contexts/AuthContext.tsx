@@ -9,7 +9,7 @@ type AuthContextType = {
   profile: Profile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
-  signUp: (email: string, password: string) => Promise<{
+  signUp: (email: string, password: string, captchaToken?: string) => Promise<{
     error: string | null
     needsEmailConfirmation: boolean
   }>
@@ -67,12 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
-  async function signUp(email: string, password: string) {
+  async function signUp(email: string, password: string, captchaToken?: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/onboarding`,
+        captchaToken,
       },
     })
 

@@ -1,12 +1,12 @@
 # FindItViral
 
-FindItViral is currently a public early-access landing page with an owner-only product prototype behind it. Visitors can submit an email address and explain what they are trying to find; the private bounty and sighting application remains unavailable to non-owners.
+FindItViral is an open beta for Greater Lansing shoppers to find and report viral, limited, and hard-to-find retail products. Members can post bounties, report sightings, and browse a verified store directory. The public landing page accepts early-access waitlist submissions.
 
 ## Stack
 
 - React 18, Vite, TypeScript, and Tailwind CSS
 - Supabase Postgres and Auth
-- Cloudflare Pages
+- Cloudflare Pages (frontend) + Cloudflare Worker (interest digest)
 
 ## Local setup
 
@@ -33,9 +33,9 @@ Run the app:
 npm run dev
 ```
 
-## Public waitlist database
+## Database
 
-The canonical migration directory contains only the public-launch database. The preferred production workflow is:
+The canonical migration directory is `supabase/migrations/`. Migrations are applied in timestamp order. The preferred production workflow is:
 
 ```bash
 npx supabase login
@@ -44,17 +44,15 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-<<<<<<< HEAD
-The CLI prompts for database credentials when needed; do not put the database password in source control or a command committed to shell history. The migrations create the protected `early_access_requests` table and a service-role-only `request_early_access` RPC. Anonymous visitors submit through `/api/early-access`; the Cloudflare Worker verifies Turnstile, enforces KV-backed rate limits, and calls Supabase with a server-side secret. Browsers cannot read or write the waitlist table or invoke its RPC directly. New and duplicate submissions return the same response.
-=======
-The CLI prompts for database credentials when needed; do not put the database password in source control or a command committed to shell history. The migration creates the protected `early_access_requests` table and a public `request_early_access` RPC. Anonymous visitors can execute the validated RPC, but they cannot read, update, delete, or insert directly into the table. New and duplicate submissions return the same response.
->>>>>>> 9213111006a787ac3a201981942650ceb97325a8
+The CLI prompts for database credentials when needed; do not put the database password in source control or a command committed to shell history.
 
-If the SQL Editor must be used instead, run `supabase/migrations/20260711000000_launch_waitlist.sql`, then run `supabase/verify/production_catalog.sql`. Record the manual change in migration history with `npx supabase migration repair 20260711000000 --status applied` after linking the project.
+The migrations create the protected `early_access_requests` table and a service-role-only `request_early_access` RPC. Anonymous visitors submit through `/api/early-access`; the Cloudflare Worker verifies Turnstile, enforces KV-backed rate limits, and calls Supabase with a server-side secret. Browsers cannot read or write the waitlist table or invoke its RPC directly. New and duplicate submissions return the same response.
+
+If the SQL Editor must be used instead, run the migration files in `supabase/migrations/` in timestamp order, then run `supabase/verify/production_catalog.sql`. Record manual changes in migration history with `npx supabase migration repair <timestamp> --status applied` after linking the project.
 
 Waitlist submissions can be reviewed in the Supabase Table Editor. They are marked to expire after 24 months; the indexed RPC cleanup removes expired rows when new requests arrive. The app captures submissions only - it does not send confirmation or campaign emails yet.
 
-The public migration is exercised from an empty database by pgTAP in CI. With Docker installed, run the same checks locally:
+The database is exercised from an empty database by pgTAP in CI. With Docker installed, run the same checks locally:
 
 ```bash
 npx supabase start
@@ -63,31 +61,42 @@ npx supabase db lint --local --schema public --level warning --fail-on error
 npx supabase test db
 ```
 
-## Optional private prototype database
+## Interest digest Worker
 
-The private prototype is separate from the public launch. For a fresh project:
+The `workers/interest-digest/` directory contains a Cloudflare Worker that sends a daily digest email of new member interest submissions to the owner.
 
-1. Create your owner account in Supabase Auth first.
-2. Run `supabase/schema.sql`.
-3. Run `supabase/seed.sql` if demo catalog data is wanted.
-4. Run `supabase/rls.sql` once.
-5. Run `supabase/legacy-migrations/20260710000000_private_app_and_early_access.sql`.
-<<<<<<< HEAD
-6. Run the current files in `supabase/migrations` in timestamp order, ending with the closed-beta lockdown migration.
-=======
-6. Run `supabase/migrations/20260711000000_launch_waitlist.sql` last.
->>>>>>> 9213111006a787ac3a201981942650ceb97325a8
-7. Add your owner user to the allow-list:
+### Secrets
 
-```sql
-insert into private.app_owners (user_id)
-select id from auth.users where email = 'you@example.com'
-on conflict (user_id) do nothing;
+Set `DIGEST_TO_EMAIL` and `SUPABASE_SECRET_KEY` as Worker secrets (not vars):
+
+```bash
+cd workers/interest-digest
+npx wrangler secret put DIGEST_TO_EMAIL
+npx wrangler secret put SUPABASE_SECRET_KEY
 ```
 
-Then disable new-user signups in Supabase Auth settings. Do not run `supabase/rls.sql` again after the owner-only migration; the file refuses to run after lockdown. The `supabase/legacy-migrations/20260709230205_harden_security.sql` migration is only for databases created from the original legacy schema. Files under `legacy-migrations` are deliberately excluded from `supabase db push`.
+`SUPABASE_URL`, `DIGEST_FROM_EMAIL`, and `DIGEST_FROM_NAME` are non-secret vars already in `wrangler.jsonc`.
 
-The private app is available at `/home` after owner sign-in.
+### Deploy
+
+```bash
+cd workers/interest-digest
+npx wrangler deploy
+```
+
+## CI
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs three jobs:
+
+1. **verify** — `npm run lint`, `npm test`, `npm run build`
+2. **database** — `supabase start`, `supabase db reset`, `supabase db lint`, `supabase test db`
+3. **worker** — `npm run check:worker`, `npm run test:worker`
+
+Run all checks locally:
+
+```bash
+npm run check:all
+```
 
 ## Verification
 
@@ -95,6 +104,8 @@ The private app is available at `/home` after owner sign-in.
 npm run lint
 npm test
 npm run build
+npm run check:worker
+npm run test:worker
 npm run smoke:web
 ```
 
@@ -109,7 +120,7 @@ The repository includes `wrangler.jsonc`; the production settings are:
 - Build command: `npm run build`
 - Output directory: `dist`
 - Node version: 22
-- Production variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Production variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_TURNSTILE_SITE_KEY`
 
 Deploy manually when needed:
 
@@ -119,10 +130,12 @@ npm run deploy
 
 Hashed assets receive immutable caching. Security headers, a real 404 page, `robots.txt`, and `sitemap.xml` are shipped from `public/`. Branch previews are disabled until an isolated preview Supabase project exists, preventing preview builds from failing or writing to production data.
 
-## Prototype features
+## Features
 
 - Product bounty board and local sighting feed
 - Private bounty claims with controlled contact exchange
 - ZIP-code distance filtering
-- Owner-only access enforced by Supabase RLS and an allow-list
+- Member onboarding with username selection
+- Admin console for contribution moderation and catalog management
+- Interest digest email for owner
 - No in-app payments or messaging

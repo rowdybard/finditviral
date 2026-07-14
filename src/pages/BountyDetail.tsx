@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
 import { trackEvent } from '../lib/analytics'
+import { mapContributionError } from '../lib/errorMap'
 import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
 import { supabase } from '../lib/supabase'
 import type { BountyClaimView, BountyDetailView } from '../types/database'
@@ -21,7 +22,7 @@ export default function BountyDetail() {
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [claimStore, setClaimStore] = useState<CatalogSelection | null>(null)
   const [claimSeenAt, setClaimSeenAt] = useState(() => localDateTime(new Date()))
-  const [claimAvailability, setClaimAvailability] = useState<'low' | 'medium' | 'high'>('high')
+  const [claimAvailability, setClaimAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
   const [claimQuantity, setClaimQuantity] = useState('')
   const [claimNotes, setClaimNotes] = useState('')
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -80,7 +81,7 @@ export default function BountyDetail() {
     })
     setClaimLoading(false)
     if (result.error) {
-      setClaimError(result.error.message)
+      setClaimError(mapContributionError(result.error))
       return
     }
     setShowClaimForm(false)
@@ -159,7 +160,7 @@ export default function BountyDetail() {
           <CatalogSearchSelect kind="store" label="Store" value={claimStore} onChange={setClaimStore} required disabled={Boolean(bounty.store_id)} />
           <div><label className="label" htmlFor="claim-seen">When did you see it?</label><input id="claim-seen" className="input" type="datetime-local" value={claimSeenAt} onChange={(event) => setClaimSeenAt(event.target.value)} required /></div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'low' | 'medium' | 'high')}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+            <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'in_stock' | 'low_stock' | 'sold_out' | 'unknown')}><option value="in_stock">In Stock</option><option value="low_stock">Low Stock</option><option value="sold_out">Sold Out</option><option value="unknown">Unknown</option></select></div>
             <div><label className="label" htmlFor="claim-quantity">Quantity (optional)</label><input id="claim-quantity" className="input" type="number" min="1" max="99" step="1" value={claimQuantity} onChange={(event) => setClaimQuantity(event.target.value)} /></div>
           </div>
           <div><label className="label" htmlFor="claim-notes">Notes (optional)</label><textarea id="claim-notes" className="input min-h-20" maxLength={2000} value={claimNotes} onChange={(event) => setClaimNotes(event.target.value)} /></div>

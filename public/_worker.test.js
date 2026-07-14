@@ -5,20 +5,79 @@ const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 const VISITOR_ID = '11111111-1111-4111-8111-111111111111'
 
 describe('public catalog metadata', () => {
-  it('keeps product and store routes indexable while admin routes stay private', () => {
-    expect(getPageMetadata('/products/test-product')).toMatchObject({
+  it('keeps product and store routes indexable while admin routes stay private', async () => {
+    expect(await getPageMetadata('/products/test-product')).toMatchObject({
       canonicalUrl: 'https://finditviral.com/products/test-product',
       robots: 'index, follow',
     })
-    expect(getPageMetadata('/stores')).toMatchObject({
+    expect(await getPageMetadata('/stores')).toMatchObject({
       canonicalUrl: 'https://finditviral.com/stores',
       robots: 'index, follow',
     })
-    expect(getPageMetadata('/stores/test-store/')).toMatchObject({
+    expect(await getPageMetadata('/stores/test-store/')).toMatchObject({
       canonicalUrl: 'https://finditviral.com/stores/test-store',
       robots: 'index, follow',
     })
-    expect(getPageMetadata('/admin')).toMatchObject({ robots: 'noindex, nofollow' })
+    expect(await getPageMetadata('/admin')).toMatchObject({ robots: 'noindex, nofollow' })
+  })
+
+  it('injects product name into metadata when Supabase returns data', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (String(url).includes('get_public_product')) {
+        return new Response(JSON.stringify({
+          name: 'Squishmallow Phoenix',
+          trend_name: 'Squishmallows',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(null, { status: 404 })
+    })
+
+    const metadata = await getPageMetadata(
+      '/products/squishmallow-phoenix',
+      { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' },
+      fetchImpl,
+    )
+
+    expect(metadata.title).toBe('Squishmallow Phoenix - FindItViral')
+    expect(metadata.description).toContain('Squishmallow Phoenix')
+    expect(metadata.robots).toBe('index, follow')
+  })
+
+  it('falls back to generic metadata when Supabase fails', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 500 }))
+
+    const metadata = await getPageMetadata(
+      '/products/unknown-product',
+      { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' },
+      fetchImpl,
+    )
+
+    expect(metadata.title).toBe('Product Availability in Greater Lansing - FindItViral')
+    expect(metadata.robots).toBe('index, follow')
+  })
+
+  it('injects store name into metadata when Supabase returns data', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).includes('get_public_store')) {
+        return new Response(JSON.stringify({
+          store_name: 'Lansing Mall',
+          retailer_name: 'Mall',
+          city: 'Lansing',
+          state: 'MI',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(null, { status: 404 })
+    })
+
+    const metadata = await getPageMetadata(
+      '/stores/lansing-mall',
+      { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' },
+      fetchImpl,
+    )
+
+    expect(metadata.title).toBe('Lansing Mall - FindItViral')
+    expect(metadata.description).toContain('Lansing Mall')
+    expect(metadata.description).toContain('Lansing, MI')
   })
 })
 
@@ -263,5 +322,97 @@ describe('handleProductClick', () => {
 
     expect(response.status).toBe(204)
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe('enforceRateLimit — fail-open hardening', () => {
+  it('blocks requests when the daily cap is reached even if primary KV fails', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (String(url).includes('siteverify')) {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(null, { status: 204 })
+    })
+
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '20'
+      throw new Error('KV unavailable')
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(429)
+    expect(fetchImpl).not.toHaveBeenCalled() // rate-limited before any fetch
+  })
+
+  it('allows requests when KV fails but daily cap has not been reached', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (String(url).includes('siteverify')) {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(null, { status: 204 })
+    })
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '5'
+      throw new Error('KV unavailable')
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(204)
+    expect(fetchImpl).toHaveBeenCalledTimes(2) // Turnstile + Supabase
+    expect(consoleSpy).toHaveBeenCalled() // high-priority logging
+    consoleSpy.mockRestore()
+  })
+
+  it('allows requests when both KV reads fail (total KV outage)', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (String(url).includes('siteverify')) {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(null, { status: 204 })
+    })
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const kvGet = vi.fn().mockRejectedValue(new Error('KV unavailable'))
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(204)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(consoleSpy).toHaveBeenCalled()
+    consoleSpy.mockRestore()
   })
 })

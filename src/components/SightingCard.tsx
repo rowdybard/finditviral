@@ -14,26 +14,37 @@ import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
 
 const stockThemes = {
-  high: {
+  in_stock: {
     rail: 'bg-green-600',
     text: 'text-green-700',
     dot: 'bg-green-600 border-green-600',
     accent: 'green' as const,
     filledDots: 5,
+    label: 'IN STOCK',
   },
-  medium: {
+  low_stock: {
     rail: 'bg-yellow-400',
     text: 'text-yellow-700',
     dot: 'bg-yellow-400 border-yellow-500',
     accent: 'yellow' as const,
     filledDots: 3,
+    label: 'LOW STOCK',
   },
-  low: {
+  sold_out: {
     rail: 'bg-red-600',
     text: 'text-red-600',
     dot: 'bg-red-600 border-red-600',
     accent: 'red' as const,
     filledDots: 1,
+    label: 'SOLD OUT',
+  },
+  unknown: {
+    rail: 'bg-stone-400',
+    text: 'text-stone-500',
+    dot: 'bg-stone-400 border-stone-500',
+    accent: 'yellow' as const,
+    filledDots: 0,
+    label: 'UNKNOWN',
   },
 }
 
@@ -42,9 +53,9 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
   const productName = sighting.product?.name ?? sighting.product_name ?? 'Unknown product'
   const productPath = `/products/${sighting.product?.slug ?? sighting.product_slug ?? ''}`
   const availability = sighting.availability
-    ?? (sighting.stock_level === 'in_stock' ? 'high' : sighting.stock_level === 'low' ? 'medium' : 'low')
+    ?? (sighting.stock_level === 'in_stock' ? 'in_stock' : sighting.stock_level === 'low' ? 'low_stock' : 'unknown')
   const theme = stockThemes[availability]
-  const availabilityLabel = availability.toUpperCase()
+  const availabilityLabel = theme.label
   const location = [sighting.city, sighting.state].filter(Boolean).join(', ')
   const photoUrl = photoFailed ? undefined : sighting.photo_urls?.[0]
   const shareText = `${availabilityLabel} availability spotted for ${productName} at ${sighting.store_name}${location ? ` in ${location}` : ''}.`
@@ -55,12 +66,12 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
       data-testid="sighting-card"
     >
       <div className={`flex flex-col items-center justify-between py-3 text-white ${theme.rail}`}>
-        <span className={`rotate-180 text-sm font-black tracking-[0.18em] [writing-mode:vertical-rl] ${availability === 'medium' ? 'text-stone-950' : ''}`}>
+        <span className={`rotate-180 text-sm font-black tracking-[0.18em] [writing-mode:vertical-rl] ${availability === 'low_stock' ? 'text-stone-950' : ''}`}>
           SIGHTING
         </span>
         <Eye
           aria-hidden="true"
-          className={availability === 'medium' ? 'text-stone-950' : ''}
+          className={availability === 'low_stock' ? 'text-stone-950' : ''}
           size={24}
           weight="bold"
         />
@@ -75,7 +86,7 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
           <div className={`grid min-w-0 gap-4 p-3 sm:p-4 ${photoUrl ? 'sm:grid-cols-[7.25rem_minmax(0,1fr)_8rem]' : 'sm:grid-cols-[7.25rem_minmax(0,1fr)]'}`}>
             <div className="rounded-lg border border-stone-300 bg-white px-3 py-3 text-center shadow-[2px_2px_0_0_#d6d3d1]">
               <p className="text-[11px] font-black uppercase tracking-[0.1em] text-stone-700">Stock</p>
-              <p className={`mt-2 font-black leading-none tracking-tight ${availability === 'medium' ? 'text-2xl sm:text-2xl' : 'text-3xl sm:text-4xl'} ${theme.text}`}>
+              <p className={`mt-2 font-black leading-none tracking-tight ${availability === 'low_stock' ? 'text-2xl sm:text-2xl' : 'text-3xl sm:text-4xl'} ${theme.text}`}>
                 {availabilityLabel}
               </p>
               <div className="mt-4 flex justify-center gap-1.5" aria-hidden="true">

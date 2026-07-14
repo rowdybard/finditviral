@@ -1,18 +1,21 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type {
+  AdminContribution,
+  AdminMemberSearchResult,
   Bounty,
   BountyClaimView,
   BountyDetailView,
-  AdminContribution,
   CatalogSuggestion,
   ContributionDraft,
   ContributionDraftType,
   InterestEvent,
   MemberRestriction,
   ModerationEvent,
+  PersonalNotification,
   PublicProduct,
   ProductSearchResult,
+  RetailerSearchResult,
   Sighting,
   Store,
   StoreSearchResult,
@@ -38,6 +41,13 @@ export async function searchProducts(query: string): RpcResult<ProductSearchResu
 
 export async function searchStores(query: string): RpcResult<StoreSearchResult[]> {
   return callRpc<StoreSearchResult[]>('search_stores', {
+    p_query: query.trim(),
+    p_limit: 12,
+  })
+}
+
+export async function searchRetailers(query: string): RpcResult<RetailerSearchResult[]> {
+  return callRpc<RetailerSearchResult[]>('search_retailers', {
     p_query: query.trim(),
     p_limit: 12,
   })
@@ -123,7 +133,7 @@ export async function createSighting(input: {
   productId: string
   storeId: string
   seenAt: string
-  availability: 'low' | 'medium' | 'high'
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: number | null
   notes: string | null
   draftId: string | null
@@ -141,22 +151,34 @@ export async function createSighting(input: {
 
 export async function createBounty(input: {
   productId: string
+  scopeType: 'region' | 'retailers' | 'stores'
   storeId: string | null
   zipCode: string | null
   radiusMiles: number | null
+  retailerIds: string[] | null
+  storeIds: string[] | null
   rewardCents: number
   deadline: string
   requirements: string | null
+  quantityNeeded: number | null
+  variantRequirements: string | null
+  acceptEquivalent: boolean
   draftId: string | null
 }): RpcResult<string> {
   return callRpc<string>('create_bounty', {
     p_product_id: input.productId,
+    p_scope_type: input.scopeType,
     p_store_id: input.storeId,
     p_zip_code: input.zipCode,
     p_radius_miles: input.radiusMiles,
+    p_retailer_ids: input.retailerIds,
+    p_store_ids: input.storeIds,
     p_reward_cents: input.rewardCents,
     p_deadline: input.deadline,
     p_requirements: input.requirements,
+    p_quantity_needed: input.quantityNeeded,
+    p_variant_requirements: input.variantRequirements,
+    p_accept_equivalent: input.acceptEquivalent,
     p_draft_id: input.draftId,
   })
 }
@@ -174,7 +196,7 @@ export async function submitBountyClaim(input: {
   bountyId: string
   storeId: string
   seenAt: string
-  availability: 'low' | 'medium' | 'high'
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: number | null
   notes: string | null
 }): RpcResult<string> {
@@ -283,7 +305,7 @@ export async function adminResolveStoreSuggestion(input: {
 export async function adminSetContributionModeration(input: {
   kind: 'sighting' | 'bounty'
   id: string
-  action: 'hide' | 'restore' | 'reject'
+  action: 'approve' | 'hide' | 'restore' | 'reject'
   reason: string | null
 }): RpcResult<null> {
   return callRpc<null>('admin_set_contribution_moderation', {
@@ -321,5 +343,102 @@ export async function adminSetMemberRestriction(input: {
     p_status: input.status,
     p_reason: input.reason,
     p_expires_at: input.expiresAt,
+  })
+}
+
+export async function getPersonalNotifications(limit = 20): RpcResult<PersonalNotification[]> {
+  return callRpc<PersonalNotification[]>('get_personal_notifications', { p_limit: limit })
+}
+
+export async function adminCreateStore(input: {
+  retailerName: string
+  storeName: string
+  addressLine1: string
+  city: string
+  state: string
+  zipCode: string
+  phone: string | null
+  websiteUrl: string | null
+  latitude: number | null
+  longitude: number | null
+}): RpcResult<string> {
+  return callRpc<string>('admin_create_store', {
+    p_retailer_name: input.retailerName,
+    p_store_name: input.storeName,
+    p_address_line1: input.addressLine1,
+    p_city: input.city,
+    p_state: input.state,
+    p_zip_code: input.zipCode,
+    p_phone: input.phone,
+    p_website_url: input.websiteUrl,
+    p_latitude: input.latitude,
+    p_longitude: input.longitude,
+  })
+}
+
+export async function adminUpdateStore(input: {
+  storeId: string
+  storeName: string | null
+  addressLine1: string | null
+  phone: string | null
+  websiteUrl: string | null
+  isActive: boolean | null
+}): RpcResult<null> {
+  return callRpc<null>('admin_update_store', {
+    p_store_id: input.storeId,
+    p_store_name: input.storeName,
+    p_address_line1: input.addressLine1,
+    p_phone: input.phone,
+    p_website_url: input.websiteUrl,
+    p_is_active: input.isActive,
+  })
+}
+
+export async function adminDisableStore(storeId: string): RpcResult<null> {
+  return callRpc<null>('admin_disable_store', { p_store_id: storeId })
+}
+
+export async function adminCreateProduct(input: {
+  trendId: string
+  name: string
+  availabilityStatus: string
+  releaseDate: string | null
+  sourceUrl: string | null
+  retailer: string | null
+}): RpcResult<string> {
+  return callRpc<string>('admin_create_product', {
+    p_trend_id: input.trendId,
+    p_name: input.name,
+    p_availability_status: input.availabilityStatus,
+    p_release_date: input.releaseDate,
+    p_source_url: input.sourceUrl,
+    p_retailer: input.retailer,
+  })
+}
+
+export async function adminUpdateProduct(input: {
+  productId: string
+  name: string | null
+  availabilityStatus: string | null
+  releaseDate: string | null
+  isActive: boolean | null
+}): RpcResult<null> {
+  return callRpc<null>('admin_update_product', {
+    p_product_id: input.productId,
+    p_name: input.name,
+    p_availability_status: input.availabilityStatus,
+    p_release_date: input.releaseDate,
+    p_is_active: input.isActive,
+  })
+}
+
+export async function adminDisableProduct(productId: string): RpcResult<null> {
+  return callRpc<null>('admin_disable_product', { p_product_id: productId })
+}
+
+export async function adminSearchMembers(query: string): RpcResult<AdminMemberSearchResult[]> {
+  return callRpc<AdminMemberSearchResult[]>('admin_search_members', {
+    p_query: query.trim(),
+    p_limit: 20,
   })
 }

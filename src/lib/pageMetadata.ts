@@ -99,3 +99,29 @@ export function applyPageMetadata(documentRef: Document, metadata: PageMetadata)
   setMetaContent(documentRef, 'meta[name="twitter:title"]', metadata.title)
   setMetaContent(documentRef, 'meta[name="twitter:description"]', metadata.description)
 }
+
+export function getPageMetadataForProduct(
+  pathname: string,
+  product: { name: string; trend_name?: string | null },
+): PageMetadata {
+  return {
+    title: `${product.name} - FindItViral`,
+    description: `See fresh Greater Lansing sightings and open bounties for ${product.name}.`,
+    canonicalUrl: `https://finditviral.com${pathname}`,
+    robots: 'index, follow',
+  }
+}
+
+export function getPageMetadataForStore(
+  pathname: string,
+  store: { store_name: string; retailer_name: string; city: string; state: string },
+): PageMetadata {
+  const storeName = store.store_name || store.retailer_name
+  const location = store.city && store.state ? ` in ${store.city}, ${store.state}` : ''
+  return {
+    title: `${storeName} - FindItViral`,
+    description: `See fresh, community-reported product sightings at ${storeName}${location}.`,
+    canonicalUrl: `https://finditviral.com${pathname}`,
+    robots: 'index, follow',
+  }
+}

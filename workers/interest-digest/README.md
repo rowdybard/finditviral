@@ -18,6 +18,10 @@ The database owns catch-up, concurrency, item assignment, leases, and the three-
 
 Never pass a secret value on the command line. For local tests, copy `.dev.vars.example` to `.dev.vars` and replace the placeholders; `.dev.vars` is ignored in this directory.
 
+### Destination allowlist
+
+The Worker validates `DIGEST_TO_EMAIL` against a hardcoded allowlist (`ALLOWED_DIGEST_DESTINATIONS` in `src/index.ts`). If the configured destination is not in the allowlist, the run is recorded as a permanent failure. Update this constant if the owner email changes.
+
 The binding and scheduling configuration follow Cloudflare's current [Workers Email API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/), [send-binding restrictions](https://developers.cloudflare.com/email-service/configuration/send-bindings/), and [Cron Trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) documentation. Cron expressions execute in UTC; the Worker performs the Detroit-time gate itself.
 
 ## Required database RPC contract

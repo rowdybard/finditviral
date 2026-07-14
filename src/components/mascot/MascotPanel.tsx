@@ -50,10 +50,12 @@ export default function MascotPanel({
                 <Link to={n.link} onClick={onClose} className="block px-3 py-2 hover:bg-stone-100">
                   <span
                     className={`text-[10px] font-black uppercase tracking-wider ${
-                      n.type === 'sighting' ? 'text-green-700' : 'text-red-600'
+                      n.type === 'sighting' ? 'text-green-700'
+                        : n.type === 'bounty' ? 'text-red-600'
+                        : 'text-brand-600'
                     }`}
                   >
-                    {n.type === 'sighting' ? 'Sighting' : 'Bounty'}
+                    {n.type === 'sighting' ? 'Sighting' : n.type === 'bounty' ? 'Bounty' : 'Update'}
                   </span>
                   <p className="text-sm font-black leading-tight text-stone-950">{n.title}</p>
                   <p className="text-xs font-medium text-stone-600">{n.subtitle}</p>

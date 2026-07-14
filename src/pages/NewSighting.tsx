@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -17,6 +17,7 @@ import {
   suggestStoreForDraft,
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
+import { mapContributionError } from '../lib/errorMap'
 import type { ContributionDraft } from '../types/database'
 
 type SightingPayload = {
@@ -24,7 +25,7 @@ type SightingPayload = {
   product: CatalogSelection | null
   store: CatalogSelection | null
   seenAt: string
-  availability: 'low' | 'medium' | 'high'
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: string
   notes: string
   productSuggestionName?: string
@@ -45,11 +46,10 @@ function isSelection(value: unknown): value is CatalogSelection {
 }
 
 export default function NewSighting() {
-  const navigate = useNavigate()
   const [product, setProduct] = useState<CatalogSelection | null>(null)
   const [store, setStore] = useState<CatalogSelection | null>(null)
   const [seenAt, setSeenAt] = useState(() => localDateTime(new Date()))
-  const [availability, setAvailability] = useState<'low' | 'medium' | 'high'>('high')
+  const [availability, setAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
   const [quantity, setQuantity] = useState('')
   const [notes, setNotes] = useState('')
   const [draft, setDraft] = useState<ContributionDraft | null>(null)
@@ -58,6 +58,7 @@ export default function NewSighting() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
   function currentPayload(): SightingPayload {
     return { version: 1, product, store, seenAt, availability, quantity, notes }
@@ -69,7 +70,7 @@ export default function NewSighting() {
     setProduct(isSelection(payload.product) ? payload.product : null)
     setStore(isSelection(payload.store) ? payload.store : null)
     if (typeof payload.seenAt === 'string') setSeenAt(payload.seenAt)
-    if (payload.availability === 'low' || payload.availability === 'medium' || payload.availability === 'high') {
+    if (payload.availability === 'in_stock' || payload.availability === 'low_stock' || payload.availability === 'sold_out' || payload.availability === 'unknown') {
       setAvailability(payload.availability)
     }
     if (typeof payload.quantity === 'string') setQuantity(payload.quantity)
@@ -110,7 +111,7 @@ export default function NewSighting() {
     })
     setDraftLoading(false)
     if (saveError) {
-      setError(saveError.message)
+      setError(mapContributionError(saveError))
       return
     }
     await loadDraft()
@@ -122,7 +123,7 @@ export default function NewSighting() {
     const { error: discardError } = await discardContributionDraft(draft.id)
     setDraftLoading(false)
     if (discardError) {
-      setError(discardError.message)
+      setError(mapContributionError(discardError))
       return
     }
     setDraft(null)
@@ -184,7 +185,7 @@ export default function NewSighting() {
     }
 
     setLoading(true)
-    const { data, error: createError } = await createSighting({
+    const { error: createError } = await createSighting({
       productId: product.id,
       storeId: store.id,
       seenAt: seenDate.toISOString(),
@@ -195,11 +196,11 @@ export default function NewSighting() {
     })
     setLoading(false)
     if (createError) {
-      setError(createError.message)
+      setError(mapContributionError(createError))
       return
     }
     trackEvent('report_sighting', { availability })
-    navigate(data ? `/products/${product.slug ?? ''}` : '/sightings')
+    setSubmitted(true)
   }
 
   return (
@@ -210,6 +211,19 @@ export default function NewSighting() {
         <p className="mt-1 text-sm text-gray-500">Share a fresh, exact store sighting so another shopper can act on it.</p>
       </div>
 
+      {submitted && (
+        <div className="card space-y-3 border-2 border-green-500 bg-green-50">
+          <h2 className="text-lg font-bold text-green-800">Submitted for review</h2>
+          <p className="text-sm text-green-700">Your sighting has been submitted and will be visible once approved by a moderator. You can track its status in your sightings list.</p>
+          <div className="flex gap-2">
+            <Link to="/sightings" className="btn-secondary">View sightings</Link>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setStore(null); setQuantity(''); setNotes(''); setDraft(null) }}>Report another</button>
+          </div>
+        </div>
+      )}
+
+      {!submitted && (
+        <>
       {draft && <ContributionDraftNotice draft={draft} onDiscard={discardDraft} discarding={draftLoading} />}
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -267,11 +281,12 @@ export default function NewSighting() {
 
         <fieldset>
           <legend className="label">Availability *</legend>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {([
-              ['low', 'Low', 'border-red-500 bg-red-50 text-red-700'],
-              ['medium', 'Medium', 'border-yellow-500 bg-yellow-50 text-yellow-800'],
-              ['high', 'High', 'border-green-600 bg-green-50 text-green-700'],
+              ['in_stock', 'In Stock', 'border-green-600 bg-green-50 text-green-700'],
+              ['low_stock', 'Low Stock', 'border-yellow-500 bg-yellow-50 text-yellow-800'],
+              ['sold_out', 'Sold Out', 'border-red-500 bg-red-50 text-red-700'],
+              ['unknown', 'Unknown', 'border-gray-400 bg-gray-50 text-gray-600'],
             ] as const).map(([value, label, activeClass]) => (
               <label key={value} className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${availability === value ? activeClass : 'border-gray-200 bg-white text-gray-600'}`}>
                 <input className="sr-only" type="radio" name="availability" value={value} checked={availability === value} onChange={() => setAvailability(value)} />
@@ -299,10 +314,12 @@ export default function NewSighting() {
             {draftLoading ? 'Saving…' : 'Save private draft'}
           </button>
           <button type="submit" className="btn-primary sm:flex-[2]" disabled={loading || draftLoading}>
-            {loading ? 'Publishing…' : 'Publish Sighting'}
+            {loading ? 'Submitting…' : 'Submit for review'}
           </button>
         </div>
       </form>
+        </>
+      )}
     </div>
   )
 }

@@ -99,6 +99,8 @@ export type ProfileContact = {
   updated_at: string
 }
 
+export type BountyScope = 'region' | 'retailers' | 'stores'
+
 export type Bounty = {
   id: string
   user_id?: string
@@ -107,6 +109,7 @@ export type Bounty = {
   product_slug?: string
   reward_amount?: number
   reward_cents?: number
+  scope_type?: BountyScope
   store_id?: string | null
   store?: Store | null
   store_slug?: string | null
@@ -116,6 +119,9 @@ export type Bounty = {
   radius_miles: number | null
   notes?: string | null
   requirements?: string | null
+  quantity_needed?: number | null
+  variant_requirements?: string | null
+  accept_equivalent?: boolean
   deadline?: string | null
   moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden'
   status: 'open' | 'claimed' | 'closed'
@@ -140,7 +146,7 @@ export type Sighting = {
   state: string | null
   zip_code: string | null
   stock_level?: 'in_stock' | 'low' | 'none'
-  availability?: 'low' | 'medium' | 'high'
+  availability?: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity?: number | null
   notes?: string | null
   seen_at?: string
@@ -152,6 +158,7 @@ export type Sighting = {
   product?: Product
   profile?: Profile
   distance_miles?: number
+  freshness_status?: 'fresh' | 'possibly_outdated' | 'expired'
 }
 
 export type ContributionDraftType = 'sighting' | 'bounty'
@@ -258,6 +265,9 @@ export type BountyDetailView = {
   reward_cents: number
   deadline: string
   requirements: string | null
+  quantity_needed: number | null
+  variant_requirements: string | null
+  accept_equivalent: boolean
   status: 'open' | 'claimed' | 'closed'
   moderation_status: 'pending' | 'approved' | 'rejected' | 'hidden'
   created_at: string
@@ -278,9 +288,32 @@ export type BountyClaimView = {
   store_id: string
   store_name: string
   seen_at: string
-  availability: 'low' | 'medium' | 'high'
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: number | null
   notes: string | null
   contact_info: string | null
+  created_at: string
+}
+
+export type PersonalNotification = {
+  id: string
+  event_type: string
+  title: string
+  subtitle: string
+  link: string
+  occurred_at: string
+}
+
+export type RetailerSearchResult = {
+  id: string
+  name: string
+  slug: string
+  website_url: string | null
+}
+
+export type AdminMemberSearchResult = {
+  user_id: string
+  username: string
+  karma: number
   created_at: string
 }

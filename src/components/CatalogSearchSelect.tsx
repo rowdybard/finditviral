@@ -1,5 +1,5 @@
 import { MagnifyingGlass, MapPin, Package, X } from '@phosphor-icons/react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { searchProducts, searchStores } from '../lib/launchApi'
 import type { ProductSearchResult, StoreSearchResult } from '../types/database'
 
@@ -54,6 +54,7 @@ export default function CatalogSearchSelect({
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(-1)
 
   useEffect(() => {
     if (value || query.trim().length < 2) {
@@ -83,6 +84,7 @@ export default function CatalogSearchSelect({
           ? ((response.data ?? []) as ProductSearchResult[]).map(toProductSelection)
           : ((response.data ?? []) as StoreSearchResult[]).map(toStoreSelection),
       )
+      setActiveIndex(-1)
       setOpen(true)
     }, 250)
 
@@ -93,7 +95,37 @@ export default function CatalogSearchSelect({
     onChange(result)
     setQuery('')
     setOpen(false)
+    setActiveIndex(-1)
   }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!open || query.trim().length < 2) return
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((prev) => Math.min(prev + 1, results.length - 1))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((prev) => Math.max(prev - 1, 0))
+    } else if (event.key === 'Enter') {
+      if (activeIndex >= 0 && activeIndex < results.length) {
+        event.preventDefault()
+        select(results[activeIndex])
+      }
+    } else if (event.key === 'Escape') {
+      setOpen(false)
+      setQuery('')
+      setActiveIndex(-1)
+    }
+  }
+
+  const statusMessage = loading
+    ? 'Searching…'
+    : error
+      ? error
+      : results.length === 0 && query.trim().length >= 2
+        ? 'No matches found.'
+        : ''
 
   return (
     <div className="relative">
@@ -138,15 +170,19 @@ export default function CatalogSearchSelect({
               }}
               onFocus={() => setOpen(true)}
               onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+              onKeyDown={handleKeyDown}
               placeholder={kind === 'product' ? 'Search products…' : 'Search stores and boutiques…'}
               autoComplete="off"
               role="combobox"
               aria-expanded={open}
               aria-controls={`${inputId}-results`}
+              aria-activedescendant={activeIndex >= 0 ? `${inputId}-opt-${activeIndex}` : undefined}
               required={required}
               disabled={disabled}
             />
           </div>
+
+          <span className="sr-only" role="status" aria-live="polite">{statusMessage}</span>
 
           {query.trim().length > 0 && query.trim().length < 2 && (
             <p className="mt-1 text-xs text-gray-500">Type at least 2 characters.</p>
@@ -160,13 +196,14 @@ export default function CatalogSearchSelect({
             >
               {loading && <p className="px-3 py-3 text-sm text-gray-500">Searching…</p>}
               {!loading && error && <p className="px-3 py-3 text-sm text-red-600">{error}</p>}
-              {!loading && !error && results.map((result) => (
+              {!loading && !error && results.map((result, index) => (
                 <button
                   key={result.id}
+                  id={`${inputId}-opt-${index}`}
                   type="button"
                   role="option"
-                  aria-selected="false"
-                  className="block w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 focus:bg-brand-50 focus:outline-none"
+                  aria-selected={index === activeIndex ? 'true' : 'false'}
+                  className={`block w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 focus:bg-brand-50 focus:outline-none ${index === activeIndex ? 'bg-brand-50' : ''}`}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => select(result)}
                 >
@@ -187,7 +224,7 @@ export default function CatalogSearchSelect({
                     onSuggest(query.trim())
                   }}
                 >
-                  Can’t find it? Suggest {kind === 'product' ? 'a product' : 'a location'}
+                  Can't find it? Suggest {kind === 'product' ? 'a product' : 'a location'}
                 </button>
               )}
             </div>

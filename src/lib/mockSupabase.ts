@@ -197,7 +197,7 @@ store.sightings.forEach((sighting, index) => Object.assign(sighting, {
   city: store.stores[index % store.stores.length].city,
   state: 'MI',
   zip_code: store.stores[index % store.stores.length].zip_code,
-  availability: sighting.stock_level === 'none' ? 'low' : sighting.stock_level === 'low' ? 'medium' : 'high',
+  availability: sighting.stock_level === 'none' ? 'sold_out' : sighting.stock_level === 'low' ? 'low_stock' : 'in_stock',
   seen_at: sighting.created_at,
   moderation_status: 'approved',
 }))
@@ -500,13 +500,13 @@ export const mockSupabase = {
         state: location?.state ?? null,
         zip_code: location?.zip_code ?? null,
         availability: args.p_availability,
-        stock_level: args.p_availability === 'low' ? 'low' : 'in_stock',
+        stock_level: args.p_availability === 'low_stock' ? 'low' : args.p_availability === 'sold_out' || args.p_availability === 'unknown' ? 'none' : 'in_stock',
         quantity: args.p_quantity,
         notes: args.p_notes,
         seen_at: args.p_seen_at,
-        is_public: true,
+        is_public: false,
         bounty_id: null,
-        moderation_status: 'approved',
+        moderation_status: 'pending',
         created_at: new Date().toISOString(),
       })
       if (args.p_draft_id) store.contribution_drafts = store.contribution_drafts.filter(draft => draft.id !== args.p_draft_id)
@@ -519,18 +519,28 @@ export const mockSupabase = {
         id,
         user_id: currentUserId,
         product_id: args.p_product_id,
+        scope_type: args.p_scope_type ?? 'region',
         store_id: args.p_store_id,
         reward_cents: args.p_reward_cents,
         zip_code: args.p_zip_code,
         radius_miles: args.p_radius_miles,
         requirements: args.p_requirements,
+        quantity_needed: args.p_quantity_needed ?? null,
+        variant_requirements: args.p_variant_requirements ?? null,
+        accept_equivalent: args.p_accept_equivalent ?? false,
         deadline: args.p_deadline,
         status: 'open',
-        moderation_status: 'approved',
+        moderation_status: 'pending',
         created_at: new Date().toISOString(),
       })
       if (args.p_draft_id) store.contribution_drafts = store.contribution_drafts.filter(draft => draft.id !== args.p_draft_id)
       return Promise.resolve({ data: id, error: null })
+    }
+
+    if (name === 'search_retailers') {
+      const q = (args.p_query ?? '').toLowerCase().trim()
+      const results = store.retailers.filter((r: any) => r.is_active && (q === '' || r.name.toLowerCase().includes(q))).slice(0, 12)
+      return Promise.resolve({ data: results, error: null })
     }
 
     if (name === 'get_bounty_detail') {
@@ -587,6 +597,28 @@ export const mockSupabase = {
       return Promise.resolve({ data: null, error: null })
     }
 
+    if (name === 'admin_create_store') {
+      const id = uid()
+      store.stores.push({ id, retailer_id: uid(), name: args.p_store_name, slug: args.p_store_name.toLowerCase().replace(/\s+/g, '-'), address_line1: args.p_address_line1, city: args.p_city, state: args.p_state, zip_code: args.p_zip_code, is_active: true, store_name: args.p_store_name, retailer_name: args.p_retailer_name, phone: args.p_phone ?? null, website_url: args.p_website_url ?? null } as any)
+      return Promise.resolve({ data: id, error: null })
+    }
+    if (name === 'admin_update_store' || name === 'admin_disable_store') {
+      return Promise.resolve({ data: null, error: null })
+    }
+    if (name === 'admin_create_product') {
+      const id = uid()
+      store.products.push({ id, trend_id: args.p_trend_id, name: args.p_name, slug: args.p_name.toLowerCase().replace(/\s+/g, '-'), availability_status: args.p_availability_status, is_active: true, source_url: args.p_source_url ?? null, retailer: args.p_retailer ?? null, release_date: args.p_release_date ?? null, verified_at: null, created_at: new Date().toISOString() } as any)
+      return Promise.resolve({ data: id, error: null })
+    }
+    if (name === 'admin_update_product' || name === 'admin_disable_product') {
+      return Promise.resolve({ data: null, error: null })
+    }
+    if (name === 'admin_search_members') {
+      const q = (args.p_query ?? '').toLowerCase().trim()
+      const results = store.profiles.filter((p: any) => q === '' || (p.username ?? '').toLowerCase().includes(q)).slice(0, 20).map((p: any) => ({ user_id: p.id, username: p.username, karma: p.karma ?? 0, created_at: p.created_at }))
+      return Promise.resolve({ data: results, error: null })
+    }
+
     if (name === 'submit_bounty_claim') {
       const bounty = store.bounties.find(b => b.id === args.p_bounty_id)
       if (!bounty || bounty.status !== 'open') {
@@ -605,8 +637,8 @@ export const mockSupabase = {
         city: canonicalStore?.city ?? args.p_city,
         state: canonicalStore?.state ?? args.p_state,
         zip_code: canonicalStore?.zip_code ?? args.p_zip_code,
-        stock_level: args.p_availability === 'low' || args.p_stock_level === 'low' ? 'low' : 'in_stock',
-        availability: args.p_availability ?? 'high',
+        stock_level: args.p_availability === 'low_stock' || args.p_availability === 'low' || args.p_stock_level === 'low' ? 'low' : args.p_availability === 'sold_out' || args.p_availability === 'unknown' ? 'none' : 'in_stock',
+        availability: args.p_availability ?? 'in_stock',
         quantity: args.p_quantity ?? null,
         notes: args.p_notes ?? null,
         seen_at: args.p_seen_at ?? new Date().toISOString(),

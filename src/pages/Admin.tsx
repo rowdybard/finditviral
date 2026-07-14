@@ -2,7 +2,10 @@ import { Check, ClockCounterClockwise, EyeSlash, LinkSimple, ShieldCheck, X } fr
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
+import { mapContributionError } from '../lib/errorMap'
 import {
+  adminCreateProduct,
+  adminCreateStore,
   adminListInterestEvents,
   adminListMemberRestrictions,
   adminListModerationHistory,
@@ -11,19 +14,21 @@ import {
   adminListStoreSuggestions,
   adminResolveProductSuggestion,
   adminResolveStoreSuggestion,
+  adminSearchMembers,
   adminSetContributionModeration,
   adminSetMemberRestriction,
   isAppOwner,
 } from '../lib/launchApi'
 import type {
   AdminContribution,
+  AdminMemberSearchResult,
   CatalogSuggestion,
   InterestEvent,
   MemberRestriction,
   ModerationEvent,
 } from '../types/database'
 
-type Tab = 'suggestions' | 'contributions' | 'interests' | 'members' | 'history'
+type Tab = 'suggestions' | 'contributions' | 'interests' | 'members' | 'history' | 'stores' | 'products'
 type NewProductAvailability = 'available' | 'backorder' | 'preorder' | 'announced' | 'limited'
 
 function suggestionTitle(suggestion: CatalogSuggestion): string {
@@ -73,7 +78,7 @@ function SuggestionReviewCard({
       : await adminResolveStoreSuggestion(baseInput)
     setLoading(false)
     if (result.error) {
-      setError(result.error.message)
+      setError(mapContributionError(result.error))
       return
     }
     await onResolved()
@@ -174,6 +179,19 @@ export default function Admin() {
   const [memberStatus, setMemberStatus] = useState<'suspended' | 'disabled'>('suspended')
   const [memberReason, setMemberReason] = useState('')
   const [memberExpiry, setMemberExpiry] = useState('')
+  const [memberSearchQuery, setMemberSearchQuery] = useState('')
+  const [memberSearchResults, setMemberSearchResults] = useState<AdminMemberSearchResult[]>([])
+  const [newStoreRetailer, setNewStoreRetailer] = useState('')
+  const [newStoreName, setNewStoreName] = useState('')
+  const [newStoreAddress, setNewStoreAddress] = useState('')
+  const [newStoreCity, setNewStoreCity] = useState('')
+  const [newStoreState, setNewStoreState] = useState('')
+  const [newStoreZip, setNewStoreZip] = useState('')
+  const [newProductName, setNewProductName] = useState('')
+  const [newProductTrend, setNewProductTrend] = useState('')
+  const [newProductAvailability, setNewProductAvailability] = useState('available')
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(false)
 
   async function loadAdminData() {
     setLoading(true)
@@ -206,11 +224,11 @@ export default function Admin() {
     void initialize()
   }, [])
 
-  async function moderate(contribution: AdminContribution, action: 'hide' | 'restore' | 'reject') {
+  async function moderate(contribution: AdminContribution, action: 'approve' | 'hide' | 'restore' | 'reject') {
     setActionId(contribution.contribution_id)
     const result = await adminSetContributionModeration({ kind: contribution.contribution_type, id: contribution.contribution_id, action, reason: null })
     setActionId(null)
-    if (result.error) setError(result.error.message)
+    if (result.error) setError(mapContributionError(result.error))
     else await loadAdminData()
   }
 
@@ -223,7 +241,7 @@ export default function Admin() {
       reason: memberReason.trim() || null,
       expiresAt: memberStatus === 'suspended' && memberExpiry ? new Date(memberExpiry).toISOString() : null,
     })
-    if (result.error) setError(result.error.message)
+    if (result.error) setError(mapContributionError(result.error))
     else {
       setMemberId('')
       setMemberReason('')
@@ -234,8 +252,61 @@ export default function Admin() {
 
   async function clearRestriction(userId: string) {
     const result = await adminSetMemberRestriction({ userId, status: null, reason: null, expiresAt: null })
-    if (result.error) setError(result.error.message)
+    if (result.error) setError(mapContributionError(result.error))
     else await loadAdminData()
+  }
+
+  async function searchMembers(query: string) {
+    setMemberSearchQuery(query)
+    if (query.trim().length < 2) { setMemberSearchResults([]); return }
+    const result = await adminSearchMembers(query)
+    setMemberSearchResults(result.data ?? [])
+  }
+
+  async function handleCreateStore(event: React.FormEvent) {
+    event.preventDefault()
+    setCatalogError(null)
+    if (!newStoreName.trim() || !newStoreRetailer.trim() || !newStoreAddress.trim() || !newStoreCity.trim() || !newStoreState.trim() || !newStoreZip.trim()) {
+      setCatalogError('All fields are required.')
+      return
+    }
+    setCatalogLoading(true)
+    const result = await adminCreateStore({
+      retailerName: newStoreRetailer.trim(),
+      storeName: newStoreName.trim(),
+      addressLine1: newStoreAddress.trim(),
+      city: newStoreCity.trim(),
+      state: newStoreState.trim(),
+      zipCode: newStoreZip.trim(),
+      phone: null,
+      websiteUrl: null,
+      latitude: null,
+      longitude: null,
+    })
+    setCatalogLoading(false)
+    if (result.error) { setCatalogError(result.error.message); return }
+    setNewStoreRetailer(''); setNewStoreName(''); setNewStoreAddress(''); setNewStoreCity(''); setNewStoreState(''); setNewStoreZip('')
+  }
+
+  async function handleCreateProduct(event: React.FormEvent) {
+    event.preventDefault()
+    setCatalogError(null)
+    if (!newProductName.trim() || !newProductTrend.trim()) {
+      setCatalogError('Product name and trend ID are required.')
+      return
+    }
+    setCatalogLoading(true)
+    const result = await adminCreateProduct({
+      trendId: newProductTrend.trim(),
+      name: newProductName.trim(),
+      availabilityStatus: newProductAvailability,
+      releaseDate: null,
+      sourceUrl: null,
+      retailer: null,
+    })
+    setCatalogLoading(false)
+    if (result.error) { setCatalogError(result.error.message); return }
+    setNewProductName(''); setNewProductTrend('')
   }
 
   if (owner === false) return <Navigate to="/home" replace />
@@ -246,6 +317,8 @@ export default function Admin() {
     { id: 'contributions', label: 'Contributions' },
     { id: 'interests', label: 'Interest inbox' },
     { id: 'members', label: 'Members' },
+    { id: 'stores', label: 'Stores' },
+    { id: 'products', label: 'Products' },
     { id: 'history', label: 'History' },
   ]
 
@@ -280,6 +353,9 @@ export default function Admin() {
             <article key={`${item.contribution_type}-${item.contribution_id}`} className="card flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs font-bold uppercase text-gray-500">{item.contribution_type} · {item.moderation_status}</p><h3 className="font-bold text-gray-900">{item.product_name}</h3><p className="text-sm text-gray-600">{item.username ? `@${item.username}` : 'Member'} · {new Date(item.occurred_at).toLocaleString()}</p></div>
               <div className="flex gap-2">
+                {item.moderation_status === 'pending' && (
+                  <button type="button" className="btn-primary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'approve')}><Check size={17} aria-hidden="true" /> Approve</button>
+                )}
                 {item.moderation_status === 'hidden'
                   ? <button type="button" className="btn-secondary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'restore')}><ClockCounterClockwise size={17} aria-hidden="true" /> Restore</button>
                   : <button type="button" className="btn-secondary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'hide')}><EyeSlash size={17} aria-hidden="true" /> Hide</button>}
@@ -292,7 +368,7 @@ export default function Admin() {
 
       {tab === 'interests' && (
         <div className="space-y-3">
-          {interests.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-xs font-bold uppercase text-brand-700">{item.source} · {item.digest_status ?? 'unassigned'}</p><time className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString()}</time></div>{item.email && <p className="mt-2 text-sm font-semibold text-gray-900">{item.email}{item.username ? ` · @${item.username}` : ''}</p>}<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{item.reason ?? item.looking_for ?? 'No details supplied.'}</p></article>)}
+          {interests.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-xs font-bold uppercase text-brand-700">{item.source} · {item.digest_status ?? 'unassigned'}</p><time className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString()}</time></div>{item.email && item.source !== 'onboarding_looking_for' && <p className="mt-2 text-sm font-semibold text-gray-900">{item.email}{item.username ? ` · @${item.username}` : ''}</p>}<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{item.reason ?? item.looking_for ?? 'No details supplied.'}</p></article>)}
           {interests.length === 0 && <p className="card text-sm text-gray-600">No interest submissions yet.</p>}
         </div>
       )}
@@ -301,12 +377,59 @@ export default function Admin() {
         <div className="space-y-5">
           <form onSubmit={restrictMember} className="card space-y-3">
             <h2 className="font-bold text-gray-900">Restrict a member</h2>
-            <input className="input" value={memberId} onChange={(event) => setMemberId(event.target.value)} placeholder="Member UUID" required />
+            <input className="input" value={memberSearchQuery} onChange={(event) => void searchMembers(event.target.value)} placeholder="Search by username…" />
+            {memberSearchResults.length > 0 && (
+              <div className="space-y-1">
+                {memberSearchResults.map((m) => (
+                  <button key={m.user_id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setMemberId(m.user_id); setMemberSearchQuery(`@${m.username}`); setMemberSearchResults([]) }}>
+                    @{m.username} · {m.karma} karma · joined {new Date(m.created_at).toLocaleDateString()}
+                  </button>
+                ))}
+              </div>
+            )}
+            <input className="input" value={memberId} onChange={(event) => setMemberId(event.target.value)} placeholder="Member UUID (auto-filled from search)" required />
             <div className="grid gap-3 sm:grid-cols-2"><select className="input" value={memberStatus} onChange={(event) => setMemberStatus(event.target.value as 'suspended' | 'disabled')}><option value="suspended">Suspended</option><option value="disabled">Disabled</option></select><input className="input" type="datetime-local" value={memberExpiry} onChange={(event) => setMemberExpiry(event.target.value)} aria-label="Optional restriction expiry" disabled={memberStatus === 'disabled'} /></div>
             <textarea className="input min-h-20" value={memberReason} onChange={(event) => setMemberReason(event.target.value)} maxLength={500} placeholder="Reason (private)" required />
             <button type="submit" className="btn-primary">Apply restriction</button>
           </form>
           {restrictions.map((item) => <article key={item.user_id} className="card flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-gray-900">{item.username ? `@${item.username}` : item.user_id}</h3><p className="text-sm text-gray-600">{item.status}{item.expires_at ? ` until ${new Date(item.expires_at).toLocaleString()}` : ''}</p>{item.reason && <p className="mt-1 text-sm text-gray-600">{item.reason}</p>}</div><button type="button" className="btn-secondary" onClick={() => void clearRestriction(item.user_id)}>Restore access</button></article>)}
+        </div>
+      )}
+
+      {tab === 'stores' && (
+        <div className="space-y-5">
+          <form onSubmit={handleCreateStore} className="card space-y-3">
+            <h2 className="font-bold text-gray-900">Add a store</h2>
+            <input className="input" value={newStoreRetailer} onChange={(event) => setNewStoreRetailer(event.target.value)} placeholder="Retailer name (e.g. Target)" required />
+            <input className="input" value={newStoreName} onChange={(event) => setNewStoreName(event.target.value)} placeholder="Store name (e.g. Target Lansing)" required />
+            <input className="input" value={newStoreAddress} onChange={(event) => setNewStoreAddress(event.target.value)} placeholder="Street address" required />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <input className="input" value={newStoreCity} onChange={(event) => setNewStoreCity(event.target.value)} placeholder="City" required />
+              <input className="input" value={newStoreState} onChange={(event) => setNewStoreState(event.target.value.toUpperCase().slice(0, 2))} placeholder="State (2-letter)" required />
+              <input className="input" value={newStoreZip} onChange={(event) => setNewStoreZip(event.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="ZIP" required />
+            </div>
+            {catalogError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{catalogError}</p>}
+            <button type="submit" className="btn-primary" disabled={catalogLoading}>{catalogLoading ? 'Creating…' : 'Create store'}</button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'products' && (
+        <div className="space-y-5">
+          <form onSubmit={handleCreateProduct} className="card space-y-3">
+            <h2 className="font-bold text-gray-900">Add a product</h2>
+            <input className="input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} placeholder="Product name" required />
+            <input className="input" value={newProductTrend} onChange={(event) => setNewProductTrend(event.target.value)} placeholder="Trend UUID" required />
+            <select className="input" value={newProductAvailability} onChange={(event) => setNewProductAvailability(event.target.value)}>
+              <option value="available">Available now</option>
+              <option value="backorder">Backorder</option>
+              <option value="preorder">Preorder</option>
+              <option value="announced">Announced</option>
+              <option value="limited">Limited release</option>
+            </select>
+            {catalogError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{catalogError}</p>}
+            <button type="submit" className="btn-primary" disabled={catalogLoading}>{catalogLoading ? 'Creating…' : 'Create product'}</button>
+          </form>
         </div>
       )}
 

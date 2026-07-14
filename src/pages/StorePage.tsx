@@ -4,7 +4,15 @@ import { Link, useParams } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
 import SightingCard from '../components/SightingCard'
 import { getPublicStore, listPublicSightings } from '../lib/launchApi'
+import { applyPageMetadata, getPageMetadataForStore } from '../lib/pageMetadata'
 import type { Sighting, Store } from '../types/database'
+
+function freshnessBadge(status: Sighting['freshness_status']) {
+  if (!status) return null
+  if (status === 'fresh') return <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-green-800">Fresh</span>
+  if (status === 'possibly_outdated') return <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-800">Possibly outdated</span>
+  return null
+}
 
 export default function StorePage() {
   const { slug } = useParams<{ slug: string }>()
@@ -34,6 +42,12 @@ export default function StorePage() {
     return () => { active = false }
   }, [slug])
 
+  useEffect(() => {
+    if (store) {
+      applyPageMetadata(document, getPageMetadataForStore(window.location.pathname, store))
+    }
+  }, [store])
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
   if (!store) return <EmptyState title="Store not found" message="This location may be awaiting review or no longer active." action={<Link to="/stores" className="btn-primary">Browse stores</Link>} />
 
@@ -59,8 +73,14 @@ export default function StorePage() {
           <Link to="/sightings/new" className="text-sm font-semibold text-brand-700">Report one →</Link>
         </div>
         {sightings.length > 0
-          ? <div className="space-y-3">{sightings.map((sighting) => <SightingCard key={sighting.id} sighting={sighting} />)}</div>
-          : <EmptyState title="No fresh sightings here" message="Sign in to report what you find at this location." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />}
+          ? <div className="space-y-3">{sightings.map((sighting) => (
+              <div key={sighting.id}>
+                {freshnessBadge(sighting.freshness_status) && <div className="mb-1">{freshnessBadge(sighting.freshness_status)}</div>}
+                <SightingCard sighting={sighting} />
+              </div>
+            ))}</div>
+          : <EmptyState title="No fresh sightings here" message="Sign in to report what you find at this location." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />
+        }
       </section>
     </div>
   )

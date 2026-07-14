@@ -9,7 +9,8 @@ import { useMascotPrefs } from './mascotPrefs'
 import './mascotAnimations.css'
 
 const STORAGE_KEY = 'fiv-mascot-pos'
-const SIZE = 64
+const WIDTH = 80
+const HEIGHT = 100
 const SLEEP_AFTER_MS = 120_000
 const EDGE_MARGIN = 12
 const TOP_MIN = 64
@@ -29,13 +30,13 @@ function loadPos(): Pos {
   } catch {
     // ignore
   }
-  return { x: window.innerWidth - SIZE - EDGE_MARGIN, y: window.innerHeight - SIZE - 80 }
+  return { x: window.innerWidth - WIDTH - EDGE_MARGIN, y: window.innerHeight - HEIGHT - 80 }
 }
 
 function clampPos(pos: Pos): Pos {
   return {
-    x: Math.max(EDGE_MARGIN, Math.min(pos.x, window.innerWidth - SIZE - EDGE_MARGIN)),
-    y: Math.max(TOP_MIN, Math.min(pos.y, window.innerHeight - SIZE - EDGE_MARGIN)),
+    x: Math.max(EDGE_MARGIN, Math.min(pos.x, window.innerWidth - WIDTH - EDGE_MARGIN)),
+    y: Math.max(TOP_MIN, Math.min(pos.y, window.innerHeight - HEIGHT - EDGE_MARGIN)),
   }
 }
 
@@ -164,9 +165,9 @@ export default function Mascot() {
       // Gently snap to the nearest horizontal edge
       setSnapping(true)
       setPos((prev) => clampPos({
-        x: prev.x + SIZE / 2 < window.innerWidth / 2
+        x: prev.x + WIDTH / 2 < window.innerWidth / 2
           ? EDGE_MARGIN
-          : window.innerWidth - SIZE - EDGE_MARGIN,
+          : window.innerWidth - WIDTH - EDGE_MARGIN,
         y: prev.y,
       }))
       setTimeout(() => setSnapping(false), 400)
@@ -186,7 +187,7 @@ export default function Mascot() {
 
   const placement: BubblePlacement = {
     openUp: pos.y > 140,
-    openLeft: pos.x + SIZE / 2 > window.innerWidth / 2,
+    openLeft: pos.x + WIDTH / 2 > window.innerWidth / 2,
   }
 
   return (
@@ -195,8 +196,8 @@ export default function Mascot() {
       style={{
         left: pos.x,
         top: pos.y,
-        width: SIZE,
-        height: SIZE,
+        width: WIDTH,
+        height: HEIGHT,
         transition: snapping ? 'left 0.35s cubic-bezier(0.22, 1, 0.36, 1)' : undefined,
       }}
     >
@@ -246,7 +247,7 @@ export default function Mascot() {
           }
         }}
         className={`${dragging ? 'cursor-grabbing' : 'cursor-grab'} ${petting ? 'mascot-wiggle' : ''} ${mood === 'walking' ? 'mascot-walk-pace' : ''} touch-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}
-        style={{ width: SIZE, height: SIZE }}
+        style={{ width: WIDTH, height: HEIGHT }}
         role="button"
         tabIndex={0}
         aria-label="Scout the mascot. Click for notifications and settings, drag to move."

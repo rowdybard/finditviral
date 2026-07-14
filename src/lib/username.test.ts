@@ -15,6 +15,7 @@ describe('USERNAME_PATTERN', () => {
     expect(USERNAME_PATTERN.test('user 123')).toBe(false)
     expect(USERNAME_PATTERN.test('user123')).toBe(false)
     expect(USERNAME_PATTERN.test('user_name')).toBe(false)
+    expect(USERNAME_PATTERN.test('abcdefghijklmnopqrstu')).toBe(false)
   })
 })
 
@@ -29,7 +30,11 @@ describe('validateUsername', () => {
   })
 
   it('returns error for too long', () => {
-    expect(validateUsername('a'.repeat(25))).toBe('Username must be 24 characters or fewer')
+    expect(validateUsername('a'.repeat(21))).toBe('Username must be 20 characters or fewer')
+  })
+
+  it('accepts exactly 20 characters (boundary)', () => {
+    expect(validateUsername('a'.repeat(20))).toBeNull()
   })
 
   it('returns error for invalid characters', () => {
@@ -62,6 +67,6 @@ describe('normalizeUsername', () => {
 describe('constants', () => {
   it('has correct min and max', () => {
     expect(USERNAME_MIN).toBe(3)
-    expect(USERNAME_MAX).toBe(24)
+    expect(USERNAME_MAX).toBe(20)
   })
 })
