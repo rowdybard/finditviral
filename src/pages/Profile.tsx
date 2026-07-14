@@ -9,7 +9,7 @@ import EmptyState from '../components/EmptyState'
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
-  const { user } = useAuth()
+  const { user, profile: authProfile } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
@@ -25,71 +25,95 @@ export default function ProfilePage() {
   const isOwnProfile = user?.id === profile?.id
 
   useEffect(() => {
-    if (!username) return
+    if (!username || !user || !authProfile) return
+    const currentUser = user
+    const currentProfile = authProfile
     async function load() {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username, karma, is_pro, created_at')
-        .eq('username', username)
-        .single()
-      if (profileError || !profileData) {
+      setLoading(true)
+      setProfile(null)
+      setBounties([])
+      setSightings([])
+      setClaims([])
+
+      // Member profiles are private during beta. This route is the signed-in
+      // member's account view, not a directory of other accounts.
+      if (username !== currentProfile.username || currentUser.id !== currentProfile.id) {
         setLoading(false)
         return
       }
-      setProfile(profileData as Profile)
-      const ownProfile = user?.id === profileData.id
+
+      const profileData = currentProfile
+      setProfile(profileData)
 
       const [bountiesRes, sightingsRes, claimsRes] = await Promise.all([
         supabase
           .from('bounties')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('id,user_id,product_id,reward_amount,reward_cents,store_id,zip_code,radius_miles,notes,requirements,deadline,status,moderation_status,created_at,product:products(*)')
           .eq('user_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('sightings')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
+          .select('id,user_id,product_id,store_id,store_name,city,state,zip_code,stock_level,availability,quantity,notes,seen_at,is_public,bounty_id,photo_urls,moderation_status,created_at,product:products(*)')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('bounty_claims')
-          .select('*, bounty:bounties(*, product:products(*)), finder:profiles(id, username, karma, is_pro, created_at)')
+          .select('id,bounty_id,finder_id,sighting_id,status,created_at,bounty:bounties(id,product_id,status,product:products(*))')
           .eq('finder_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
       ])
 
-      setBounties(bountiesRes.data as Bounty[] ?? [])
-      setSightings(sightingsRes.data as Sighting[] ?? [])
-      setClaims(claimsRes.data as BountyClaim[] ?? [])
+      const bountyRows = (bountiesRes.data ?? []).map((row) => ({
+        ...row,
+        product: Array.isArray(row.product) ? row.product[0] : row.product,
+      }))
+      const sightingRows = (sightingsRes.data ?? []).map((row) => ({
+        ...row,
+        product: Array.isArray(row.product) ? row.product[0] : row.product,
+      }))
+      const claimRows = (claimsRes.data ?? []).map((row) => {
+        const bounty = Array.isArray(row.bounty) ? row.bounty[0] : row.bounty
+        return {
+          ...row,
+          bounty: bounty
+            ? {
+                ...bounty,
+                product: Array.isArray(bounty.product) ? bounty.product[0] : bounty.product,
+              }
+            : undefined,
+        }
+      })
+      setBounties(bountyRows as unknown as Bounty[])
+      setSightings(sightingRows as unknown as Sighting[])
+      setClaims(claimRows as unknown as BountyClaim[])
       if (bountiesRes.error || sightingsRes.error || claimsRes.error) {
         setError('Some content failed to load.')
       }
 
-      if (ownProfile) {
-        const [ownProfileRes, contactRes] = await Promise.all([
-          supabase.rpc('get_my_profile'),
-          supabase
-            .from('profile_contacts')
-            .select('user_id, contact_info, created_at, updated_at')
-            .eq('user_id', profileData.id)
-            .single(),
-        ])
-        const ownProfileData = Array.isArray(ownProfileRes.data)
-          ? ownProfileRes.data[0]
-          : ownProfileRes.data
-        if (ownProfileData) {
-          setProfile(ownProfileData as Profile)
-        }
-        setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
+      const [ownProfileRes, contactRes] = await Promise.all([
+        supabase.rpc('get_my_profile'),
+        supabase
+          .from('profile_contacts')
+          .select('user_id, contact_info, created_at, updated_at')
+          .eq('user_id', profileData.id)
+          .single(),
+      ])
+      const ownProfileData = Array.isArray(ownProfileRes.data)
+        ? ownProfileRes.data[0]
+        : ownProfileRes.data
+      if (ownProfileData) {
+        setProfile(ownProfileData as Profile)
       }
+      setSavedContactInfo((contactRes.data as ProfileContact | null)?.contact_info ?? null)
 
       setLoading(false)
     }
     load()
-  }, [username, user?.id])
+  }, [username, user, authProfile])
 
   async function handleSaveContact() {
     if (!profile) return

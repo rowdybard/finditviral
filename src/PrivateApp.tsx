@@ -3,13 +3,14 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Auth from './pages/Auth'
+import Admin from './pages/Admin'
 import Bounties from './pages/Bounties'
 import BountyDetail from './pages/BountyDetail'
 import Home from './pages/Home'
+import Drafts from './pages/Drafts'
 import NewBounty from './pages/NewBounty'
 import NewSighting from './pages/NewSighting'
 import Onboarding from './pages/Onboarding'
-import ProductPage from './pages/ProductPage'
 import Profile from './pages/Profile'
 import Sightings from './pages/Sightings'
 import TrendPage from './pages/TrendPage'
@@ -39,7 +40,8 @@ export default function PrivateApp() {
                 <Routes>
                   <Route path="/home" element={<Home />} />
                   <Route path="/trends/:slug" element={<TrendPage />} />
-                  <Route path="/products/:slug" element={<ProductPage />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/drafts" element={<Drafts />} />
                   <Route path="/bounties" element={<Bounties />} />
                   <Route path="/bounties/new" element={<NewBounty />} />
                   <Route path="/bounties/:id" element={<BountyDetail />} />

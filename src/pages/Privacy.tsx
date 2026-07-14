@@ -46,12 +46,15 @@ export default function Privacy() {
             <p className="mt-3">
               FiV Heat turns aggregate product opens into a smoothed relative-interest score, so a few early clicks do not overwhelm the comparison. The same browser-and-product pair can count again only after six hours.
             </p>
+            <p className="mt-3">
+              The site owner can review product-interest responses in a private admin area and may receive one daily operational email summarizing new responses. These messages are used to run the beta, not for bulk marketing.
+            </p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold text-stone-900">Who processes it</h2>
             <p className="mt-2">
-              Cloudflare hosts the site and provides Turnstile bot verification, Supabase stores early-access and account data, and Google Analytics measures page visits and successful early-access submissions. These providers process information on our behalf under their own security and privacy terms. Browser privacy tools or blockers may prevent analytics from loading. We do not sell your information or otherwise share it unless required by law.
+              Cloudflare hosts the site, provides Turnstile bot verification, and delivers the owner’s operational digest. Supabase stores early-access and account data, and Google Analytics measures page visits and successful early-access submissions. These providers process information on our behalf under their own security and privacy terms. Browser privacy tools or blockers may prevent analytics from loading. We do not sell your information or otherwise share it unless required by law.
             </p>
           </section>
 
@@ -62,6 +65,9 @@ export default function Privacy() {
             </p>
             <p className="mt-3">
               The FiV Heat browser identifier expires after 30 days. Product-specific deduplication keys expire after six hours and are removed when later FiV Heat activity runs the cleanup, while aggregate product-open totals are retained to calculate relative interest.
+            </p>
+            <p className="mt-3">
+              Incomplete contribution drafts expire after 90 days. Rejected suggestions and hidden community reports may be retained with a private moderation history to prevent abuse and explain owner decisions.
             </p>
           </section>
 

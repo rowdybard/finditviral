@@ -7,6 +7,7 @@ import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 import { mapProductHeat, trackProductOpen, type ProductHeat } from '../lib/productHeat'
+import { listPublicBounties, listPublicSightings } from '../lib/launchApi'
 
 export default function TrendPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -50,35 +51,18 @@ export default function TrendPage() {
       const productList = productsData as Product[] ?? []
       const productIds = productList.map((p) => p.id)
 
-      const [bountiesRes, sightingsRes, sightingProductIdsRes, heatRes] = await Promise.all([
-        supabase
-          .from('bounties')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('status', 'open')
-          .in('product_id', productIds)
-          .order('created_at', { ascending: false })
-          .limit(10),
-        supabase
-          .from('sightings')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('is_public', true)
-          .in('product_id', productIds)
-          .order('created_at', { ascending: false })
-          .limit(10),
-        supabase
-          .from('sightings')
-          .select('product_id')
-          .eq('is_public', true)
-          .in('product_id', productIds),
+      const [bountiesRes, sightingsRes, heatRes] = await Promise.all([
+        listPublicBounties({ limit: 50 }),
+        listPublicSightings({ limit: 50 }),
         supabase.rpc('get_trend_click_heat', { p_trend_id: trendData.id }),
       ])
 
       const productsWithSightings = new Set(
-        (sightingProductIdsRes.data ?? []).map((s) => (s as { product_id: string }).product_id)
+        (sightingsRes.data ?? []).filter((sighting) => productIds.includes(sighting.product_id)).map((sighting) => sighting.product_id),
       )
       setProducts(productList.map((p) => ({ ...p, has_sightings: productsWithSightings.has(p.id) })))
-      setBounties(bountiesRes.data as Bounty[] ?? [])
-      setSightings(sightingsRes.data as Sighting[] ?? [])
+      setBounties((bountiesRes.data as Bounty[] ?? []).filter((bounty) => productIds.includes(bounty.product_id)).slice(0, 10))
+      setSightings((sightingsRes.data as Sighting[] ?? []).filter((sighting) => productIds.includes(sighting.product_id)).slice(0, 10))
       setHeatByProduct(heatRes.error ? {} : mapProductHeat(heatRes.data))
       if (bountiesRes.error || sightingsRes.error) {
         setError('Some content failed to load.')

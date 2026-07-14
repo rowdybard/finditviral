@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import type { Product, Bounty, Sighting } from '../types/database'
+import { Link, useParams } from 'react-router-dom'
 import BountyCard from '../components/BountyCard'
-import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import SightingCard from '../components/SightingCard'
+import { getPublicProduct, listPublicBounties, listPublicSightings } from '../lib/launchApi'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
+import type { Bounty, PublicProduct, Sighting } from '../types/database'
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<PublicProduct | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [loading, setLoading] = useState(true)
@@ -17,131 +17,86 @@ export default function ProductPage() {
 
   useEffect(() => {
     if (!slug) return
+    let active = true
     async function load() {
-      const { data: productData, error: productError } = await supabase
-        .from('products')
-        .select('*, trend:trends(*)')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .single()
-      if (productError || !productData) {
+      setLoading(true)
+      const productResult = await getPublicProduct(slug!)
+      if (!active) return
+      if (productResult.error || !productResult.data) {
+        setProduct(null)
         setLoading(false)
         return
       }
-      setProduct(productData as Product)
 
-      const [bountiesRes, sightingsRes] = await Promise.all([
-        supabase
-          .from('bounties')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('product_id', productData.id)
-          .eq('status', 'open')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('sightings')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('product_id', productData.id)
-          .eq('is_public', true)
-          .order('created_at', { ascending: false }),
+      setProduct(productResult.data)
+      const [bountyResult, sightingResult] = await Promise.all([
+        listPublicBounties({ productId: productResult.data.id, limit: 50 }),
+        listPublicSightings({ productId: productResult.data.id, limit: 50 }),
       ])
-
-      setBounties(bountiesRes.data as Bounty[] ?? [])
-      setSightings(sightingsRes.data as Sighting[] ?? [])
-      if (bountiesRes.error || sightingsRes.error) {
-        setError('Some content failed to load.')
-      }
+      if (!active) return
+      setBounties(bountyResult.data ?? [])
+      setSightings(sightingResult.data ?? [])
+      setError(bountyResult.error || sightingResult.error ? 'Some recent activity could not be loaded.' : null)
       setLoading(false)
     }
-    load()
+    void load()
+    return () => { active = false }
   }, [slug])
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
-      </div>
-    )
+    return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
   }
 
   if (!product) {
-    return (
-      <EmptyState
-        title="Product not found"
-        message="This product may have been removed."
-        action={<Link to="/" className="btn-primary">Go home</Link>}
-      />
-    )
+    return <EmptyState title="Product not found" message="This product may be unavailable or no longer public." action={<Link to="/stores" className="btn-primary">Browse stores</Link>} />
   }
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      <div>
-        {product.trend && (
-          <Link to={`/trends/${product.trend.slug}`} className="text-sm text-gray-500 hover:text-gray-700">
-            ← {product.trend.name}
-          </Link>
+    <div className="space-y-8">
+      {error && <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
+
+      <header className="overflow-hidden rounded-2xl border-2 border-stone-900 bg-[#fffdf7] shadow-[5px_5px_0_0_#0c251d]">
+        {product.image_url && (
+          <img src={product.image_url} alt="" className="h-52 w-full border-b-2 border-stone-900 object-cover" />
         )}
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">{product.name}</h1>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-full bg-brand-50 px-3 py-1 font-semibold text-brand-700">
-            {availabilityLabel(product)}
-          </span>
-          {releaseLabel(product.release_date) && (
-            <span className="text-gray-600">Releases {releaseLabel(product.release_date)}</span>
-          )}
-          {product.source_url && (
-            <a href={product.source_url} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:text-brand-700">
-              Verify at {product.retailer ?? 'official source'} ↗
-            </a>
-          )}
+        <div className="p-5">
+          {product.trend_name && <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">{product.trend_name}</p>}
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950">{product.name}</h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-800">{availabilityLabel(product)}</span>
+            {releaseLabel(product.release_date) && <span className="text-gray-600">Release: {releaseLabel(product.release_date)}</span>}
+            {product.source_url && (
+              <a href={product.source_url} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:text-brand-800">
+                Verify at {product.retailer ?? 'official source'} ↗
+              </a>
+            )}
+          </div>
+          {product.image_attribution && <p className="mt-3 text-xs text-gray-500">Image: {product.image_attribution}</p>}
+          <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 text-center">
+            <div><dt className="text-xs font-bold uppercase text-stone-500">Fresh sightings</dt><dd className="text-2xl font-black text-green-700">{product.approved_sighting_count}</dd></div>
+            <div><dt className="text-xs font-bold uppercase text-stone-500">Open bounties</dt><dd className="text-2xl font-black text-red-600">{product.open_bounty_count}</dd></div>
+          </dl>
         </div>
-      </div>
+      </header>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Open Bounties</h2>
-          <Link to="/bounties/new" className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            Post a bounty →
-          </Link>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Fresh Sightings</h2>
+          <Link to="/sightings/new" className="text-sm font-semibold text-brand-700">Report one →</Link>
         </div>
-        {bounties.length > 0 ? (
-          <div className="space-y-3">
-            {bounties.map((b) => (
-              <BountyCard key={b.id} bounty={b} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No open bounties for this product"
-            message="Post a bounty to ask local shoppers for help finding it."
-            action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
-          />
-        )}
+        {sightings.length > 0
+          ? <div className="space-y-3">{sightings.map((sighting) => <SightingCard key={sighting.id} sighting={sighting} />)}</div>
+          : <EmptyState title="No fresh sightings" message="Inventory reports expire quickly. Sign in to share what you find." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />}
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Public Sightings</h2>
-          <Link to="/sightings/new" className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            Report a sighting →
-          </Link>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Open Bounties</h2>
+          <Link to="/bounties/new" className="text-sm font-semibold text-brand-700">Post one →</Link>
         </div>
-        {sightings.length > 0 ? (
-          <div className="space-y-3">
-            {sightings.map((s) => (
-              <SightingCard key={s.id} sighting={s} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No sightings reported for this product yet"
-            message="Check back later, report what you find, or post a bounty for local help."
-            action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
-          />
-        )}
+        {bounties.length > 0
+          ? <div className="space-y-3">{bounties.map((bounty) => <BountyCard key={bounty.id} bounty={bounty} />)}</div>
+          : <EmptyState title="No open bounties" message="Sign in to ask local shoppers for help finding this product." action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>} />}
       </section>
     </div>
   )

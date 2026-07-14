@@ -1,0 +1,112 @@
+@keyframes mascot-idle-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes mascot-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  93%, 97% { transform: scaleY(0.1); }
+}
+
+@keyframes mascot-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes mascot-excited {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-12px) rotate(-5deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-12px) rotate(5deg); }
+}
+
+@keyframes mascot-ear-twitch {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+
+@keyframes mascot-bubble-pop-in {
+  0% { transform: scale(0) translateY(10px); opacity: 0; }
+  60% { transform: scale(1.05) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes mascot-bubble-pop-out {
+  0% { transform: scale(1) translateY(0); opacity: 1; }
+  100% { transform: scale(0) translateY(10px); opacity: 0; }
+}
+
+@keyframes mascot-tail-wag {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(15deg); }
+}
+
+@keyframes mascot-zzz-float {
+  0% { opacity: 0; transform: translate(0, 0); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(5px, -12px); }
+}
+
+@keyframes mascot-walk-pace {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-14px); }
+  50% { transform: translateX(0); }
+  75% { transform: translateX(14px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes mascot-trot {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes mascot-leg-step {
+  0%, 100% { transform: rotate(8deg); }
+  50% { transform: rotate(-8deg); }
+}
+
+@keyframes mascot-alert-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes mascot-badge-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.mascot-idle { animation: mascot-idle-bounce 3s ease-in-out infinite; }
+.mascot-blink { animation: mascot-blink 4s ease-in-out infinite; transform-origin: center; }
+.mascot-wiggle { animation: mascot-wiggle 0.5s ease-in-out 3; }
+.mascot-excited { animation: mascot-excited 0.6s ease-in-out 2; }
+.mascot-ear-twitch { animation: mascot-ear-twitch 2s ease-in-out infinite; transform-origin: bottom center; }
+.mascot-tail-wag { animation: mascot-tail-wag 1s ease-in-out infinite; transform-origin: bottom left; }
+.mascot-bubble-in { animation: mascot-bubble-pop-in 0.3s ease-out forwards; }
+.mascot-bubble-out { animation: mascot-bubble-pop-out 0.25s ease-in forwards; }
+.mascot-zzz { animation: mascot-zzz-float 2.5s ease-out infinite; }
+.mascot-walk-pace { animation: mascot-walk-pace 4s ease-in-out 1; }
+.mascot-trot { animation: mascot-trot 0.4s ease-in-out infinite; }
+.mascot-leg-a { animation: mascot-leg-step 0.4s ease-in-out infinite; }
+.mascot-leg-b { animation: mascot-leg-step 0.4s ease-in-out infinite; animation-delay: 0.2s; }
+.mascot-alert { animation: mascot-alert-shake 0.5s ease-in-out 2; }
+.mascot-badge { animation: mascot-badge-pop 0.3s ease-out; }
+
+.mascot-reduce-motion,
+.mascot-reduce-motion * {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-idle, .mascot-blink, .mascot-wiggle, .mascot-excited,
+  .mascot-ear-twitch, .mascot-tail-wag, .mascot-bubble-in, .mascot-bubble-out,
+  .mascot-zzz, .mascot-walk-pace, .mascot-trot, .mascot-leg-a, .mascot-leg-b,
+  .mascot-alert, .mascot-badge {
+    animation: none !important;
+  }
+}

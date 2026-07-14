@@ -1,6 +1,6 @@
 import type { Product } from '../types/database'
 
-export function availabilityLabel(product: Product) {
+export function availabilityLabel(product: Pick<Product, 'availability_status'>) {
   switch (product.availability_status) {
     case 'available': return 'Available now'
     case 'backorder': return 'Backorder'

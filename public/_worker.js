@@ -15,17 +15,26 @@ const RATE_LIMIT_MAX_REQUESTS = 5
 const RATE_LIMIT_WINDOW_SECONDS = 600
 const UPSTREAM_TIMEOUT_MS = 10_000
 
-const SPA_ROUTES = [
+const PUBLIC_SPA_ROUTES = [
+  /^\/products\/[^/]+\/?$/,
+  /^\/stores\/?$/,
+  /^\/stores\/[^/]+\/?$/,
+]
+
+const PRIVATE_SPA_ROUTES = [
   /^\/privacy\/?$/,
   /^\/auth\/?$/,
   /^\/onboarding\/?$/,
   /^\/home\/?$/,
   /^\/trends\//,
-  /^\/products\//,
   /^\/bounties(?:\/|$)/,
   /^\/sightings(?:\/|$)/,
   /^\/profile\//,
+  /^\/drafts\/?$/,
+  /^\/admin(?:\/|$)/,
 ]
+
+const SPA_ROUTES = [...PUBLIC_SPA_ROUTES, ...PRIVATE_SPA_ROUTES]
 
 const ROOT_METADATA = {
   title: 'FindItViral - Find Viral Products in Greater Lansing',
@@ -83,6 +92,18 @@ function createApiResponse(status, body, extraHeaders = {}) {
       ...extraHeaders,
     },
   })
+}
+
+const PUBLIC_PRODUCTS_METADATA = {
+  title: 'Product Availability in Greater Lansing - FindItViral',
+  description: 'See recent Greater Lansing sightings and open bounties for viral and hard-to-find retail products.',
+  robots: 'index, follow',
+}
+
+const PUBLIC_STORES_METADATA = {
+  title: 'Greater Lansing Store Directory - FindItViral',
+  description: 'Browse verified Greater Lansing stores and recent community-reported product sightings.',
+  robots: 'index, follow',
 }
 
 function createSupabaseServerHeaders(apiKey) {
@@ -391,10 +412,22 @@ function isSpaRoute(pathname) {
   return SPA_ROUTES.some((pattern) => pattern.test(pathname))
 }
 
-function getPageMetadata(pathname) {
+export function getPageMetadata(pathname) {
   const normalizedPathname = normalizePathname(pathname)
   if (normalizedPathname === '/') return ROOT_METADATA
   if (normalizedPathname === '/privacy') return PRIVACY_METADATA
+  if (normalizedPathname.startsWith('/products/')) {
+    return {
+      ...PUBLIC_PRODUCTS_METADATA,
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+    }
+  }
+  if (normalizedPathname === '/stores' || normalizedPathname.startsWith('/stores/')) {
+    return {
+      ...PUBLIC_STORES_METADATA,
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+    }
+  }
   if (isSpaRoute(pathname)) {
     return {
       ...PRIVATE_METADATA,

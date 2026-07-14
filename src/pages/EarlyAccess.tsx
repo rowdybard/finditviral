@@ -188,6 +188,7 @@ export default function EarlyAccess() {
           <span>FindItViral &middot; {activeMarket.footerTagline}</span>
           <span className="flex flex-wrap items-center gap-4">
             <a href="mailto:contact@finditviral.com" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">contact@finditviral.com</a>
+            <Link to="/stores" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Browse verified stores</Link>
             <Link to="/privacy" className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Privacy</Link>
             <Link to="/auth" className="font-medium text-stone-500 underline-offset-4 hover:text-stone-800 hover:underline">Sign in</Link>
           </span>

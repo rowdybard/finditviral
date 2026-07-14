@@ -42,6 +42,13 @@ const ONBOARDING_METADATA: PageMetadata = {
   robots: 'noindex, nofollow',
 }
 
+const STORE_DIRECTORY_METADATA: PageMetadata = {
+  title: 'Verified Greater Lansing Stores - FindItViral',
+  description: 'Browse verified Greater Lansing stores and boutiques with fresh community product sightings.',
+  canonicalUrl: 'https://finditviral.com/stores',
+  robots: 'index, follow',
+}
+
 function normalizePathname(pathname: string) {
   if (pathname === '/') return pathname
   return pathname.replace(/\/+$/, '') || '/'
@@ -53,6 +60,23 @@ export function getPageMetadata(pathname: string): PageMetadata {
   if (normalizedPathname === '/privacy') return PRIVACY_METADATA
   if (normalizedPathname === '/auth') return AUTH_METADATA
   if (normalizedPathname === '/onboarding') return ONBOARDING_METADATA
+  if (normalizedPathname === '/stores') return STORE_DIRECTORY_METADATA
+  if (normalizedPathname.startsWith('/stores/')) {
+    return {
+      title: 'Greater Lansing Store Sightings - FindItViral',
+      description: 'See fresh, community-reported product sightings at a verified Greater Lansing store.',
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+      robots: 'index, follow',
+    }
+  }
+  if (normalizedPathname.startsWith('/products/')) {
+    return {
+      title: 'Product Sightings and Bounties - FindItViral',
+      description: 'See fresh Greater Lansing sightings and open bounties for this viral or hard-to-find product.',
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+      robots: 'index, follow',
+    }
+  }
   return {
     ...PRIVATE_METADATA,
     canonicalUrl: `https://finditviral.com${normalizedPathname}`,

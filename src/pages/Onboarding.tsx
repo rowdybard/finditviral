@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
 import { supabase } from '../lib/supabase'
-import { normalizeUsername, validateUsername } from '../lib/username'
+import { USERNAME_MAX, normalizeUsername, validateUsername } from '../lib/username'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -90,12 +90,14 @@ export default function Onboarding() {
 
     if (rpcError) {
       const message = rpcError.message
+      const usernameConflict = message === 'username_unavailable'
+        || rpcError.details?.includes('username_claim_policy') === true
       if (message.includes('already been completed') || message.includes('55006')) {
         await refreshProfile()
         navigate('/home', { replace: true })
         return
       }
-      if (message.includes('taken') || message.includes('23505')) {
+      if (usernameConflict) {
         setError('That username is taken. Try another one.')
         setStep(0)
       } else if (message.includes('ZIP')) {
@@ -190,19 +192,20 @@ export default function Onboarding() {
                   id="onboarding-username"
                   className="w-full rounded-lg border-2 border-stone-300 px-3.5 py-3 text-base focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
                   value={username}
-                  onChange={(event) => { setUsername(event.target.value); setError(null) }}
+                  onChange={(event) => { setUsername(normalizeUsername(event.target.value)); setError(null) }}
                   placeholder="e.g. bargainhunter"
                   required
-                  maxLength={20}
+                  maxLength={USERNAME_MAX}
                   autoComplete="off"
                   autoCapitalize="off"
+                  pattern="[A-Za-z]+"
                   spellCheck={false}
                 />
                 <div className="mt-2 min-h-5 text-sm">
                   {usernameStatus === 'checking' && <span className="text-stone-500">Checking availability…</span>}
                   {usernameStatus === 'available' && <span className="font-medium text-green-700">✓ Available</span>}
                   {usernameStatus === 'taken' && <span className="font-medium text-red-700">That username is taken.</span>}
-                  {usernameStatus === 'invalid' && <span className="font-medium text-red-700">Use 3–20 letters, numbers, or underscores.</span>}
+                  {usernameStatus === 'invalid' && <span className="font-medium text-red-700">Use 3–24 letters only.</span>}
                 </div>
               </div>
               {error && <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>}

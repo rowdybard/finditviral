@@ -1,5 +1,7 @@
 import { type ReactNode } from 'react'
 import Navbar from './Navbar'
+import Mascot from './mascot/Mascot'
+import MascotRestoreButton from './mascot/MascotRestoreButton'
 import { activeMarket } from '../lib/market'
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -9,7 +11,9 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 mx-auto w-full max-w-2xl px-4 py-6">{children}</main>
       <footer className="border-t border-gray-200 py-4 text-center text-xs text-gray-400">
         FindItViral — {activeMarket.betaLabel}
+        <MascotRestoreButton />
       </footer>
+      <Mascot />
     </div>
   )
 }

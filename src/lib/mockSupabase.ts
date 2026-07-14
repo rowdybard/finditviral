@@ -115,6 +115,11 @@ const initialData = {
     { id: 'p95', trend_id: 't5', name: 'Magic Jellykins Surprise Plush Jar 2-Pack', slug: 'magic-jellykins-surprise-plush-jar-2pack', created_at: days(20) },
     { id: 'p96', trend_id: 't5', name: 'Magic Jellykins Doll Playset 12pk', slug: 'magic-jellykins-doll-playset-12pk', created_at: days(10) },
   ],
+  stores: [
+    { id: 'st1', slug: 'target-lansing-edgewood', retailer_name: 'Target', store_name: 'Target Lansing Edgewood', address_line1: '500 E Edgewood Blvd', city: 'Lansing', state: 'MI', zip_code: '48911', is_active: true },
+    { id: 'st2', slug: 'meijer-lansing-s-pennsylvania', retailer_name: 'Meijer', store_name: 'Meijer Lansing', address_line1: '6200 S Pennsylvania Ave', city: 'Lansing', state: 'MI', zip_code: '48911', is_active: true },
+    { id: 'st3', slug: 'five-below-eastwood', retailer_name: 'Five Below', store_name: 'Five Below Eastwood', address_line1: '2925 Preyde Blvd', city: 'Lansing', state: 'MI', zip_code: '48912', is_active: true },
+  ],
   profiles: [
     { id: 'u1', username: 'DemoHunter', karma: 12, is_pro: true, created_at: days(90) },
     { id: 'u2', username: 'SquishFan22', karma: 5, is_pro: false, created_at: days(60) },
@@ -151,6 +156,12 @@ const initialData = {
     { id: 's10', user_id: 'u4', product_id: 'p94', store_name: 'Target', city: 'Chicago', state: 'IL', zip_code: '60601', stock_level: 'in_stock', is_public: true, bounty_id: null, photo_urls: null, created_at: hours(7) },
   ],
   bounty_claims: [] as any[],
+  contribution_drafts: [] as any[],
+  product_suggestions: [] as any[],
+  store_suggestions: [] as any[],
+  interest_events: [] as any[],
+  member_restrictions: [] as any[],
+  moderation_events: [] as any[],
   zip_codes: [
     { zip_code: '10001', latitude: 40.7484, longitude: -73.9967, city: 'New York', state: 'NY' },
     { zip_code: '90210', latitude: 34.0901, longitude: -118.4065, city: 'Beverly Hills', state: 'CA' },
@@ -173,6 +184,22 @@ store.products.forEach((product) => Object.assign(product, {
   release_date: null,
   verified_at: new Date().toISOString(),
   is_active: true,
+}))
+store.bounties.forEach((bounty) => Object.assign(bounty, {
+  reward_cents: Math.round((bounty.reward_amount ?? 0) * 100),
+  requirements: bounty.notes ?? null,
+  deadline: new Date(Date.now() + 7 * 864e5).toISOString(),
+  moderation_status: 'approved',
+}))
+store.sightings.forEach((sighting, index) => Object.assign(sighting, {
+  store_id: store.stores[index % store.stores.length].id,
+  store_name: store.stores[index % store.stores.length].store_name,
+  city: store.stores[index % store.stores.length].city,
+  state: 'MI',
+  zip_code: store.stores[index % store.stores.length].zip_code,
+  availability: sighting.stock_level === 'none' ? 'low' : sighting.stock_level === 'low' ? 'medium' : 'high',
+  seen_at: sighting.created_at,
+  moderation_status: 'approved',
 }))
 let mockSession: any = null
 const listeners: ((event: string, session: any) => void)[] = []
@@ -259,6 +286,92 @@ class Builder {
 export const mockSupabase = {
   from(t: string) { return new Builder(t) },
   rpc(name: string, args: any) {
+    if (name === 'search_products') {
+      const query = String(args?.p_query ?? '').trim().toLowerCase()
+      const matches = store.products
+        .filter(product => product.is_active && product.name.toLowerCase().includes(query))
+        .slice(0, Math.min(Number(args?.p_limit) || 12, 12))
+        .map(product => ({
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          trend_name: store.trends.find(trend => trend.id === product.trend_id)?.name ?? null,
+          availability_status: product.availability_status,
+          release_date: product.release_date,
+          image_url: null,
+        }))
+      return Promise.resolve({ data: matches, error: null })
+    }
+
+    if (name === 'search_stores') {
+      const query = String(args?.p_query ?? '').trim().toLowerCase()
+      const matches = store.stores
+        .filter(location => location.is_active && [location.store_name, location.retailer_name, location.city, location.zip_code].some(value => String(value).toLowerCase().includes(query)))
+        .slice(0, Math.min(Number(args?.p_limit) || 12, 12))
+      return Promise.resolve({ data: matches, error: null })
+    }
+
+    if (name === 'get_public_product') {
+      const product = store.products.find(item => item.slug === args?.p_slug && item.is_active)
+      if (!product) return Promise.resolve({ data: [], error: null })
+      const trend = store.trends.find(item => item.id === product.trend_id)
+      return Promise.resolve({ data: [{
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        trend_id: product.trend_id,
+        trend_name: trend?.name ?? null,
+        trend_slug: trend?.slug ?? null,
+        availability_status: product.availability_status,
+        release_date: product.release_date,
+        retailer: product.retailer,
+        source_url: product.source_url,
+        image_url: null,
+        image_attribution: null,
+        latest_seen_at: null,
+        approved_sighting_count: store.sightings.filter(item => item.product_id === product.id && item.moderation_status === 'approved').length,
+        open_bounty_count: store.bounties.filter(item => item.product_id === product.id && item.status === 'open' && item.moderation_status === 'approved').length,
+      }], error: null })
+    }
+
+    if (name === 'list_public_stores' || name === 'get_public_store') {
+      const query = String(args?.p_query ?? '').trim().toLowerCase()
+      let locations = store.stores.filter(location => location.is_active)
+      if (name === 'get_public_store') locations = locations.filter(location => location.slug === args?.p_slug)
+      else if (query) locations = locations.filter(location => [location.store_name, location.retailer_name, location.city, location.zip_code].some(value => String(value).toLowerCase().includes(query)))
+      return Promise.resolve({ data: locations.map(location => ({
+        ...location,
+        latest_seen_at: store.sightings.filter(item => item.store_id === location.id).sort((a, b) => b.seen_at.localeCompare(a.seen_at))[0]?.seen_at ?? null,
+        approved_sighting_count: store.sightings.filter(item => item.store_id === location.id && item.moderation_status === 'approved').length,
+      })), error: null })
+    }
+
+    if (name === 'list_public_sightings') {
+      const rows = store.sightings
+        .filter(item => item.moderation_status === 'approved'
+          && (!args?.p_product_id || item.product_id === args.p_product_id)
+          && (!args?.p_store_id || item.store_id === args.p_store_id))
+        .slice(0, Number(args?.p_limit) || 50)
+        .map(item => {
+          const product = store.products.find(candidate => candidate.id === item.product_id)
+          const location = store.stores.find(candidate => candidate.id === item.store_id)
+          return { ...item, product_name: product?.name, product_slug: product?.slug, store_slug: location?.slug, retailer_name: location?.retailer_name, distance_miles: 3.2 }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
+
+    if (name === 'list_public_bounties') {
+      const rows = store.bounties
+        .filter(item => item.status === 'open' && item.moderation_status === 'approved' && (!args?.p_product_id || item.product_id === args.p_product_id))
+        .slice(0, Number(args?.p_limit) || 50)
+        .map(item => {
+          const product = store.products.find(candidate => candidate.id === item.product_id)
+          const location = store.stores.find(candidate => candidate.id === item.store_id)
+          return { ...item, product_name: product?.name, product_slug: product?.slug, store_name: location?.store_name ?? null, store_slug: location?.slug ?? null, retailer_name: location?.retailer_name ?? null, distance_miles: 4.6 }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
+
     const currentUserId = mockSession?.user?.id
     if (!currentUserId) {
       return Promise.resolve({ data: null, error: { message: 'Authentication required' } })
@@ -291,7 +404,7 @@ export const mockSupabase = {
 
     if (name === 'is_username_available') {
       const username = String(args?.p_username ?? '').trim().toLowerCase()
-      const available = /^[a-z0-9_]{3,20}$/.test(username)
+      const available = /^[a-z]{3,24}$/.test(username)
         && !store.profiles.some(p => p.id !== currentUserId && String(p.username).toLowerCase() === username)
       return Promise.resolve({ data: available, error: null })
     }
@@ -311,6 +424,169 @@ export const mockSupabase = {
       return Promise.resolve({ data: null, error: null })
     }
 
+    if (name === 'get_my_contribution_drafts') {
+      return Promise.resolve({ data: store.contribution_drafts.filter(draft => draft.user_id === currentUserId), error: null })
+    }
+
+    if (name === 'save_contribution_draft') {
+      const id = args?.p_draft_id || uid()
+      const existing = store.contribution_drafts.find(draft => draft.id === id && draft.user_id === currentUserId)
+      const row = {
+        id,
+        user_id: currentUserId,
+        draft_type: args.p_draft_type,
+        payload: args.p_payload,
+        product_id: args.p_product_id,
+        store_id: args.p_store_id,
+        product_suggestion_id: existing?.product_suggestion_id ?? null,
+        store_suggestion_id: existing?.store_suggestion_id ?? null,
+        state: existing?.state ?? 'editing',
+        updated_at: new Date().toISOString(),
+      }
+      if (existing) Object.assign(existing, row)
+      else store.contribution_drafts.push(row)
+      return Promise.resolve({ data: id, error: null })
+    }
+
+    if (name === 'discard_contribution_draft') {
+      store.contribution_drafts = store.contribution_drafts.filter(draft => !(draft.id === args.p_draft_id && draft.user_id === currentUserId))
+      return Promise.resolve({ data: null, error: null })
+    }
+
+    if (name === 'suggest_product_for_draft' || name === 'suggest_store_for_draft') {
+      const draftId = args?.p_draft_id || uid()
+      const suggestionId = uid()
+      const suggestionTable = name === 'suggest_product_for_draft' ? store.product_suggestions : store.store_suggestions
+      suggestionTable.push({
+        id: suggestionId,
+        user_id: currentUserId,
+        name: args.p_name,
+        retailer_name: args.p_retailer_name,
+        store_name: args.p_store_name,
+        address_line1: args.p_address_line1,
+        city: args.p_city,
+        state: args.p_state,
+        zip_code: args.p_zip_code,
+        source_url: args.p_source_url ?? args.p_website_url,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      })
+      const existing = store.contribution_drafts.find(draft => draft.id === draftId)
+      const draft = existing ?? { id: draftId, user_id: currentUserId }
+      Object.assign(draft, {
+        draft_type: args.p_draft_type,
+        payload: args.p_payload,
+        product_id: null,
+        store_id: null,
+        product_suggestion_id: name === 'suggest_product_for_draft' ? suggestionId : existing?.product_suggestion_id ?? null,
+        store_suggestion_id: name === 'suggest_store_for_draft' ? suggestionId : existing?.store_suggestion_id ?? null,
+        state: 'waiting_for_approval',
+        updated_at: new Date().toISOString(),
+      })
+      if (!existing) store.contribution_drafts.push(draft)
+      return Promise.resolve({ data: [{ draft_id: draftId, suggestion_id: suggestionId }], error: null })
+    }
+
+    if (name === 'create_sighting') {
+      const location = store.stores.find(item => item.id === args.p_store_id)
+      const id = uid()
+      store.sightings.push({
+        id,
+        user_id: currentUserId,
+        product_id: args.p_product_id,
+        store_id: args.p_store_id,
+        store_name: location?.store_name ?? 'Unknown store',
+        city: location?.city ?? null,
+        state: location?.state ?? null,
+        zip_code: location?.zip_code ?? null,
+        availability: args.p_availability,
+        stock_level: args.p_availability === 'low' ? 'low' : 'in_stock',
+        quantity: args.p_quantity,
+        notes: args.p_notes,
+        seen_at: args.p_seen_at,
+        is_public: true,
+        bounty_id: null,
+        moderation_status: 'approved',
+        created_at: new Date().toISOString(),
+      })
+      if (args.p_draft_id) store.contribution_drafts = store.contribution_drafts.filter(draft => draft.id !== args.p_draft_id)
+      return Promise.resolve({ data: id, error: null })
+    }
+
+    if (name === 'create_bounty') {
+      const id = uid()
+      store.bounties.push({
+        id,
+        user_id: currentUserId,
+        product_id: args.p_product_id,
+        store_id: args.p_store_id,
+        reward_cents: args.p_reward_cents,
+        zip_code: args.p_zip_code,
+        radius_miles: args.p_radius_miles,
+        requirements: args.p_requirements,
+        deadline: args.p_deadline,
+        status: 'open',
+        moderation_status: 'approved',
+        created_at: new Date().toISOString(),
+      })
+      if (args.p_draft_id) store.contribution_drafts = store.contribution_drafts.filter(draft => draft.id !== args.p_draft_id)
+      return Promise.resolve({ data: id, error: null })
+    }
+
+    if (name === 'get_bounty_detail') {
+      const bounty = store.bounties.find(item => item.id === args.p_bounty_id)
+      if (!bounty) return Promise.resolve({ data: [], error: null })
+      const product = store.products.find(item => item.id === bounty.product_id)
+      const location = store.stores.find(item => item.id === bounty.store_id)
+      const profile = store.profiles.find(item => item.id === bounty.user_id)
+      const callerClaim = store.bounty_claims.find(item => item.bounty_id === bounty.id && item.finder_id === currentUserId)
+      return Promise.resolve({ data: [{
+        ...bounty,
+        product_name: product?.name ?? 'Unknown product',
+        product_slug: product?.slug ?? '',
+        store_name: location?.store_name ?? null,
+        owner_username: profile?.username ?? 'member',
+        is_owner: bounty.user_id === currentUserId,
+        caller_claim_id: callerClaim?.id ?? null,
+        caller_claim_status: callerClaim?.status ?? null,
+        owner_contact_info: null,
+        accepted_finder_contact_info: null,
+      }], error: null })
+    }
+
+    if (name === 'list_my_bounty_claims') {
+      const bounty = store.bounties.find(item => item.id === args.p_bounty_id)
+      const rows = store.bounty_claims
+        .filter(claim => claim.bounty_id === args.p_bounty_id && (bounty?.user_id === currentUserId || claim.finder_id === currentUserId))
+        .map(claim => {
+          const sighting = store.sightings.find(item => item.id === claim.sighting_id)
+          const profile = store.profiles.find(item => item.id === claim.finder_id)
+          return { ...claim, finder_username: profile?.username ?? 'member', store_id: sighting?.store_id, store_name: sighting?.store_name, seen_at: sighting?.seen_at, availability: sighting?.availability, quantity: sighting?.quantity, notes: sighting?.notes, contact_info: null }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
+
+    if (name.startsWith('admin_list_')) {
+      if (currentUserId !== 'u1') return Promise.resolve({ data: null, error: { message: 'Owner access required' } })
+      if (name === 'admin_list_product_suggestions') return Promise.resolve({ data: store.product_suggestions, error: null })
+      if (name === 'admin_list_store_suggestions') return Promise.resolve({ data: store.store_suggestions, error: null })
+      if (name === 'admin_list_interest_events') return Promise.resolve({ data: store.interest_events, error: null })
+      if (name === 'admin_list_member_restrictions') return Promise.resolve({ data: store.member_restrictions, error: null })
+      if (name === 'admin_list_moderation_history') return Promise.resolve({ data: store.moderation_events, error: null })
+      if (name === 'admin_list_recent_contributions') return Promise.resolve({ data: [], error: null })
+    }
+
+    if (name === 'admin_resolve_product_suggestion' || name === 'admin_resolve_store_suggestion') {
+      const suggestionTable = name.includes('product') ? store.product_suggestions : store.store_suggestions
+      const suggestion = suggestionTable.find(item => item.id === args.p_suggestion_id)
+      if (suggestion) suggestion.status = args.p_decision
+      return Promise.resolve({ data: args.p_canonical_id ?? uid(), error: null })
+    }
+
+    if (name === 'admin_set_contribution_moderation' || name === 'admin_set_member_restriction') {
+      return Promise.resolve({ data: null, error: null })
+    }
+
     if (name === 'submit_bounty_claim') {
       const bounty = store.bounties.find(b => b.id === args.p_bounty_id)
       if (!bounty || bounty.status !== 'open') {
@@ -319,15 +595,22 @@ export const mockSupabase = {
       if (bounty.user_id === currentUserId) {
         return Promise.resolve({ data: null, error: { message: 'You cannot claim your own bounty' } })
       }
+      const canonicalStore = store.stores.find(location => location.id === args.p_store_id)
       const sighting = {
         id: uid(),
         user_id: currentUserId,
         product_id: bounty.product_id,
-        store_name: args.p_store_name,
-        city: args.p_city,
-        state: args.p_state,
-        zip_code: args.p_zip_code,
-        stock_level: args.p_stock_level || 'in_stock',
+        store_id: canonicalStore?.id ?? null,
+        store_name: canonicalStore?.store_name ?? args.p_store_name,
+        city: canonicalStore?.city ?? args.p_city,
+        state: canonicalStore?.state ?? args.p_state,
+        zip_code: canonicalStore?.zip_code ?? args.p_zip_code,
+        stock_level: args.p_availability === 'low' || args.p_stock_level === 'low' ? 'low' : 'in_stock',
+        availability: args.p_availability ?? 'high',
+        quantity: args.p_quantity ?? null,
+        notes: args.p_notes ?? null,
+        seen_at: args.p_seen_at ?? new Date().toISOString(),
+        moderation_status: 'approved',
         is_public: false,
         bounty_id: bounty.id,
         photo_urls: null,

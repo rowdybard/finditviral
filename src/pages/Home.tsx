@@ -6,6 +6,7 @@ import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
+import { listPublicBounties, listPublicSightings } from '../lib/launchApi'
 
 export default function Home() {
   const [trends, setTrends] = useState<Trend[]>([])
@@ -20,18 +21,8 @@ export default function Home() {
       const [trendsRes, productsRes, bountiesRes, sightingsRes] = await Promise.all([
         supabase.from('trends').select('*').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name'),
-        supabase
-          .from('bounties')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('status', 'open')
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('sightings')
-          .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-          .eq('is_public', true)
-          .order('created_at', { ascending: false })
-          .limit(5),
+        listPublicBounties({ limit: 5 }),
+        listPublicSightings({ limit: 5 }),
       ])
 
       if (trendsRes.error || productsRes.error || bountiesRes.error || sightingsRes.error) {
@@ -91,8 +82,9 @@ export default function Home() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {trends.map((trend) => {
               const trendProducts = products.filter((p) => p.trend_id === trend.id)
-              const trendBounties = bounties.filter((b) => b.product?.trend_id === trend.id)
-              const trendSightings = sightings.filter((s) => s.product?.trend_id === trend.id)
+              const trendProductIds = new Set(trendProducts.map((product) => product.id))
+              const trendBounties = bounties.filter((bounty) => trendProductIds.has(bounty.product_id))
+              const trendSightings = sightings.filter((sighting) => trendProductIds.has(sighting.product_id))
               return (
                 <Link
                   key={trend.id}

@@ -1,8 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handleEarlyAccess, handleProductClick } from './_worker.js'
+import { getPageMetadata, handleEarlyAccess, handleProductClick } from './_worker.js'
 
 const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 const VISITOR_ID = '11111111-1111-4111-8111-111111111111'
+
+describe('public catalog metadata', () => {
+  it('keeps product and store routes indexable while admin routes stay private', () => {
+    expect(getPageMetadata('/products/test-product')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/products/test-product',
+      robots: 'index, follow',
+    })
+    expect(getPageMetadata('/stores')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/stores',
+      robots: 'index, follow',
+    })
+    expect(getPageMetadata('/stores/test-store/')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/stores/test-store',
+      robots: 'index, follow',
+    })
+    expect(getPageMetadata('/admin')).toMatchObject({ robots: 'noindex, nofollow' })
+  })
+})
 
 function env(overrides = {}) {
   return {

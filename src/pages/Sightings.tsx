@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase'
 import type { Sighting, Product, Trend } from '../types/database'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
-import { haversineMiles } from '../lib/distance'
 import { activeMarket } from '../lib/market'
+import { listPublicSightings } from '../lib/launchApi'
 
 export default function Sightings() {
   const [sightings, setSightings] = useState<Sighting[]>([])
@@ -34,26 +34,12 @@ export default function Sightings() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let query = supabase
-        .from('sightings')
-        .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-        .eq('is_public', true)
-        .order('created_at', { ascending: false })
-
-      if (productFilter) {
-        query = query.eq('product_id', productFilter)
-      } else if (trendFilter) {
-        const trendProductIds = products.filter((p) => p.trend_id === trendFilter).map((p) => p.id)
-        if (trendProductIds.length > 0) {
-          query = query.in('product_id', trendProductIds)
-        } else {
-          setSightings([])
-          setLoading(false)
-          return
-        }
-      }
-
-      const { data, error: queryError } = await query
+      const { data, error: queryError } = await listPublicSightings({
+        productId: productFilter || null,
+        limit: 50,
+        zipCode: zipFilter.trim() || null,
+        radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+      })
       if (queryError) {
         setError('Failed to load sightings. Please try again.')
         setSightings([])
@@ -62,45 +48,9 @@ export default function Sightings() {
       }
       setError(null)
       let results = data as Sighting[] ?? []
-
-      if (zipFilter.trim() && results.length > 0) {
-        const { data: zipData } = await supabase
-          .from('zip_codes')
-          .select('latitude, longitude')
-          .eq('zip_code', zipFilter.trim())
-          .single()
-
-        if (zipData) {
-          const radius = parseInt(radiusFilter) || 50
-          const userLat = zipData.latitude
-          const userLon = zipData.longitude
-          const sightingZipCodes = Array.from(
-            new Set(results.map((s) => s.zip_code).filter((z): z is string => Boolean(z))),
-          )
-          const { data: sightingZips } = await supabase
-            .from('zip_codes')
-            .select('zip_code, latitude, longitude')
-            .in('zip_code', sightingZipCodes)
-          const zipMap = new Map(
-            (sightingZips ?? []).map((z) => [(z as { zip_code: string }).zip_code, z as { latitude: number; longitude: number }]),
-          )
-          const filtered: Sighting[] = []
-          for (const s of results) {
-            if (s.zip_code) {
-              const sz = zipMap.get(s.zip_code)
-              if (sz) {
-                const dist = haversineMiles(userLat, userLon, sz.latitude, sz.longitude)
-                if (dist <= radius) {
-                  filtered.push({ ...s, distance_miles: dist })
-                }
-              }
-            }
-          }
-          results = filtered
-          results.sort((a, b) => (a.distance_miles ?? 0) - (b.distance_miles ?? 0))
-        } else {
-          results = []
-        }
+      if (!productFilter && trendFilter) {
+        const trendProductIds = new Set(products.filter((product) => product.trend_id === trendFilter).map((product) => product.id))
+        results = results.filter((sighting) => trendProductIds.has(sighting.product_id))
       }
 
       setSightings(results)

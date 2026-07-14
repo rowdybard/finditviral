@@ -4,9 +4,10 @@ Disallow: /home
 Disallow: /auth
 Disallow: /onboarding
 Disallow: /trends/
-Disallow: /products/
 Disallow: /bounties
 Disallow: /sightings
 Disallow: /profile/
+Disallow: /drafts
+Disallow: /admin
 
 Sitemap: https://finditviral.com/sitemap.xml

@@ -4,8 +4,8 @@ import { validateUsername, normalizeUsername, USERNAME_PATTERN, USERNAME_MIN, US
 describe('USERNAME_PATTERN', () => {
   it('matches valid usernames', () => {
     expect(USERNAME_PATTERN.test('abc')).toBe(true)
-    expect(USERNAME_PATTERN.test('user_123')).toBe(true)
-    expect(USERNAME_PATTERN.test('a_b_c')).toBe(true)
+    expect(USERNAME_PATTERN.test('username')).toBe(true)
+    expect(USERNAME_PATTERN.test('michael')).toBe(true)
   })
 
   it('rejects invalid usernames', () => {
@@ -13,13 +13,15 @@ describe('USERNAME_PATTERN', () => {
     expect(USERNAME_PATTERN.test('ABC')).toBe(false)
     expect(USERNAME_PATTERN.test('user-123')).toBe(false)
     expect(USERNAME_PATTERN.test('user 123')).toBe(false)
+    expect(USERNAME_PATTERN.test('user123')).toBe(false)
+    expect(USERNAME_PATTERN.test('user_name')).toBe(false)
   })
 })
 
 describe('validateUsername', () => {
   it('returns null for valid usernames', () => {
     expect(validateUsername('goodname')).toBeNull()
-    expect(validateUsername('user_123')).toBeNull()
+    expect(validateUsername('anothername')).toBeNull()
   })
 
   it('returns error for too short', () => {
@@ -27,11 +29,13 @@ describe('validateUsername', () => {
   })
 
   it('returns error for too long', () => {
-    expect(validateUsername('a'.repeat(21))).toBe('Username must be 20 characters or fewer')
+    expect(validateUsername('a'.repeat(25))).toBe('Username must be 24 characters or fewer')
   })
 
   it('returns error for invalid characters', () => {
-    expect(validateUsername('User-Name')).toBe('Only lowercase letters, numbers, and underscore')
+    expect(validateUsername('User-Name')).toBe('Use letters only')
+    expect(validateUsername('user123')).toBe('Use letters only')
+    expect(validateUsername('user_name')).toBe('Use letters only')
   })
 
   it('returns error for banned words', () => {
@@ -49,11 +53,15 @@ describe('normalizeUsername', () => {
   it('lowercases and trims', () => {
     expect(normalizeUsername('  Hello  ')).toBe('hello')
   })
+
+  it('applies NFKC normalization before validation', () => {
+    expect(normalizeUsername('  ＨＥＬＬＯ  ')).toBe('hello')
+  })
 })
 
 describe('constants', () => {
   it('has correct min and max', () => {
     expect(USERNAME_MIN).toBe(3)
-    expect(USERNAME_MAX).toBe(20)
+    expect(USERNAME_MAX).toBe(24)
   })
 })

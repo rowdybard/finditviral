@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase'
 import type { Bounty, Product, Trend } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import EmptyState from '../components/EmptyState'
-import { haversineMiles } from '../lib/distance'
 import { activeMarket } from '../lib/market'
+import { listPublicBounties } from '../lib/launchApi'
 
 export default function Bounties() {
   const [bounties, setBounties] = useState<Bounty[]>([])
@@ -35,26 +35,12 @@ export default function Bounties() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let query = supabase
-        .from('bounties')
-        .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-
-      if (productFilter) {
-        query = query.eq('product_id', productFilter)
-      } else if (trendFilter) {
-        const trendProductIds = products.filter((p) => p.trend_id === trendFilter).map((p) => p.id)
-        if (trendProductIds.length > 0) {
-          query = query.in('product_id', trendProductIds)
-        } else {
-          setBounties([])
-          setLoading(false)
-          return
-        }
-      }
-
-      const { data, error: queryError } = await query
+      const { data, error: queryError } = await listPublicBounties({
+        productId: productFilter || null,
+        limit: 50,
+        zipCode: zipFilter.trim() || null,
+        radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+      })
       if (queryError) {
         setError('Failed to load bounties. Please try again.')
         setBounties([])
@@ -63,45 +49,13 @@ export default function Bounties() {
       }
       setError(null)
       let results = data as Bounty[] ?? []
-
-      if (zipFilter.trim()) {
-        const { data: zipData } = await supabase
-          .from('zip_codes')
-          .select('latitude, longitude')
-          .eq('zip_code', zipFilter.trim())
-          .single()
-
-        if (zipData) {
-          const radius = parseInt(radiusFilter) || 50
-          const userLat = zipData.latitude
-          const userLon = zipData.longitude
-          const bountyZipCodes = Array.from(new Set(results.map((b) => b.zip_code)))
-          const { data: bountyZips } = await supabase
-            .from('zip_codes')
-            .select('zip_code, latitude, longitude')
-            .in('zip_code', bountyZipCodes)
-          const zipMap = new Map(
-            (bountyZips ?? []).map((z) => [(z as { zip_code: string }).zip_code, z as { latitude: number; longitude: number }]),
-          )
-          const filtered: Bounty[] = []
-          for (const b of results) {
-            const bz = zipMap.get(b.zip_code)
-            if (bz) {
-              const dist = haversineMiles(userLat, userLon, bz.latitude, bz.longitude)
-              if (dist <= radius) {
-                filtered.push({ ...b, distance_miles: dist })
-              }
-            }
-          }
-          results = filtered
-          results.sort((a, b) => (a.distance_miles ?? 0) - (b.distance_miles ?? 0))
-        } else {
-          results = []
-        }
+      if (!productFilter && trendFilter) {
+        const trendProductIds = new Set(products.filter((product) => product.trend_id === trendFilter).map((product) => product.id))
+        results = results.filter((bounty) => trendProductIds.has(bounty.product_id))
       }
 
       if (sortBy === 'reward') {
-        results.sort((a, b) => b.reward_amount - a.reward_amount)
+        results.sort((a, b) => (b.reward_cents ?? Math.round((b.reward_amount ?? 0) * 100)) - (a.reward_cents ?? Math.round((a.reward_amount ?? 0) * 100)))
       }
       setBounties(results)
       setLoading(false)

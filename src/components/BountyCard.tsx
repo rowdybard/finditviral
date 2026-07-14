@@ -22,8 +22,15 @@ function cardReward(amount: number): string {
 }
 
 export default function BountyCard({ bounty }: { bounty: Bounty }) {
-  const productName = bounty.product?.name ?? 'Unknown product'
-  const shareText = `Help find ${productName} near ZIP ${bounty.zip_code} for a ${cardReward(bounty.reward_amount)} reward.`
+  const productName = bounty.product?.name ?? bounty.product_name ?? 'Unknown product'
+  const rewardAmount = bounty.reward_cents !== undefined
+    ? bounty.reward_cents / 100
+    : bounty.reward_amount ?? 0
+  const exactStore = bounty.store?.store_name ?? bounty.store_name
+  const locationLabel = exactStore
+    ? `${exactStore}${bounty.store?.city ? ` in ${bounty.store.city}` : ''}`
+    : `ZIP ${bounty.zip_code ?? '48910'}`
+  const shareText = `Help find ${productName} near ${locationLabel} for a ${cardReward(rewardAmount)} reward.`
 
   return (
     <article
@@ -49,7 +56,7 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
                 Reward
               </p>
               <p className="mt-1 text-4xl font-black leading-none tracking-tight text-red-600 sm:text-5xl">
-                {cardReward(bounty.reward_amount)}
+                {cardReward(rewardAmount)}
               </p>
               <span className="mt-3 inline-flex items-center rounded-md border-2 border-red-500 px-3 py-0.5 text-xs font-black uppercase text-red-600">
                 {statusLabel(bounty.status)}
@@ -71,7 +78,7 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
                 </>
               )}
               <p className="mt-3 line-clamp-3 text-sm font-medium leading-snug text-stone-700">
-                {bounty.notes || 'No additional notes yet. Tap through for the full bounty.'}
+                {bounty.requirements || bounty.notes || 'No additional requirements yet. Tap through for the full bounty.'}
               </p>
             </div>
 
@@ -81,9 +88,9 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
                 <dd className="flex items-start gap-2">
                   <MapPin className="mt-0.5 shrink-0 text-red-600" aria-hidden="true" size={20} weight="fill" />
                   <span>
-                    <strong className="block text-sm font-black text-red-600">{bounty.zip_code}</strong>
+                    <strong className="block text-sm font-black text-red-600">{exactStore ?? bounty.zip_code ?? 'Local'}</strong>
                     <span className="block text-[10px] font-bold uppercase leading-tight text-stone-600">
-                      {bounty.radius_miles} mi radius
+                      {exactStore ? 'Exact store' : `${bounty.radius_miles ?? 50} mi radius`}
                     </span>
                   </span>
                 </dd>

@@ -1,151 +1,104 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
-import type { Bounty, BountyClaim, ProfileContact } from '../types/database'
-import { formatReward, timeAgo, statusColor, statusLabel } from '../lib/utils'
-import { trackEvent } from '../lib/analytics'
+import { Link, useParams } from 'react-router-dom'
+import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
-import { activeMarket } from '../lib/market'
+import { trackEvent } from '../lib/analytics'
+import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
+import { supabase } from '../lib/supabase'
+import type { BountyClaimView, BountyDetailView } from '../types/database'
+import { formatReward, statusColor, statusLabel, timeAgo } from '../lib/utils'
+
+function localDateTime(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
 
 export default function BountyDetail() {
   const { id } = useParams<{ id: string }>()
-  const { user } = useAuth()
-  const [bounty, setBounty] = useState<Bounty | null>(null)
-  const [claims, setClaims] = useState<BountyClaim[]>([])
-  const [claimContacts, setClaimContacts] = useState<Record<string, string | null>>({})
-  const [ownerContact, setOwnerContact] = useState<string | null>(null)
+  const [bounty, setBounty] = useState<BountyDetailView | null>(null)
+  const [claims, setClaims] = useState<BountyClaimView[]>([])
   const [loading, setLoading] = useState(true)
   const [showClaimForm, setShowClaimForm] = useState(false)
-  const [claimStore, setClaimStore] = useState('')
-  const [claimCity, setClaimCity] = useState('')
-  const [claimState, setClaimState] = useState('')
-  const [claimZip, setClaimZip] = useState('')
-  const [claimStock, setClaimStock] = useState('in_stock')
+  const [claimStore, setClaimStore] = useState<CatalogSelection | null>(null)
+  const [claimSeenAt, setClaimSeenAt] = useState(() => localDateTime(new Date()))
+  const [claimAvailability, setClaimAvailability] = useState<'low' | 'medium' | 'high'>('high')
+  const [claimQuantity, setClaimQuantity] = useState('')
+  const [claimNotes, setClaimNotes] = useState('')
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const isOwner = user?.id === bounty?.user_id
-
-  async function loadContacts(nextBounty: Bounty | null, nextClaims: BountyClaim[]) {
-    setClaimContacts({})
-    setOwnerContact(null)
-    if (!user || !nextBounty) return
-
-    const acceptedClaims = nextClaims.filter((claim) => claim.status === 'accepted')
-    if (user.id === nextBounty.user_id) {
-      const finderIds = Array.from(new Set(acceptedClaims.map((claim) => claim.finder_id)))
-      if (finderIds.length === 0) return
-
-      const { data } = await supabase
-        .from('profile_contacts')
-        .select('user_id, contact_info')
-        .in('user_id', finderIds)
-
-      const contacts = (data as Pick<ProfileContact, 'user_id' | 'contact_info'>[] | null) ?? []
-      setClaimContacts(
-        Object.fromEntries(contacts.map((contact) => [contact.user_id, contact.contact_info])),
-      )
-      return
-    }
-
-    const acceptedForCurrentUser = acceptedClaims.some((claim) => claim.finder_id === user.id)
-    if (!acceptedForCurrentUser) return
-
-    const { data } = await supabase
-      .from('profile_contacts')
-      .select('user_id, contact_info')
-      .eq('user_id', nextBounty.user_id)
-      .single()
-    setOwnerContact((data as Pick<ProfileContact, 'user_id' | 'contact_info'> | null)?.contact_info ?? null)
-  }
-
-  async function reloadBountyAndClaims() {
+  async function reload() {
     if (!id) return
-    const { data: bountyData } = await supabase
-      .from('bounties')
-      .select('*, product:products(*), profile:profiles(id, username, karma, is_pro, created_at)')
-      .eq('id', id)
-      .single()
-    const nextBounty = bountyData as Bounty | null
-    setBounty(nextBounty)
-
-    if (!nextBounty) {
-      setClaims([])
-      setClaimContacts({})
-      setOwnerContact(null)
-      return
+    const [detailResult, claimsResult] = await Promise.all([
+      getBountyDetail(id),
+      listMyBountyClaims(id),
+    ])
+    setBounty(detailResult.data)
+    setClaims(claimsResult.data ?? [])
+    if (detailResult.data?.store_id && detailResult.data.store_name) {
+      setClaimStore({ id: detailResult.data.store_id, label: detailResult.data.store_name, detail: 'Required store for this bounty' })
     }
-
-    const { data: claimsData } = await supabase
-      .from('bounty_claims')
-      .select('*, sighting:sightings(*), finder:profiles(id, username, karma, is_pro, created_at)')
-      .eq('bounty_id', id)
-      .order('created_at', { ascending: false })
-    const nextClaims = claimsData as BountyClaim[] ?? []
-    setClaims(nextClaims)
-    await loadContacts(nextBounty, nextClaims)
+    if (detailResult.error) setActionError('This bounty could not be loaded.')
   }
 
   useEffect(() => {
-    if (!id) return
     async function load() {
-      await reloadBountyAndClaims()
+      await reload()
       setLoading(false)
     }
-    load()
-  }, [id, user?.id])
+    void load()
+  }, [id])
 
-  async function handleClaimSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleClaimSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setClaimError(null)
-    if (!user || !bounty) return
-    if (!claimStore.trim()) {
-      setClaimError('Store name is required.')
+    if (!bounty || !claimStore) {
+      setClaimError('Choose the exact store where you found the product.')
+      return
+    }
+    const quantity = claimQuantity === '' ? null : Number(claimQuantity)
+    if (quantity !== null && (!Number.isInteger(quantity) || quantity < 1 || quantity > 99)) {
+      setClaimError('Quantity must be a whole number from 1 to 99.')
+      return
+    }
+    const seenDate = new Date(claimSeenAt)
+    if (Number.isNaN(seenDate.getTime())) {
+      setClaimError('Enter a valid sighting time.')
       return
     }
 
     setClaimLoading(true)
-    const { error: claimError } = await supabase.rpc('submit_bounty_claim', {
-      p_bounty_id: bounty.id,
-      p_store_name: claimStore.trim(),
-      p_city: claimCity.trim() || null,
-      p_state: claimState.trim() || null,
-      p_zip_code: claimZip.trim() || null,
-      p_stock_level: claimStock,
+    const result = await submitBountyClaim({
+      bountyId: bounty.id,
+      storeId: claimStore.id,
+      seenAt: seenDate.toISOString(),
+      availability: claimAvailability,
+      quantity,
+      notes: claimNotes.trim() || null,
     })
-
     setClaimLoading(false)
-    if (claimError) {
-      setClaimError(claimError.message)
+    if (result.error) {
+      setClaimError(result.error.message)
       return
     }
-
     setShowClaimForm(false)
-    setClaimStore('')
-    setClaimCity('')
-    setClaimState('')
-    setClaimZip('')
-    await reloadBountyAndClaims()
+    trackEvent('submit_bounty_claim', { availability: claimAvailability })
+    await reload()
   }
 
   async function handleClaimAction(claimId: string, action: 'accepted' | 'rejected') {
     setActionError(null)
     setActionLoading(claimId)
-    const { error } = await supabase.rpc(
-      action === 'accepted' ? 'accept_bounty_claim' : 'reject_bounty_claim',
-      { p_claim_id: claimId },
-    )
-
+    const { error } = await supabase.rpc(action === 'accepted' ? 'accept_bounty_claim' : 'reject_bounty_claim', { p_claim_id: claimId })
     setActionLoading(null)
     if (error) {
       setActionError(error.message)
       return
     }
     if (action === 'accepted') trackEvent('accept_claim')
-    await reloadBountyAndClaims()
+    await reload()
   }
 
   async function handleClose() {
@@ -154,266 +107,84 @@ export default function BountyDetail() {
     setActionLoading('close')
     const { error } = await supabase.rpc('close_bounty', { p_bounty_id: id })
     setActionLoading(null)
-    if (error) {
-      setActionError(error.message)
-      return
-    }
-    await reloadBountyAndClaims()
+    if (error) setActionError(error.message)
+    else await reload()
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
-      </div>
-    )
-  }
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
+  if (!bounty) return <EmptyState title="Bounty not found" message="It may be expired, hidden, or unavailable to this account." action={<Link to="/bounties" className="btn-primary">View bounties</Link>} />
 
-  if (!bounty) {
-    return (
-      <EmptyState
-        title="Bounty not found"
-        message="This bounty may have been removed."
-        action={<Link to="/bounties" className="btn-primary">View bounties</Link>}
-      />
-    )
-  }
-
-  const acceptedClaim = claims.find((c) => c.status === 'accepted')
+  const canClaim = !bounty.is_owner
+    && bounty.status === 'open'
+    && bounty.moderation_status === 'approved'
+    && new Date(bounty.deadline).getTime() > Date.now()
+    && !bounty.caller_claim_id
 
   return (
     <div className="space-y-6">
       <div>
         <Link to="/bounties" className="text-sm text-gray-500 hover:text-gray-700">← Bounties</Link>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="badge bg-brand-100 text-brand-800">
-            {formatReward(bounty.reward_amount)}
-          </span>
-          <span className={`badge ${statusColor(bounty.status)}`}>
-            {statusLabel(bounty.status)}
-          </span>
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+          <div><h1 className="text-2xl font-black text-gray-900">{bounty.product_name}</h1><p className="mt-1 text-sm text-gray-500">Posted by @{bounty.owner_username} · {timeAgo(bounty.created_at)}</p></div>
+          <span className={`badge ${statusColor(bounty.status)}`}>{statusLabel(bounty.status)}</span>
         </div>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">
-          {bounty.product?.name ?? 'Unknown product'}
-        </h1>
-        <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
-          <span>ZIP {bounty.zip_code}</span>
-          <span>·</span>
-          <span>{bounty.radius_miles}mi radius</span>
-          <span>·</span>
-          <span>{timeAgo(bounty.created_at)}</span>
-        </div>
-        {bounty.notes && (
-          <p className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
-            {bounty.notes}
-          </p>
-        )}
-        <p className="mt-3 text-xs text-gray-400">
-          {activeMarket.trustNotice}
-        </p>
-        <Link
-          to={`/profile/${bounty.profile?.username ?? ''}`}
-          className="mt-3 inline-block text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          Posted by {bounty.profile?.username ?? 'Unknown'}
-        </Link>
       </div>
 
-      {isOwner && bounty.status !== 'closed' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Claims ({claims.length})</h2>
-            {bounty.status === 'open' && (
-              <button onClick={handleClose} className="btn-ghost text-sm" disabled={actionLoading === 'close'}>
-                {actionLoading === 'close' ? 'Closing...' : 'Close bounty'}
-              </button>
-            )}
-          </div>
-          {actionError && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {actionError}
-            </div>
-          )}
-          {claims.length > 0 ? (
-            <div className="space-y-3">
-              {claims.map((claim) => (
-                <div key={claim.id} className="card">
-                  <div className="flex items-center justify-between">
-                    <Link
-                      to={`/profile/${claim.finder?.username ?? ''}`}
-                      className="font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      {claim.finder?.username ?? 'Unknown'}
-                    </Link>
-                    <span className={`badge ${statusColor(claim.status)}`}>
-                      {statusLabel(claim.status)}
-                    </span>
-                  </div>
-                  {claim.sighting && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      <p>{claim.sighting.store_name}</p>
-                      {claim.sighting.city && claim.sighting.state && (
-                        <p className="text-gray-500">{claim.sighting.city}, {claim.sighting.state}</p>
-                      )}
-                      {claim.sighting.zip_code && (
-                        <p className="text-gray-500">ZIP {claim.sighting.zip_code}</p>
-                      )}
-                      <p className="mt-1 text-gray-500">
-                        Stock: {claim.sighting.stock_level.replace('_', ' ')}
-                      </p>
-                    </div>
-                  )}
-                  {claim.status === 'pending' && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleClaimAction(claim.id, 'accepted')}
-                        className="btn-primary text-sm"
-                        disabled={actionLoading === claim.id}
-                      >
-                        {actionLoading === claim.id ? '...' : 'Accept'}
-                      </button>
-                      <button
-                        onClick={() => handleClaimAction(claim.id, 'rejected')}
-                        className="btn-secondary text-sm"
-                        disabled={actionLoading === claim.id}
-                      >
-                        {actionLoading === claim.id ? '...' : 'Reject'}
-                      </button>
-                    </div>
-                  )}
-                  {claim.status === 'accepted' && claimContacts[claim.finder_id] && (
-                    <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm">
-                      <p className="font-medium text-green-800">Contact info:</p>
-                      <p className="mt-1 text-green-700">{claimContacts[claim.finder_id]}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No claims yet.</p>
-          )}
+      {bounty.moderation_status !== 'approved' && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">This bounty is {bounty.moderation_status}. New claims are disabled.</div>
+      )}
+      {actionError && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+
+      <section className="card space-y-4 border-2 border-stone-900 shadow-[4px_4px_0_0_#0c251d]">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div><p className="text-xs font-bold uppercase text-gray-500">Reward</p><p className="text-2xl font-black text-red-600">{formatReward(bounty.reward_cents / 100)}</p></div>
+          <div><p className="text-xs font-bold uppercase text-gray-500">Scope</p><p className="font-bold text-gray-900">{bounty.store_name ?? `ZIP ${bounty.zip_code}`}</p><p className="text-xs text-gray-500">{bounty.store_name ? 'Exact store' : `${bounty.radius_miles} mile radius`}</p></div>
+          <div><p className="text-xs font-bold uppercase text-gray-500">Deadline</p><p className="font-bold text-gray-900">{new Date(bounty.deadline).toLocaleDateString()}</p><p className="text-xs text-gray-500">{new Date(bounty.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p></div>
+          <div><p className="text-xs font-bold uppercase text-gray-500">Claims</p><p className="text-2xl font-black text-gray-900">{claims.length}</p></div>
         </div>
+        {bounty.requirements && <div className="border-t border-gray-200 pt-4"><h2 className="text-sm font-bold text-gray-900">Requirements</h2><p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{bounty.requirements}</p></div>}
+        <p className="border-t border-gray-200 pt-4 text-xs leading-relaxed text-gray-500">FindItViral records the promised reward but does not process payment or hold funds. Participants arrange fulfillment directly.</p>
+      </section>
+
+      {bounty.is_owner && (bounty.status === 'open' || bounty.status === 'claimed') && (
+        <button type="button" className="btn-secondary" onClick={() => void handleClose()} disabled={actionLoading === 'close'}>{actionLoading === 'close' ? 'Closing…' : 'Close Bounty'}</button>
       )}
 
-      {!isOwner && user && bounty.status === 'open' && !showClaimForm && (
-        <button
-          onClick={() => setShowClaimForm(true)}
-          className="btn-primary w-full"
-        >
-          Claim this bounty
-        </button>
-      )}
+      {canClaim && !showClaimForm && <button type="button" className="btn-primary w-full" onClick={() => setShowClaimForm(true)}>I Found It</button>}
+      {!bounty.is_owner && bounty.caller_claim_status && <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">Your claim is {bounty.caller_claim_status}.</div>}
 
-      {!isOwner && user && bounty.status !== 'open' && (
-        <p className="card text-sm text-gray-500">
-          This bounty is {bounty.status}. <Link to="/bounties" className="text-brand-600 hover:text-brand-700 font-medium">Browse other bounties →</Link>
-        </p>
-      )}
-
-      {!isOwner && user && bounty.status === 'open' && showClaimForm && (
-        <form onSubmit={handleClaimSubmit} className="card space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Claim this bounty</h2>
-          <p className="text-sm text-gray-500">
-            Report where you found this product. The bounty poster will see your sighting and your contact info if they accept.
-          </p>
-          <p className="text-xs text-gray-400">
-            Payment is arranged directly between you and the bounty poster.
-          </p>
-          <div>
-            <label className="label" htmlFor="claimStore">Store name *</label>
-            <input
-              id="claimStore"
-              className="input"
-              value={claimStore}
-              onChange={(e) => setClaimStore(e.target.value)}
-              placeholder={activeMarket.storePlaceholder}
-              maxLength={120}
-              required
-            />
+      {showClaimForm && (
+        <form onSubmit={handleClaimSubmit} className="card space-y-4 border-2 border-brand-300">
+          <div><h2 className="font-bold text-gray-900">Submit your exact-store sighting</h2><p className="mt-1 text-xs text-gray-600">The bounty owner can review this claim. It does not become a public sighting.</p></div>
+          <CatalogSearchSelect kind="store" label="Store" value={claimStore} onChange={setClaimStore} required disabled={Boolean(bounty.store_id)} />
+          <div><label className="label" htmlFor="claim-seen">When did you see it?</label><input id="claim-seen" className="input" type="datetime-local" value={claimSeenAt} onChange={(event) => setClaimSeenAt(event.target.value)} required /></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'low' | 'medium' | 'high')}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+            <div><label className="label" htmlFor="claim-quantity">Quantity (optional)</label><input id="claim-quantity" className="input" type="number" min="1" max="99" step="1" value={claimQuantity} onChange={(event) => setClaimQuantity(event.target.value)} /></div>
           </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="label" htmlFor="claimCity">City</label>
-              <input
-                id="claimCity"
-                className="input"
-                value={claimCity}
-                onChange={(e) => setClaimCity(e.target.value)}
-                maxLength={100}
-              />
-            </div>
-            <div className="w-20">
-              <label className="label" htmlFor="claimState">State</label>
-              <input
-                id="claimState"
-                className="input"
-                value={claimState}
-                onChange={(e) => setClaimState(e.target.value.toUpperCase().slice(0, 2))}
-                maxLength={2}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="label" htmlFor="claimZip">ZIP code</label>
-            <input
-              id="claimZip"
-              className="input"
-              type="text"
-              inputMode="numeric"
-              maxLength={5}
-              value={claimZip}
-              onChange={(e) => setClaimZip(e.target.value.replace(/\D/g, ''))}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="claimStock">Stock level</label>
-            <select
-              id="claimStock"
-              className="input"
-              value={claimStock}
-              onChange={(e) => setClaimStock(e.target.value)}
-            >
-              <option value="in_stock">In Stock</option>
-              <option value="low">Low Stock</option>
-              <option value="none">Out of Stock</option>
-            </select>
-          </div>
-          {claimError && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {claimError}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary flex-1" disabled={claimLoading}>
-              {claimLoading ? 'Submitting...' : 'Submit claim'}
-            </button>
-            <button type="button" onClick={() => setShowClaimForm(false)} className="btn-secondary">
-              Cancel
-            </button>
-          </div>
+          <div><label className="label" htmlFor="claim-notes">Notes (optional)</label><textarea id="claim-notes" className="input min-h-20" maxLength={2000} value={claimNotes} onChange={(event) => setClaimNotes(event.target.value)} /></div>
+          {claimError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{claimError}</div>}
+          <div className="flex gap-2"><button type="submit" className="btn-primary" disabled={claimLoading}>{claimLoading ? 'Submitting…' : 'Submit Claim'}</button><button type="button" className="btn-ghost" onClick={() => setShowClaimForm(false)} disabled={claimLoading}>Cancel</button></div>
         </form>
       )}
 
-      {!user && bounty.status === 'open' && (
-        <div className="card text-center">
-          <p className="text-sm text-gray-600">Sign in to claim this bounty.</p>
-          <Link to="/auth" className="btn-primary mt-3">Sign In</Link>
-        </div>
-      )}
-
-      {acceptedClaim && !isOwner && user?.id === acceptedClaim.finder_id && (
-        <div className="card">
-          <h2 className="font-semibold text-green-800">Your claim was accepted!</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Contact the bounty poster to arrange payment:
-          </p>
-          <div className="mt-3 rounded-lg bg-green-50 p-3 text-sm">
-            <p className="font-medium text-green-800">{bounty.profile?.username}'s contact info:</p>
-            <p className="mt-1 text-green-700">{ownerContact || 'No contact info provided'}</p>
+      <section>
+        <h2 className="mb-3 text-lg font-bold text-gray-900">Claims</h2>
+        {claims.length > 0 ? (
+          <div className="space-y-3">
+            {claims.map((claim) => (
+              <article key={claim.id} className="card">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-gray-900">@{claim.finder_username}</h3><p className="mt-1 text-sm text-gray-600">{claim.store_name} · {claim.availability.toUpperCase()} availability{claim.quantity ? ` · about ${claim.quantity}` : ''}</p><p className="text-xs text-gray-500">Seen {new Date(claim.seen_at).toLocaleString()}</p></div><span className={`badge ${statusColor(claim.status)}`}>{statusLabel(claim.status)}</span></div>
+                {claim.notes && <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{claim.notes}</p>}
+                {claim.contact_info && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Accepted finder contact: {claim.contact_info}</p>}
+                {bounty.is_owner && claim.status === 'pending' && <div className="mt-4 flex gap-2 border-t border-gray-200 pt-3"><button type="button" className="btn-primary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'accepted')}>Accept</button><button type="button" className="btn-secondary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'rejected')}>Reject</button></div>}
+              </article>
+            ))}
           </div>
-        </div>
-      )}
+        ) : <EmptyState title="No claims yet" message="Claims will appear here for the bounty owner and each participating finder." />}
+      </section>
+
+      {!bounty.is_owner && bounty.owner_contact_info && <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">Accepted bounty owner contact: {bounty.owner_contact_info}</div>}
     </div>
   )
 }

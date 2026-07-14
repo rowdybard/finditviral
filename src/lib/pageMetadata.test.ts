@@ -30,4 +30,24 @@ describe('getPageMetadata', () => {
     expect(getPageMetadata('/home').canonicalUrl).toBe('https://finditviral.com/home')
     expect(getPageMetadata('/unrecognized').robots).toBe('noindex, nofollow')
   })
+
+  it('makes sanitized product and store discovery routes indexable', () => {
+    expect(getPageMetadata('/stores')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/stores',
+      robots: 'index, follow',
+    })
+    expect(getPageMetadata('/stores/lansing-target')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/stores/lansing-target',
+      robots: 'index, follow',
+    })
+    expect(getPageMetadata('/products/nice-cube')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/products/nice-cube',
+      robots: 'index, follow',
+    })
+  })
+
+  it('keeps admin and private draft routes out of search results', () => {
+    expect(getPageMetadata('/admin').robots).toBe('noindex, nofollow')
+    expect(getPageMetadata('/drafts').robots).toBe('noindex, nofollow')
+  })
 })
