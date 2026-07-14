@@ -912,6 +912,8 @@ to authenticated;
 -- ---------------------------------------------------------------------------
 -- 2B. Fix admin_create_product: replace retailer with brand
 -- ---------------------------------------------------------------------------
+drop function if exists public.admin_create_product(uuid, text, text, date, text, text);
+
 create or replace function public.admin_create_product(
   p_trend_id uuid,
   p_name text,

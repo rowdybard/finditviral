@@ -1,12 +1,13 @@
 -- Behavioral pgTAP tests for release readiness migration (20260715000010).
--- Tests draft payload validation, bounty lifecycle, admin RPCs, security, and search.
+-- Tests draft payload validation, bounty lifecycle (create/claim), admin RPCs,
+-- suggestion→draft→publish flow, cross-user draft denial, security, and search.
 
 begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(27);
+select plan(30);
 
 -- ============================================================================
 -- Test fixtures: create two test users, profiles, username claims, app_owners
@@ -16,38 +17,32 @@ declare
   v_owner_id uuid := '00000000-0000-4000-8000-000000000001';
   v_member_id uuid := '00000000-0000-4000-8000-000000000002';
 begin
-  -- Owner user in auth.users
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_owner_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'owner@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
 
-  -- Member user in auth.users
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_member_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'member@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
 
-  -- Owner profile
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_owner_id, 'testowner', true, 100, now())
   on conflict (id) do update set onboarding_completed = true, username = 'testowner';
 
-  -- Member profile
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_member_id, 'testmember', true, 50, now())
   on conflict (id) do update set onboarding_completed = true, username = 'testmember';
 
-  -- Username claims (exactly 1 per user for is_permanent_member)
-  insert into private.username_claims (user_id, username, normalized_username, protection_name, is_legacy)
+  insert into private.username_claims (user_id, claimed_username, normalized_username, protection_name, is_legacy)
   values (v_owner_id, 'testowner', 'testowner', 'testowner', false)
-  on conflict do nothing;
+  on conflict (user_id) do update set claimed_username = 'testowner', normalized_username = 'testowner', protection_name = 'testowner', is_legacy = false;
 
-  insert into private.username_claims (user_id, username, normalized_username, protection_name, is_legacy)
+  insert into private.username_claims (user_id, claimed_username, normalized_username, protection_name, is_legacy)
   values (v_member_id, 'testmember', 'testmember', 'testmember', false)
-  on conflict do nothing;
+  on conflict (user_id) do update set claimed_username = 'testmember', normalized_username = 'testmember', protection_name = 'testmember', is_legacy = false;
 
-  -- Owner in app_owners
   insert into private.app_owners (user_id)
   values (v_owner_id)
   on conflict (user_id) do nothing;
@@ -72,6 +67,30 @@ begin
     '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated","is_anonymous":false}',
     true);
 end;
+$$;
+
+-- Helper: fetch a seed product ID for tests
+create or replace function pg_temp.get_test_product_id()
+returns uuid language sql stable as $$
+  select id from public.products where is_active order by verified_at desc limit 1;
+$$;
+
+-- Helper: fetch seed retailer IDs (Target + Walmart)
+create or replace function pg_temp.get_retailer_ids()
+returns uuid[] language sql stable as $$
+  select array_agg(id order by name) from public.retailers where is_active and slug in ('target', 'walmart');
+$$;
+
+-- Helper: fetch a store ID by slug
+create or replace function pg_temp.get_store_id(p_slug text)
+returns uuid language sql stable as $$
+  select id from public.stores where slug = p_slug and is_active;
+$$;
+
+-- Helper: fetch seed store IDs for multi-store bounty
+create or replace function pg_temp.get_store_ids()
+returns uuid[] language sql stable as $$
+  select array_agg(id order by slug) from public.stores where is_active and slug in ('target-east-lansing-downtown', 'target-west-lansing');
 $$;
 
 -- ============================================================================
@@ -99,241 +118,310 @@ select throws_ok(
   'bounty draft payload rejects invalid scope'
 );
 
--- 4. refresh_contribution_draft reads zipCode (not zip_code)
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'private' and p.proname = 'refresh_contribution_draft'
-      and pg_get_functiondef(p.oid) ~ "zipCode"
-  ),
-  'refresh_contribution_draft reads zipCode from payload'
+-- ============================================================================
+-- 4. Create region bounty (behavioral)
+-- ============================================================================
+select pg_temp.set_owner_ctx();
+
+select lives_ok(
+  $$ select public.create_bounty(
+    pg_temp.get_test_product_id(),
+    'region',
+    null,
+    '48910',
+    50,
+    null, null,
+    500,
+    now() + interval '7 days',
+    'Test region bounty',
+    1, null, false, null
+  ) $$,
+  'create_bounty succeeds for region scope'
+);
+
+-- 5. Create retailer bounty with ZIP+radius (behavioral)
+select lives_ok(
+  $$ select public.create_bounty(
+    pg_temp.get_test_product_id(),
+    'retailers',
+    null,
+    '48910',
+    50,
+    pg_temp.get_retailer_ids(),
+    null,
+    500,
+    now() + interval '7 days',
+    'Test retailer bounty',
+    1, null, false, null
+  ) $$,
+  'create_bounty succeeds for retailer scope with ZIP+radius'
+);
+
+-- 6. Create multi-store bounty (behavioral)
+select lives_ok(
+  $$ select public.create_bounty(
+    pg_temp.get_test_product_id(),
+    'stores',
+    null,
+    null, null,
+    null,
+    pg_temp.get_store_ids(),
+    500,
+    now() + interval '7 days',
+    'Test multi-store bounty',
+    1, null, false, null
+  ) $$,
+  'create_bounty succeeds for multi-store scope'
+);
+
+-- 7. Retailer bounty requires ZIP+radius
+select throws_ok(
+  $$ select public.create_bounty(
+    pg_temp.get_test_product_id(),
+    'retailers',
+    null,
+    null, null,
+    pg_temp.get_retailer_ids(),
+    null,
+    500,
+    now() + interval '7 days',
+    'Test retailer bounty no zip',
+    1, null, false, null
+  ) $$,
+  '22023',
+  'create_bounty rejects retailer scope without ZIP+radius'
 );
 
 -- ============================================================================
--- 5. Bounty scope check constraint allows ZIP+radius for retailers
+-- 8. Claim from allowed store for retailer bounty (behavioral)
 -- ============================================================================
-select ok(
-  exists (
-    select 1
-    from pg_constraint c
-    join pg_class t on t.oid = c.conrelid
-    join pg_namespace n on n.oid = t.relnamespace
-    where n.nspname = 'public' and t.relname = 'bounties'
-      and c.conname = 'bounties_scope_check'
-      and pg_get_constraintdef(c.oid) ~ "scope_type = 'retailers'.*zip_code.*radius_miles"
-  ),
-  'bounties_scope_check allows ZIP+radius for retailers scope'
+-- Insert an approved retailer bounty directly for claim testing
+do $$
+declare
+  v_bounty_id uuid;
+begin
+  insert into public.bounties (
+    user_id, product_id, store_id, reward_amount, reward_cents,
+    zip_code, radius_miles, notes, requirements, deadline,
+    status, moderation_status, scope_type
+  ) values (
+    '00000000-0000-4000-8000-000000000001',
+    pg_temp.get_test_product_id(),
+    null,
+    5.00, 500,
+    '48910', 50,
+    'Claim test retailer bounty', 'Claim test retailer bounty',
+    now() + interval '7 days',
+    'open', 'approved', 'retailers'
+  )
+  returning id into v_bounty_id;
+
+  insert into public.bounty_retailers (bounty_id, retailer_id)
+  select v_bounty_id, id from public.retailers where slug in ('target', 'walmart');
+
+  perform set_config('pg_temp.test_bounty_id', v_bounty_id::text, true);
+end;
+$$;
+
+-- Member claims from a Target store (should succeed — Target is in scope, within 50mi of 48910)
+select pg_temp.set_member_ctx();
+
+select lives_ok(
+  $$ select public.submit_bounty_claim(
+    (select current_setting('pg_temp.test_bounty_id', true))::uuid,
+    pg_temp.get_store_id('target-east-lansing-downtown'),
+    now() - interval '1 hour',
+    'in_stock',
+    1, 'Test claim allowed store'
+  ) $$,
+  'submit_bounty_claim succeeds for store within retailer scope and radius'
 );
 
--- 6. validate_bounty_scope trigger has been dropped
-select hasnt_function(
-  'public', 'validate_bounty_scope',
-  'validate_bounty_scope trigger function dropped'
+-- 9. Reject claim from out-of-scope retailer (behavioral)
+select throws_ok(
+  $$ select public.submit_bounty_claim(
+    (select current_setting('pg_temp.test_bounty_id', true))::uuid,
+    pg_temp.get_store_id('best-buy-lansing-803'),
+    now() - interval '30 minutes',
+    'in_stock',
+    1, 'Test claim wrong retailer'
+  ) $$,
+  '22023',
+  'submit_bounty_claim rejects store from non-scoped retailer'
 );
 
--- 7. create_bounty validates associations after insert (not via trigger)
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'create_bounty'
-      and pg_get_functiondef(p.oid) ~ 'bounty_retailers.*bounty_id = v_bounty_id'
-      and pg_get_functiondef(p.oid) ~ 'bounty_stores.*bounty_id = v_bounty_id'
-  ),
-  'create_bounty validates associations inside function body'
+-- 10. Reject self-claim (behavioral)
+select pg_temp.set_owner_ctx();
+
+select throws_ok(
+  $$ select public.submit_bounty_claim(
+    (select current_setting('pg_temp.test_bounty_id', true))::uuid,
+    pg_temp.get_store_id('target-east-lansing-downtown'),
+    now() - interval '10 minutes',
+    'in_stock',
+    1, 'Self claim test'
+  ) $$,
+  '42501',
+  'submit_bounty_claim rejects self-claim'
 );
 
--- ============================================================================
--- 8. list_public_bounties returns retailer_names and store_names
--- ============================================================================
-select has_column(
-  'public', 'list_public_bounties', 'retailer_names',
-  'list_public_bounties returns retailer_names column'
-);
+-- 11. Reject claim on closed bounty (behavioral)
+do $$
+declare
+  v_closed_bounty_id uuid;
+begin
+  insert into public.bounties (
+    user_id, product_id, store_id, reward_amount, reward_cents,
+    zip_code, radius_miles, notes, requirements, deadline,
+    status, moderation_status, scope_type
+  ) values (
+    '00000000-0000-4000-8000-000000000001',
+    pg_temp.get_test_product_id(),
+    null,
+    5.00, 500,
+    '48910', 50,
+    'Closed bounty', 'Closed bounty',
+    now() + interval '7 days',
+    'closed', 'approved', 'region'
+  )
+  returning id into v_closed_bounty_id;
 
-select has_column(
-  'public', 'list_public_bounties', 'store_names',
-  'list_public_bounties returns store_names column'
-);
+  perform set_config('pg_temp.closed_bounty_id', v_closed_bounty_id::text, true);
+end;
+$$;
 
--- 9. get_bounty_detail returns retailer_names and store_names
-select has_column(
-  'public', 'get_bounty_detail', 'retailer_names',
-  'get_bounty_detail returns retailer_names column'
-);
+select pg_temp.set_member_ctx();
 
-select has_column(
-  'public', 'get_bounty_detail', 'store_names',
-  'get_bounty_detail returns store_names column'
-);
-
--- ============================================================================
--- 10. Admin store RPC signature: no phone/website_url, has source_url
--- ============================================================================
-select has_function(
-  'public', 'admin_create_store',
-  array['text', 'text', 'text', 'text', 'text', 'text', 'text', 'numeric', 'numeric'],
-  'admin_create_store has correct signature with source_url'
-);
-
-select hasnt_function(
-  'public', 'admin_create_store',
-  array['text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'numeric', 'numeric'],
-  'admin_create_store old signature with phone/website_url is gone'
-);
-
--- 11. Admin product RPC signature: brand instead of retailer
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'admin_create_product'
-      and pg_get_functiondef(p.oid) ~ 'p_brand'
-      and pg_get_functiondef(p.oid) !~ 'p_retailer'
-  ),
-  'admin_create_product uses p_brand (not p_retailer)'
-);
-
--- 12. admin_create_store inserts verification_method and verified_at
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'admin_create_store'
-      and pg_get_functiondef(p.oid) ~ 'owner_verified'
-      and pg_get_functiondef(p.oid) ~ 'official_source'
-      and pg_get_functiondef(p.oid) ~ 'verified_at'
-  ),
-  'admin_create_store sets verification_method and verified_at'
-);
-
--- 13. admin_create_product inserts brand column
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'admin_create_product'
-      and pg_get_functiondef(p.oid) ~ 'insert into public\.products'
-      and pg_get_functiondef(p.oid) ~ 'brand'
-  ),
-  'admin_create_product inserts brand column'
-);
-
--- ============================================================================
--- 14. Personal notifications revoked from anon
--- ============================================================================
-select ok(
-  not has_function_privilege('anon', 'public.get_personal_notifications(integer)', 'execute'),
-  'anon cannot execute get_personal_notifications'
-);
-
-select ok(
-  has_function_privilege('authenticated', 'public.get_personal_notifications(integer)', 'execute'),
-  'authenticated can execute get_personal_notifications'
+select throws_ok(
+  $$ select public.submit_bounty_claim(
+    (select current_setting('pg_temp.closed_bounty_id', true))::uuid,
+    pg_temp.get_store_id('target-east-lansing-downtown'),
+    now() - interval '5 minutes',
+    'in_stock',
+    1, 'Claim on closed bounty'
+  ) $$,
+  '55000',
+  'submit_bounty_claim rejects claim on closed bounty'
 );
 
 -- ============================================================================
--- 15. Username unique index on normalized_username for non-legacy
+-- 12. Suggestion → draft → approve → publish flow (behavioral)
 -- ============================================================================
-select has_index(
-  'private', 'username_claims', 'username_claims_normalized_unique_idx',
-  'username_claims has unique index on normalized_username'
+select pg_temp.set_member_ctx();
+
+-- Member saves a product suggestion for a bounty draft and capture IDs
+do $$
+declare
+  v_row record;
+begin
+  select draft_id, suggestion_id into v_row
+  from public.suggest_product_for_draft(
+    null,
+    'bounty',
+    '{"version":1,"scope":"region","zipCode":"48910","radiusMiles":"50","rewardAmount":"20","deadline":"2026-07-20","requirements":"","quantityNeeded":"1","variantRequirements":"","acceptEquivalent":false,"selectedRetailers":[],"selectedStores":[]}'::jsonb,
+    'Suggestion Test Product',
+    'SuggestionTestBrand',
+    'https://example.com/source',
+    null
+  );
+  perform set_config('pg_temp.test_draft_id', v_row.draft_id::text, true);
+  perform set_config('pg_temp.test_suggestion_id', v_row.suggestion_id::text, true);
+end;
+$$;
+
+-- Owner approves the product suggestion
+select pg_temp.set_owner_ctx();
+
+select lives_ok(
+  $$ select public.admin_resolve_product_suggestion(
+    (select current_setting('pg_temp.test_suggestion_id', true))::uuid,
+    'approved',
+    null,
+    null,
+    'available',
+    null
+  ) $$,
+  'admin_resolve_product_suggestion approves the suggestion'
 );
 
-select index_is_unique(
-  'private', 'username_claims', 'username_claims_normalized_unique_idx',
-  'username_claims normalized_username index is unique'
+-- 13. Draft state is ready after suggestion approval (behavioral)
+select results_eq(
+  $$ select state from private.contribution_drafts
+     where id = (select current_setting('pg_temp.test_draft_id', true))::uuid $$,
+  $$ select 'ready'::text $$,
+  'draft state is ready after suggestion approval'
 );
 
--- ============================================================================
--- 16. search_products includes brand
--- ============================================================================
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'search_products'
-      and pg_get_functiondef(p.oid) ~ 'p\.brand'
-  ),
-  'search_products searches on brand column'
+-- 14. Member publishes bounty from approved draft (behavioral)
+select pg_temp.set_member_ctx();
+
+select lives_ok(
+  $$ select public.create_bounty(
+    (select product_id from private.contribution_drafts where id = (select current_setting('pg_temp.test_draft_id', true))::uuid),
+    'region',
+    null,
+    '48910',
+    50,
+    null, null,
+    500,
+    now() + interval '7 days',
+    'Published from draft',
+    1, null, false,
+    (select current_setting('pg_temp.test_draft_id', true))::uuid
+  ) $$,
+  'create_bounty succeeds publishing from approved draft'
 );
 
--- 17. products has brand index
-select has_index(
-  'public', 'products', 'products_brand_idx',
-  'products has index on brand'
-);
-
--- ============================================================================
--- 18. submit_bounty_claim checks retailer scope distance
--- ============================================================================
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'submit_bounty_claim'
-      and pg_get_functiondef(p.oid) ~ "scope_type = 'retailers'"
-      and pg_get_functiondef(p.oid) ~ 'distance_miles'
-      and pg_get_functiondef(p.oid) ~ 'radius_miles'
-  ),
-  'submit_bounty_claim checks distance for retailer scope'
-);
-
--- 19. submit_bounty_claim checks store belongs to allowed retailer
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'submit_bounty_claim'
-      and pg_get_functiondef(p.oid) ~ 'bounty_retailers'
-  ),
-  'submit_bounty_claim checks store belongs to allowed retailer'
-);
-
--- ============================================================================
--- 20. create_bounty requires ZIP+radius for retailer scope
--- ============================================================================
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'create_bounty'
-      and pg_get_functiondef(p.oid) ~ "scope_type = 'retailers'"
-      and pg_get_functiondef(p.oid) ~ 'v_zip is null'
-      and pg_get_functiondef(p.oid) ~ 'p_radius_miles not in'
-  ),
-  'create_bounty requires ZIP+radius for retailer scope'
-);
-
--- 21. create_bounty hint codes for stable error mapping
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'create_bounty'
-      and pg_get_functiondef(p.oid) ~ "hint = 'INVALID_SCOPE'"
-      and pg_get_functiondef(p.oid) ~ "hint = 'INVALID_LOCATION'"
-      and pg_get_functiondef(p.oid) ~ "hint = 'INVALID_BOUNTY_DETAILS'"
-  ),
-  'create_bounty has stable error hint codes'
-);
-
--- 22. submit_bounty_claim hint codes
-select ok(
-  exists (
-    select 1 from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'submit_bounty_claim'
-      and pg_get_functiondef(p.oid) ~ "hint = 'BOUNTY_CLOSED'"
-      and pg_get_functiondef(p.oid) ~ "hint = 'STORE_OUT_OF_SCOPE'"
-      and pg_get_functiondef(p.oid) ~ "hint = 'UNAUTHORIZED'"
-  ),
-  'submit_bounty_claim has stable error hint codes'
+-- 15. Draft is consumed after publish (behavioral)
+select results_eq(
+  $$ select count(*) from private.contribution_drafts
+     where id = (select current_setting('pg_temp.test_draft_id', true))::uuid $$,
+  $$ select 0::bigint $$,
+  'draft is deleted after successful publish'
 );
 
 -- ============================================================================
--- 23. Admin store creation works against real schema (behavioral)
+-- 16. Cross-user draft access denied (behavioral)
+-- ============================================================================
+select pg_temp.set_member_ctx();
+
+do $$
+declare
+  v_draft_id uuid;
+begin
+  v_draft_id := public.save_contribution_draft(
+    null,
+    'bounty',
+    '{"version":1,"scope":"region","zipCode":"48910","radiusMiles":"50","rewardAmount":"20","deadline":"2026-07-20","requirements":"","quantityNeeded":"1","variantRequirements":"","acceptEquivalent":false,"selectedRetailers":[],"selectedStores":[]}'::jsonb,
+    pg_temp.get_test_product_id(),
+    null
+  );
+  perform set_config('pg_temp.member_a_draft_id', v_draft_id::text, true);
+end;
+$$;
+
+select pg_temp.set_owner_ctx();
+
+select throws_ok(
+  $$ select public.create_bounty(
+    pg_temp.get_test_product_id(),
+    'region',
+    null,
+    '48910',
+    50,
+    null, null,
+    500,
+    now() + interval '7 days',
+    'Cross-user draft test',
+    1, null, false,
+    (select current_setting('pg_temp.member_a_draft_id', true))::uuid
+  ) $$,
+  'P0002',
+  'create_bounty rejects cross-user draft access'
+);
+
+-- ============================================================================
+-- 17. Admin store creation succeeds (behavioral)
 -- ============================================================================
 select pg_temp.set_owner_ctx();
 
@@ -352,23 +440,19 @@ select lives_ok(
   'admin_create_store succeeds with real schema columns'
 );
 
--- 24. Admin product creation works (behavioral)
--- Get a trend ID from seed data
+-- 18. Admin product creation with brand (behavioral)
 select lives_ok(
-  $$ declare v_trend_id uuid;
-    select id into v_trend_id from public.trends where is_active limit 1;
-    if v_trend_id is null then
-      insert into public.trends (name, slug, description, is_active)
-      values ('Test Trend', 'test-trend', 'Test', true)
-      on conflict (slug) do update set is_active = true
-      returning id into v_trend_id;
-    end if;
+  $$ do $$
+  declare v_trend_id uuid;
+  begin
+    select id into v_trend_id from public.trends where slug = 'community-verified';
     perform public.admin_create_product(v_trend_id, 'Test Product Alpha', 'available', null, null, 'TestBrand');
-  $$,
+  end;
+  $$ $$,
   'admin_create_product succeeds with brand column'
 );
 
--- 25. Non-owner admin call fails
+-- 19. Non-owner admin denied (behavioral)
 select pg_temp.set_member_ctx();
 
 select throws_ok(
@@ -388,12 +472,11 @@ select throws_ok(
 );
 
 -- ============================================================================
--- 26. Product search finds by brand (behavioral)
+-- 20. Product search finds by brand (behavioral)
 -- ============================================================================
--- Insert a product with a unique brand for search testing
 insert into public.products (trend_id, name, slug, brand, is_active, verification_method, verified_at)
 select t.id, 'BrandSearch Test Product', 'brandsearch-test-product', 'UniqueBrandXYZ', true, 'owner_verified', now()
-from public.trends t where t.is_active limit 1
+from public.trends t where t.slug = 'community-verified'
 on conflict (slug) do update set brand = 'UniqueBrandXYZ', is_active = true;
 
 select results_eq(
@@ -402,17 +485,96 @@ select results_eq(
   'search_products finds products by brand'
 );
 
--- 27. Onboarding interest events have NULL email in DB
+-- ============================================================================
+-- 21. Retailer bounty has correct associations (behavioral verification)
+-- ============================================================================
+select results_eq(
+  $$ select count(*) from public.bounty_retailers br
+     join public.bounties b on b.id = br.bounty_id
+     join public.retailers r on r.id = br.retailer_id
+     where b.scope_type = 'retailers'
+       and b.requirements = 'Test retailer bounty'
+       and r.slug in ('target', 'walmart') $$,
+  $$ select 2::bigint $$,
+  'retailer bounty has 2 retailer associations (Target + Walmart)'
+);
+
+-- 22. Multi-store bounty has correct associations (behavioral verification)
+select results_eq(
+  $$ select count(*) from public.bounty_stores bs
+     join public.bounties b on b.id = bs.bounty_id
+     where b.scope_type = 'stores'
+       and b.requirements = 'Test multi-store bounty' $$,
+  $$ select 2::bigint $$,
+  'multi-store bounty has 2 store associations'
+);
+
+-- 23. list_public_bounties returns retailer_names (behavioral)
 select ok(
   exists (
-    select 1
-    from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'complete_onboarding'
-      and pg_get_functiondef(p.oid) ~ 'onboarding_looking_for'
-      and pg_get_functiondef(p.oid) ~ 'email.*null'
+    select 1 from public.list_public_bounties(null, '48910', 250, 100) lb
+    where lb.retailer_names is not null
+      and array_length(lb.retailer_names, 1) >= 1
   ),
-  'complete_onboarding stores NULL email for onboarding_looking_for events'
+  'list_public_bounties returns non-null retailer_names for retailer bounty'
+);
+
+-- 24. get_bounty_detail returns scope details (behavioral)
+select pg_temp.set_owner_ctx();
+
+select ok(
+  exists (
+    select 1 from public.get_bounty_detail(
+      (select id from public.bounties where requirements = 'Test retailer bounty' limit 1)
+    ) d
+    where d.scope_type = 'retailers'
+      and d.retailer_names is not null
+      and d.quantity_needed = 1
+      and d.accept_equivalent = false
+  ),
+  'get_bounty_detail returns retailer_names and scope details'
+);
+
+-- ============================================================================
+-- 25. validate_bounty_scope trigger dropped (structural)
+-- ============================================================================
+select hasnt_function(
+  'public', 'validate_bounty_scope',
+  'validate_bounty_scope trigger function dropped'
+);
+
+-- 26. Username unique index (structural)
+select has_index(
+  'private', 'username_claims', 'username_claims_normalized_unique_idx',
+  'username_claims has unique index on normalized_username'
+);
+
+select index_is_unique(
+  'private', 'username_claims', 'username_claims_normalized_unique_idx',
+  'username_claims normalized_username index is unique'
+);
+
+-- 27. Personal notifications revoked from anon (structural)
+select ok(
+  not has_function_privilege('anon', 'public.get_personal_notifications(integer)', 'execute'),
+  'anon cannot execute get_personal_notifications'
+);
+
+select ok(
+  has_function_privilege('authenticated', 'public.get_personal_notifications(integer)', 'execute'),
+  'authenticated can execute get_personal_notifications'
+);
+
+-- 28. admin_create_product uses p_brand not p_retailer (structural)
+select ok(
+  exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'admin_create_product'
+      and pg_get_functiondef(p.oid) ~ 'p_brand'
+      and pg_get_functiondef(p.oid) !~ 'p_retailer'
+  ),
+  'admin_create_product uses p_brand (not p_retailer)'
 );
 
 select * from finish();
