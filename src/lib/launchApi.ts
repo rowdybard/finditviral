@@ -357,8 +357,7 @@ export async function adminCreateStore(input: {
   city: string
   state: string
   zipCode: string
-  phone: string | null
-  websiteUrl: string | null
+  sourceUrl: string | null
   latitude: number | null
   longitude: number | null
 }): RpcResult<string> {
@@ -369,8 +368,7 @@ export async function adminCreateStore(input: {
     p_city: input.city,
     p_state: input.state,
     p_zip_code: input.zipCode,
-    p_phone: input.phone,
-    p_website_url: input.websiteUrl,
+    p_source_url: input.sourceUrl,
     p_latitude: input.latitude,
     p_longitude: input.longitude,
   })
@@ -380,16 +378,14 @@ export async function adminUpdateStore(input: {
   storeId: string
   storeName: string | null
   addressLine1: string | null
-  phone: string | null
-  websiteUrl: string | null
+  sourceUrl: string | null
   isActive: boolean | null
 }): RpcResult<null> {
   return callRpc<null>('admin_update_store', {
     p_store_id: input.storeId,
     p_store_name: input.storeName,
     p_address_line1: input.addressLine1,
-    p_phone: input.phone,
-    p_website_url: input.websiteUrl,
+    p_source_url: input.sourceUrl,
     p_is_active: input.isActive,
   })
 }
@@ -404,7 +400,7 @@ export async function adminCreateProduct(input: {
   availabilityStatus: string
   releaseDate: string | null
   sourceUrl: string | null
-  retailer: string | null
+  brand: string | null
 }): RpcResult<string> {
   return callRpc<string>('admin_create_product', {
     p_trend_id: input.trendId,
@@ -412,7 +408,7 @@ export async function adminCreateProduct(input: {
     p_availability_status: input.availabilityStatus,
     p_release_date: input.releaseDate,
     p_source_url: input.sourceUrl,
-    p_retailer: input.retailer,
+    p_brand: input.brand,
   })
 }
 

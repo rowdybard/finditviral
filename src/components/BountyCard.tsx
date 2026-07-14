@@ -29,14 +29,14 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
   const exactStore = bounty.store?.store_name ?? bounty.store_name
   const scopeType = bounty.scope_type ?? (exactStore ? 'stores' : 'region')
   const locationLabel = scopeType === 'retailers'
-    ? 'Any store in selected retailers'
+    ? (bounty.retailer_names?.length ? bounty.retailer_names.join(', ') : 'Selected retailers')
     : scopeType === 'stores' && !exactStore
-    ? 'Selected stores'
+    ? (bounty.store_names?.length ? bounty.store_names.join(', ') : 'Selected stores')
     : exactStore
     ? `${exactStore}${bounty.store?.city ? ` in ${bounty.store.city}` : ''}`
     : `ZIP ${bounty.zip_code ?? '48910'}`
   const scopeDetail = scopeType === 'retailers'
-    ? 'Retailer scope'
+    ? `Within ${bounty.radius_miles ?? 50} mi of ${bounty.zip_code ?? '48910'}`
     : scopeType === 'stores' && !exactStore
     ? 'Multi-store'
     : exactStore

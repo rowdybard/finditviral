@@ -278,13 +278,12 @@ export default function Admin() {
       city: newStoreCity.trim(),
       state: newStoreState.trim(),
       zipCode: newStoreZip.trim(),
-      phone: null,
-      websiteUrl: null,
+      sourceUrl: null,
       latitude: null,
       longitude: null,
     })
     setCatalogLoading(false)
-    if (result.error) { setCatalogError(result.error.message); return }
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
     setNewStoreRetailer(''); setNewStoreName(''); setNewStoreAddress(''); setNewStoreCity(''); setNewStoreState(''); setNewStoreZip('')
   }
 
@@ -302,10 +301,10 @@ export default function Admin() {
       availabilityStatus: newProductAvailability,
       releaseDate: null,
       sourceUrl: null,
-      retailer: null,
+      brand: null,
     })
     setCatalogLoading(false)
-    if (result.error) { setCatalogError(result.error.message); return }
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
     setNewProductName(''); setNewProductTrend('')
   }
 

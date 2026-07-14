@@ -197,6 +197,10 @@ export default function NewBounty() {
       setError('Choose at least one retailer.')
       return false
     }
+    if (scope === 'retailers' && !/^[0-9]{5}$/.test(zipCode)) {
+      setError('Enter a valid 5-digit ZIP code for the search radius.')
+      return false
+    }
     if (scope === 'region' && !/^[0-9]{5}$/.test(zipCode)) {
       setError('Enter a valid 5-digit ZIP code.')
       return false
@@ -246,8 +250,8 @@ export default function NewBounty() {
       productId: product.id,
       scopeType: scope,
       storeId: scope === 'stores' ? (store?.id ?? null) : null,
-      zipCode: scope === 'region' ? zipCode : null,
-      radiusMiles: scope === 'region' ? Number(radiusMiles) : null,
+      zipCode: scope === 'region' || scope === 'retailers' ? zipCode : null,
+      radiusMiles: scope === 'region' || scope === 'retailers' ? Number(radiusMiles) : null,
       retailerIds: scope === 'retailers' ? selectedRetailers.map(r => r.id) : null,
       storeIds: scope === 'stores' && !store ? selectedStores.map(s => s.id) : null,
       rewardCents,
@@ -330,6 +334,21 @@ export default function NewBounty() {
             <div>
               <label className="label" htmlFor="radius">Radius</label>
               <select id="radius" className="input" value={radiusMiles} onChange={(event) => setRadiusMiles(event.target.value)}>
+                {[10, 25, 50, 100, 250].map((miles) => <option key={miles} value={miles}>{miles} mi</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {scope === 'retailers' && (
+          <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+            <div>
+              <label className="label" htmlFor="retailer-zip">Origin ZIP *</label>
+              <input id="retailer-zip" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ''))} required />
+            </div>
+            <div>
+              <label className="label" htmlFor="retailer-radius">Radius</label>
+              <select id="retailer-radius" className="input" value={radiusMiles} onChange={(event) => setRadiusMiles(event.target.value)}>
                 {[10, 25, 50, 100, 250].map((miles) => <option key={miles} value={miles}>{miles} mi</option>)}
               </select>
             </div>

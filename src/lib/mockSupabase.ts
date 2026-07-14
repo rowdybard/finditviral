@@ -374,7 +374,7 @@ export const mockSupabase = {
         .map(item => {
           const product = store.products.find(candidate => candidate.id === item.product_id)
           const location = store.stores.find(candidate => candidate.id === item.store_id)
-          return { ...item, product_name: product?.name, product_slug: product?.slug, store_name: location?.store_name ?? null, store_slug: location?.slug ?? null, retailer_name: location?.retailer_name ?? null, distance_miles: 4.6 }
+          return { ...item, product_name: product?.name, product_slug: product?.slug, store_name: location?.store_name ?? null, store_slug: location?.slug ?? null, retailer_name: location?.retailer_name ?? null, retailer_names: null, store_names: null, distance_miles: 4.6 }
         })
       return Promise.resolve({ data: rows, error: null })
     }

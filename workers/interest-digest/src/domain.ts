@@ -116,10 +116,13 @@ function parseDigestItem(value: unknown): DigestItem {
     throw new DigestContractError('source is not supported')
   }
 
-  const email = requireNullableString(value, 'email', 320)
-  if (email !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const rawEmail = requireNullableString(value, 'email', 320)
+  if (rawEmail !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
     throw new DigestContractError('email is invalid')
   }
+
+  // Defense in depth: onboarding events must never expose member auth emails
+  const email = source === 'onboarding_looking_for' ? null : rawEmail
 
   const interest = requireString(value, 'interest', MAX_INTEREST_LENGTH)
   if (interest.trim().length === 0) {

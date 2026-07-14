@@ -16,6 +16,21 @@ const HINT_TO_MESSAGE: Record<string, string> = {
   LOOKING_FOR_TOO_LONG: 'Please keep your interests under 500 characters.',
   CITY_INVALID: 'Please select at least one valid Greater Lansing city.',
   REFERRALS_UNAVAILABLE: 'Referrals are unavailable during beta.',
+  DRAFT_UNSUPPORTED_FIELD: 'This form contains unsupported fields. Please refresh and try again.',
+  DRAFT_UNSUPPORTED_VERSION: 'This form version is unsupported. Please refresh and try again.',
+  INVALID_SCOPE: 'Please choose a valid scope.',
+  INVALID_LOCATION: 'Please choose a valid Greater Lansing ZIP code and radius.',
+  INVALID_BOUNTY_DETAILS: 'Some bounty details are invalid. Please check your submission.',
+  INVALID_STORE: 'Invalid store details. Please check your submission.',
+  INVALID_PRODUCT: 'Invalid product details. Please check your submission.',
+  INVALID_SUGGESTION: 'Invalid suggestion details. Please check your submission.',
+  PRODUCT_UNAVAILABLE: 'That product is no longer available.',
+  STORE_UNAVAILABLE: 'That store is no longer available.',
+  STORE_OUT_OF_SCOPE: 'This store is not in the bounty scope.',
+  BOUNTY_CLOSED: 'This bounty is no longer accepting claims.',
+  BOUNTY_UNAVAILABLE: 'This bounty is unavailable.',
+  UNAUTHORIZED: 'You do not have permission to do that.',
+  INVALID_CLAIM: 'Invalid claim details. Please check your submission.',
 }
 
 const MESSAGE_TO_FALLBACK: Record<string, { message: string; step?: number }> = {
@@ -60,6 +75,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
 
 export function mapContributionError(error: PostgrestError | null): string {
   if (!error) return 'Something went wrong. Please try again.'
+
+  const hint = error.hint ?? ''
+  if (hint && hint in HINT_TO_MESSAGE) return HINT_TO_MESSAGE[hint]
 
   const code = error.code ?? ''
   if (ERROR_CODE_MESSAGES[code]) return ERROR_CODE_MESSAGES[code]

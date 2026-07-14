@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(8);
+select plan(7);
 
 -- 1. Rate limit function exists and references private schema tables
 select has_function(
@@ -56,25 +56,12 @@ select ok(
   'submit_bounty_claim uses 5-minute future check (not 15)'
 );
 
--- 5. list_public_bounties returns scope_type column
+-- 6. list_public_bounties returns scope_type column
 select has_column(
   'public',
   'list_public_bounties',
   'scope_type',
   'list_public_bounties returns scope_type column'
-);
-
--- 6. list_public_bounties includes retailer/stores scope bounties without distance filter
-select ok(
-  exists (
-    select 1
-    from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and p.proname = 'list_public_bounties'
-      and pg_get_functiondef(p.oid) ~ "scope_type in \('retailers', 'stores'\)"
-  ),
-  'list_public_bounties skips distance filter for retailer/stores scope'
 );
 
 -- 7. bounties_scope_check constraint exists
@@ -83,10 +70,10 @@ select has_check(
   'bounties has scope_check constraint'
 );
 
--- 8. validate_bounty_scope trigger function exists for association validation
-select has_function(
+-- 8. validate_bounty_scope trigger has been dropped (validation moved inside create_bounty)
+select hasnt_function(
   'public', 'validate_bounty_scope',
-  'validate_bounty_scope trigger function exists for association validation'
+  'validate_bounty_scope trigger function has been dropped (validation moved inside create_bounty)'
 );
 
 select * from finish();

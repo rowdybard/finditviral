@@ -41,5 +41,21 @@ describe('parseDigestClaimResponse', () => {
       items: [validClaim.items[0], validClaim.items[0]],
     }])).toThrow(/duplicate event IDs/)
   })
+
+  it('forces onboarding_looking_for email to null even if database leaks one', () => {
+    const result = parseDigestClaimResponse([{
+      ...validClaim,
+      items: [{
+        event_id: '55555555-5555-4555-8555-555555555555',
+        source: 'onboarding_looking_for',
+        occurred_at: '2026-07-12T20:00:00.000Z',
+        email: 'leaked@example.com',
+        username: 'bargainhunter',
+        interest: 'Looking for viral snacks.',
+      }],
+    }])
+    expect(result).not.toBeNull()
+    expect(result!.items[0].email).toBeNull()
+  })
 })
 

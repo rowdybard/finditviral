@@ -122,6 +122,8 @@ export type Bounty = {
   quantity_needed?: number | null
   variant_requirements?: string | null
   accept_equivalent?: boolean
+  retailer_names?: string[] | null
+  store_names?: string[] | null
   deadline?: string | null
   moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden'
   status: 'open' | 'claimed' | 'closed'
@@ -269,6 +271,8 @@ export type BountyDetailView = {
   variant_requirements: string | null
   accept_equivalent: boolean
   scope_type: 'region' | 'retailers' | 'stores'
+  retailer_names: string[] | null
+  store_names: string[] | null
   status: 'open' | 'claimed' | 'closed'
   moderation_status: 'pending' | 'approved' | 'rejected' | 'hidden'
   created_at: string
