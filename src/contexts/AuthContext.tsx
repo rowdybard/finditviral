@@ -8,7 +8,7 @@ type AuthContextType = {
   user: User | null
   profile: Profile | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, captchaToken?: string) => Promise<{
     error: string | null
     needsEmailConfirmation: boolean
@@ -59,8 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }
 
-  async function signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  async function signIn(email: string, password: string, captchaToken?: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken },
+    })
     if (error) return { error: error.message }
     setSession(data.session)
     await fetchProfile(data.user.id)

@@ -14,6 +14,7 @@ const PRODUCT_CLICK_MAX_BODY_LENGTH = 256
 const RATE_LIMIT_MAX_REQUESTS = 5
 const RATE_LIMIT_WINDOW_SECONDS = 600
 const RATE_LIMIT_DAILY_MAX_REQUESTS = 20
+const EARLY_ACCESS_MAX_BODY_LENGTH = 2048
 const RATE_LIMIT_DAILY_WINDOW_SECONDS = 60 * 60 * 24
 const UPSTREAM_TIMEOUT_MS = 10_000
 
@@ -388,10 +389,11 @@ export async function handleEarlyAccess(request, env, fetchImpl = fetch) {
 
   let payload
   try {
-    payload = await request.json()
+    payload = await readJsonWithByteLimit(request, EARLY_ACCESS_MAX_BODY_LENGTH)
   } catch {
     return createApiResponse(400, { error: 'invalid_request' })
   }
+  if (!payload) return createApiResponse(400, { error: 'invalid_request' })
 
   const email = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : ''
   const reason = typeof payload?.reason === 'string' ? payload.reason.trim() : ''

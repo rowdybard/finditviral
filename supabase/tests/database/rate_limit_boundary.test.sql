@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(7);
+select plan(9);
 
 -- ============================================================================
 -- Test fixtures: create test users, profiles, app_owners
@@ -266,6 +266,72 @@ select throws_ok(
   '42901',
   'Rate limit exceeded for suggestions',
   '6th suggestion is rejected with rate limit error (42901)'
+);
+
+-- ============================================================================
+-- 8. Store suggestion rate limit: 6th store suggestion is rejected
+-- ============================================================================
+select throws_ok(
+  $test$
+  do $body$
+  begin
+    perform pg_temp.set_member_ctx();
+    -- 5 suggestions already exist from test 6 (product suggestions count toward shared limit)
+    -- A store suggestion is the 6th suggestion overall and should fail
+    perform public.suggest_store_for_draft(
+      null, 'sighting', '{"version":1}'::jsonb,
+      null, 'Rate Limit Retailer 2', 'Rate Limit Store 2',
+      '456 Test Ave', 'Lansing', 'MI', '48910', null, null
+    );
+  end;
+  $body$;
+  $test$,
+  '42901',
+  'Rate limit exceeded for suggestions',
+  '6th store suggestion is rejected with rate limit error (42901)'
+);
+
+-- ============================================================================
+-- 9. Duplicate bounty claim by same user is rejected
+-- ============================================================================
+select throws_ok(
+  $test$
+  do $body$
+  declare
+    v_product_id uuid := pg_temp.get_test_product_id();
+    v_store_id uuid := pg_temp.get_test_store_id();
+    v_member_id uuid := '00000000-0000-4000-8000-000000000002';
+    v_bounty_id uuid;
+    v_sighting_id uuid;
+  begin
+    perform pg_temp.set_member_ctx();
+
+    -- Create a bounty owned by member
+    insert into public.bounties (user_id, product_id, reward_amount, reward_cents,
+      zip_code, radius_miles, notes, requirements, deadline, status, moderation_status,
+      scope_type)
+    values (v_member_id, v_product_id, 5.00, 500, '48910', 10,
+      'test', 'test', now() + interval '7 days', 'open', 'approved', 'region')
+    returning id into v_bounty_id;
+
+    -- Create a sighting to use for the claim
+    insert into public.sightings (user_id, product_id, store_id, store_name, city, state, zip_code,
+      stock_level, availability, seen_at, is_public, moderation_status)
+    values (v_member_id, v_product_id, v_store_id, 'Test Store', 'Lansing', 'MI', '48910',
+      'in_stock', 'in_stock', now() - interval '5 minutes', false, 'approved')
+    returning id into v_sighting_id;
+
+    -- First claim should succeed
+    perform public.submit_bounty_claim(v_bounty_id, v_sighting_id);
+
+    -- Second claim on same bounty by same user should fail (duplicate)
+    perform public.submit_bounty_claim(v_bounty_id, v_sighting_id);
+  end;
+  $body$;
+  $test$,
+  '23505',
+  'Duplicate bounty claim should be rejected with unique constraint violation',
+  'Duplicate bounty claim by same user is rejected'
 );
 
 select * from finish();

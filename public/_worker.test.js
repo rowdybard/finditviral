@@ -542,4 +542,23 @@ describe('enforceRateLimit — boundary conditions', () => {
     expect(dailyPut).toBeDefined()
     expect(dailyPut[1]).toBe('20')
   })
+
+  it('rejects oversized request bodies for early-access', async () => {
+    const fetchImpl = vi.fn()
+    const oversizedBody = JSON.stringify({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products. ' + 'x'.repeat(3000),
+      turnstileToken: 'valid-token',
+    })
+    const oversizedRequest = new Request('https://finditviral.com/api/early-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: oversizedBody,
+    })
+
+    const response = await handleEarlyAccess(oversizedRequest, env(), fetchImpl)
+
+    expect(response.status).toBe(400)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
 })

@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(14);
+select plan(17);
 
 -- ============================================================================
 -- Fixtures: dedicated trends + products, isolated with unique zqx* tokens
@@ -211,6 +211,39 @@ select results_eq(
   $$ select count(*) from public.search_products('zqxinactivetrendtoken', 12) $$,
   $$ select 0::bigint $$,
   'a product under an inactive trend is excluded from search results'
+);
+
+-- ============================================================================
+-- 15. pg_trgm extension is installed
+-- ============================================================================
+select has_extension('pg_trgm', 'pg_trgm extension is installed');
+
+-- ============================================================================
+-- 16. products has a GIN trigram index on name for active rows
+-- ============================================================================
+select ok(
+  exists (
+    select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'products'
+      and indexname = 'products_name_trgm_idx'
+  ),
+  'products_name_trgm_idx exists on products table'
+);
+
+-- ============================================================================
+-- 17. trends has a GIN trigram index on name for active rows
+-- ============================================================================
+select ok(
+  exists (
+    select 1
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'trends'
+      and indexname = 'trends_name_trgm_idx'
+  ),
+  'trends_name_trgm_idx exists on trends table'
 );
 
 select * from finish();

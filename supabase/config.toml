@@ -31,7 +31,7 @@ minimum_password_length = 8
 
 [auth.email]
 enable_signup = true
-enable_confirmations = false
+enable_confirmations = true
 secure_password_change = true
 
 [auth.sms]

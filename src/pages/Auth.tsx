@@ -39,8 +39,6 @@ export default function Auth() {
   const turnstileWidgetId = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!isSignUp) return
-
     let cancelled = false
 
     function loadTurnstile() {
@@ -99,7 +97,7 @@ export default function Auth() {
       setCaptchaToken(null)
       setCaptchaExpired(false)
     }
-  }, [isSignUp])
+  }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -142,7 +140,13 @@ export default function Auth() {
       return
     }
 
-    const { error: signInError } = await signIn(normalizedEmail, password)
+    if (!captchaToken) {
+      setError('Please complete the CAPTCHA verification.')
+      setLoading(false)
+      return
+    }
+
+    const { error: signInError } = await signIn(normalizedEmail, password, captchaToken)
     if (signInError) {
       console.error('sign_in error:', signInError)
       setError(mapAuthError(signInError, false))
@@ -254,14 +258,12 @@ export default function Auth() {
                   </div>
                 )}
 
-                {isSignUp && (
-                  <div>
-                    <div ref={turnstileContainerRef} className="cf-turnstile" />
-                    {captchaExpired && (
-                      <p className="mt-1 text-xs text-stone-500">CAPTCHA expired. Please verify again.</p>
-                    )}
-                  </div>
-                )}
+                <div>
+                  <div ref={turnstileContainerRef} className="cf-turnstile" />
+                  {captchaExpired && (
+                    <p className="mt-1 text-xs text-stone-500">CAPTCHA expired. Please verify again.</p>
+                  )}
+                </div>
 
                 {error && (
                   <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
@@ -269,7 +271,7 @@ export default function Auth() {
 
                 <button
                   type="submit"
-                  disabled={loading || (isSignUp && !captchaToken)}
+                  disabled={loading || !captchaToken}
                   className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}

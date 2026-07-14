@@ -779,7 +779,7 @@ export const mockSupabase = {
       listeners.forEach(l => l('SIGNED_IN', mockSession))
       return Promise.resolve({ data: { user: { id, email }, session: mockSession }, error: null })
     },
-    signInWithPassword: ({ email }: any) => {
+    signInWithPassword: ({ email, options: _options }: any) => {
       const id = email.includes('poster') ? 'u2' : 'u1'
       mockSession = { user: { id, email }, access_token: 'mock' }
       listeners.forEach(l => l('SIGNED_IN', mockSession))
