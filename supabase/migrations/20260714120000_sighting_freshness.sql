@@ -9,12 +9,14 @@ stable
 security definer
 set search_path = pg_catalog, pg_temp
 as $$
-  case
+  select case
     when p_seen_at >= now() - interval '24 hours' then 'fresh'
     when p_seen_at >= now() - interval '72 hours' then 'possibly_outdated'
     else 'expired'
   end
 $$;
+
+drop function if exists public.list_public_sightings(uuid, uuid, text, integer, integer);
 
 create or replace function public.list_public_sightings(
   p_product_id uuid default null,

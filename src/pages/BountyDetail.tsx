@@ -139,11 +139,19 @@ export default function BountyDetail() {
       <section className="card space-y-4 border-2 border-stone-900 shadow-[4px_4px_0_0_#0c251d]">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div><p className="text-xs font-bold uppercase text-gray-500">Reward</p><p className="text-2xl font-black text-red-600">{formatReward(bounty.reward_cents / 100)}</p></div>
-          <div><p className="text-xs font-bold uppercase text-gray-500">Scope</p><p className="font-bold text-gray-900">{bounty.store_name ?? `ZIP ${bounty.zip_code}`}</p><p className="text-xs text-gray-500">{bounty.store_name ? 'Exact store' : `${bounty.radius_miles} mile radius`}</p></div>
+          <div><p className="text-xs font-bold uppercase text-gray-500">Scope</p><p className="font-bold text-gray-900">{bounty.scope_type === 'region' ? `ZIP ${bounty.zip_code}` : bounty.scope_type === 'retailers' ? 'Retailers' : bounty.store_name ?? 'Stores'}</p><p className="text-xs text-gray-500">{bounty.scope_type === 'region' ? `${bounty.radius_miles} mile radius` : bounty.scope_type === 'retailers' ? 'Specific retailers' : 'Exact store'}</p></div>
           <div><p className="text-xs font-bold uppercase text-gray-500">Deadline</p><p className="font-bold text-gray-900">{new Date(bounty.deadline).toLocaleDateString()}</p><p className="text-xs text-gray-500">{new Date(bounty.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p></div>
           <div><p className="text-xs font-bold uppercase text-gray-500">Claims</p><p className="text-2xl font-black text-gray-900">{claims.length}</p></div>
         </div>
         {bounty.requirements && <div className="border-t border-gray-200 pt-4"><h2 className="text-sm font-bold text-gray-900">Requirements</h2><p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{bounty.requirements}</p></div>}
+        {(bounty.quantity_needed || bounty.variant_requirements || bounty.accept_equivalent) && (
+          <div className="border-t border-gray-200 pt-4 space-y-2">
+            <h2 className="text-sm font-bold text-gray-900">Details</h2>
+            {bounty.quantity_needed && <p className="text-sm text-gray-700"><span className="font-medium">Quantity needed:</span> {bounty.quantity_needed}</p>}
+            {bounty.variant_requirements && <p className="text-sm text-gray-700"><span className="font-medium">Variant requirements:</span> {bounty.variant_requirements}</p>}
+            {bounty.accept_equivalent && <p className="text-sm text-gray-700"><span className="font-medium">Accept equivalent variants</span></p>}
+          </div>
+        )}
         <p className="border-t border-gray-200 pt-4 text-xs leading-relaxed text-gray-500">FindItViral records the promised reward but does not process payment or hold funds. Participants arrange fulfillment directly.</p>
       </section>
 

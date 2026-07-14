@@ -174,8 +174,8 @@ export default function NewSighting() {
     }
     const seenDate = new Date(seenAt)
     const now = Date.now()
-    if (Number.isNaN(seenDate.getTime()) || seenDate.getTime() < now - 7 * 24 * 60 * 60 * 1000 || seenDate.getTime() > now + 15 * 60 * 1000) {
-      setError('The sighting time must be within the past 7 days and no more than 15 minutes in the future.')
+    if (Number.isNaN(seenDate.getTime()) || seenDate.getTime() < now - 7 * 24 * 60 * 60 * 1000 || seenDate.getTime() > now + 5 * 60 * 1000) {
+      setError('The sighting time must be within the past 7 days and no more than 5 minutes in the future.')
       return
     }
     const parsedQuantity = quantity === '' ? null : Number(quantity)
@@ -273,7 +273,7 @@ export default function NewSighting() {
             type="datetime-local"
             value={seenAt}
             min={localDateTime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))}
-            max={localDateTime(new Date(Date.now() + 15 * 60 * 1000))}
+            max={localDateTime(new Date(Date.now() + 5 * 60 * 1000))}
             onChange={(event) => setSeenAt(event.target.value)}
             required
           />

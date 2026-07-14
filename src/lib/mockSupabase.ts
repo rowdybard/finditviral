@@ -115,6 +115,13 @@ const initialData = {
     { id: 'p95', trend_id: 't5', name: 'Magic Jellykins Surprise Plush Jar 2-Pack', slug: 'magic-jellykins-surprise-plush-jar-2pack', created_at: days(20) },
     { id: 'p96', trend_id: 't5', name: 'Magic Jellykins Doll Playset 12pk', slug: 'magic-jellykins-doll-playset-12pk', created_at: days(10) },
   ],
+  retailers: [
+    { id: 'r1', name: 'Target', website_url: 'https://www.target.com', is_active: true },
+    { id: 'r2', name: 'Meijer', website_url: 'https://www.meijer.com', is_active: true },
+    { id: 'r3', name: 'Five Below', website_url: 'https://www.fivebelow.com', is_active: true },
+    { id: 'r4', name: 'Walmart', website_url: 'https://www.walmart.com', is_active: true },
+    { id: 'r5', name: 'Barnes & Noble', website_url: 'https://www.barnesandnoble.com', is_active: true },
+  ],
   stores: [
     { id: 'st1', slug: 'target-lansing-edgewood', retailer_name: 'Target', store_name: 'Target Lansing Edgewood', address_line1: '500 E Edgewood Blvd', city: 'Lansing', state: 'MI', zip_code: '48911', is_active: true },
     { id: 'st2', slug: 'meijer-lansing-s-pennsylvania', retailer_name: 'Meijer', store_name: 'Meijer Lansing', address_line1: '6200 S Pennsylvania Ave', city: 'Lansing', state: 'MI', zip_code: '48911', is_active: true },
@@ -404,7 +411,7 @@ export const mockSupabase = {
 
     if (name === 'is_username_available') {
       const username = String(args?.p_username ?? '').trim().toLowerCase()
-      const available = /^[a-z]{3,24}$/.test(username)
+      const available = /^[a-z]{3,20}$/.test(username)
         && !store.profiles.some(p => p.id !== currentUserId && String(p.username).toLowerCase() === username)
       return Promise.resolve({ data: available, error: null })
     }
@@ -561,6 +568,10 @@ export const mockSupabase = {
         caller_claim_status: callerClaim?.status ?? null,
         owner_contact_info: null,
         accepted_finder_contact_info: null,
+        scope_type: bounty.scope_type ?? 'region',
+        quantity_needed: bounty.quantity_needed ?? null,
+        variant_requirements: bounty.variant_requirements ?? null,
+        accept_equivalent: bounty.accept_equivalent ?? false,
       }], error: null })
     }
 

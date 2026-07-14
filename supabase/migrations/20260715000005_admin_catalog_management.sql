@@ -197,7 +197,7 @@ as $$
   from public.profiles p
   where nullif(btrim(p_query), '') is null
     or p.username ilike '%' || btrim(p_query) || '%'
-  order by similarity(p.username, btrim(p_query)) desc, p.username
+  order by case when p.username ilike btrim(p_query) || '%' then 0 else 1 end, p.username
   limit least(greatest(coalesce(p_limit, 20), 1), 50);
 $$;
 

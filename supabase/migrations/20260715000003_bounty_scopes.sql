@@ -213,7 +213,7 @@ as $$
       or r.name ilike '%' || btrim(p_query) || '%'
       or r.slug ilike '%' || btrim(p_query) || '%'
     )
-  order by similarity(r.name, btrim(p_query)) desc, r.name
+  order by case when r.name ilike btrim(p_query) || '%' then 0 else 1 end, r.name
   limit least(greatest(coalesce(p_limit, 12), 1), 12);
 $$;
 
