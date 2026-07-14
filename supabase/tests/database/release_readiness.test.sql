@@ -17,15 +17,21 @@ declare
   v_owner_id uuid := '00000000-0000-4000-8000-000000000001';
   v_member_id uuid := '00000000-0000-4000-8000-000000000002';
 begin
+  set local session_replication_role = 'replica';
+
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_owner_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'owner@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'testowner' where id = v_owner_id;
+  update private.username_claims set claimed_username = 'testowner', normalized_username = 'testowner' where user_id = v_owner_id;
 
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_member_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'member@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'testmember' where id = v_member_id;
+  update private.username_claims set claimed_username = 'testmember', normalized_username = 'testmember' where user_id = v_member_id;
 
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_owner_id, 'testowner', true, 100, now())
@@ -46,6 +52,8 @@ begin
   insert into private.app_owners (user_id)
   values (v_owner_id)
   on conflict (user_id) do nothing;
+
+  set local session_replication_role = 'origin';
 end;
 $$;
 
@@ -107,6 +115,7 @@ select throws_ok(
   $$ select private.validate_draft_payload('bounty',
     '{"version":1,"unknownField":"bad"}'::jsonb) $$,
   '22023',
+  'Contribution draft contains unsupported fields',
   'bounty draft payload rejects unknown fields'
 );
 
@@ -115,6 +124,7 @@ select throws_ok(
   $$ select private.validate_draft_payload('bounty',
     '{"version":1,"scope":"invalid"}'::jsonb) $$,
   '22023',
+  'Invalid bounty scope',
   'bounty draft payload rejects invalid scope'
 );
 
@@ -189,6 +199,7 @@ select throws_ok(
     1, null, false, null
   ) $$,
   '22023',
+  'Choose valid retailers within a ZIP radius',
   'create_bounty rejects retailer scope without ZIP+radius'
 );
 
@@ -275,6 +286,7 @@ select throws_ok(
     1, 'Test claim wrong retailer'
   ) $$,
   '22023',
+  'This store does not belong to a retailer in the bounty scope',
   'submit_bounty_claim rejects store from non-scoped retailer'
 );
 
@@ -290,6 +302,7 @@ select throws_ok(
     1, 'Self claim test'
   ) $$,
   '42501',
+  'You cannot claim your own bounty',
   'submit_bounty_claim rejects self-claim'
 );
 
@@ -329,6 +342,7 @@ select throws_ok(
     1, 'Claim on closed bounty'
   ) $$,
   '55000',
+  'Bounty is unavailable',
   'submit_bounty_claim rejects claim on closed bounty'
 );
 
@@ -445,6 +459,7 @@ select throws_ok(
     (select current_setting('pg_temp.member_a_draft_id', true))::uuid
   ) $$,
   'P0002',
+  'Draft not found',
   'create_bounty rejects cross-user draft access'
 );
 
@@ -493,6 +508,7 @@ select throws_ok(
     null
   ) $$,
   '42501',
+  'Owner access required',
   'non-owner cannot create store'
 );
 

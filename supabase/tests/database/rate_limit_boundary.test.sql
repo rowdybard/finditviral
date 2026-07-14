@@ -19,15 +19,21 @@ declare
   v_owner_id uuid := '00000000-0000-4000-8000-000000000001';
   v_member_id uuid := '00000000-0000-4000-8000-000000000002';
 begin
+  set local session_replication_role = 'replica';
+
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_owner_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'owner@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'rateowner' where id = v_owner_id;
+  update private.username_claims set claimed_username = 'rateowner', normalized_username = 'rateowner' where user_id = v_owner_id;
 
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_member_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'member@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'ratemember' where id = v_member_id;
+  update private.username_claims set claimed_username = 'ratemember', normalized_username = 'ratemember' where user_id = v_member_id;
 
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_owner_id, 'rateowner', true, 100, now())
@@ -48,6 +54,8 @@ begin
   insert into private.app_owners (user_id)
   values (v_owner_id)
   on conflict (user_id) do nothing;
+
+  set local session_replication_role = 'origin';
 end;
 $$;
 
@@ -129,6 +137,7 @@ select throws_ok(
   $body$;
   $test$,
   '42901',
+  'Rate limit exceeded for sightings',
   '11th sighting is rejected with rate limit error (42901)'
 );
 
@@ -178,6 +187,7 @@ select throws_ok(
   $body$;
   $test$,
   '42901',
+  'Rate limit exceeded for bounties',
   '6th bounty is rejected with rate limit error (42901)'
 );
 
@@ -254,6 +264,7 @@ select throws_ok(
   $body$;
   $test$,
   '42901',
+  'Rate limit exceeded for suggestions',
   '6th suggestion is rejected with rate limit error (42901)'
 );
 

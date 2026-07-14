@@ -14,8 +14,9 @@ select ok(
 );
 
 -- 21-char username should always return false
-select is_false(
+select is(
   (select is_username_available from public.is_username_available('abcdefghijklmnopqrstu')),
+  false,
   '21-char username is rejected by is_username_available'
 );
 

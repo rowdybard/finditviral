@@ -19,15 +19,21 @@ declare
   v_owner_id uuid := '00000000-0000-4000-8000-000000000001';
   v_member_id uuid := '00000000-0000-4000-8000-000000000002';
 begin
+  set local session_replication_role = 'replica';
+
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_owner_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'catalogowner@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'catalogowner' where id = v_owner_id;
+  update private.username_claims set claimed_username = 'catalogowner', normalized_username = 'catalogowner' where user_id = v_owner_id;
 
   insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
   values (v_member_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
           'catalogmember@test.local', 'test', now(), now(), now())
   on conflict (id) do nothing;
+  update public.profiles set username = 'catalogmember' where id = v_member_id;
+  update private.username_claims set claimed_username = 'catalogmember', normalized_username = 'catalogmember' where user_id = v_member_id;
 
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_owner_id, 'catalogowner', true, 100, now())
@@ -48,6 +54,8 @@ begin
   insert into private.app_owners (user_id)
   values (v_owner_id)
   on conflict (user_id) do nothing;
+
+  set local session_replication_role = 'origin';
 end;
 $$;
 
@@ -105,7 +113,7 @@ select lives_ok(
 select lives_ok(
   $$ select public.admin_create_store(
     'Catalog QA Retailer', 'Catalog QA Store', '1 Test Ave', 'Lansing', 'MI', '48910',
-    null, null, null, null
+    null::text, null::numeric, null::numeric
   ) $$,
   'owner can create a store'
 );
@@ -148,7 +156,7 @@ select results_eq(
 select lives_ok(
   $$ select public.admin_update_store(
     (select id from public.stores where slug = 'catalog-qa-store-lansing-mi'),
-    'Catalog QA Store Updated', null, null, null, null
+    'Catalog QA Store Updated', null::text, null::text, null::boolean
   ) $$,
   'owner can update a store'
 );
@@ -244,7 +252,7 @@ select results_eq(
 select lives_ok(
   $$ select public.admin_update_store(
     (select id from public.stores where slug = 'catalog-qa-store-lansing-mi'),
-    null, null, null, null, true
+    null::text, null::text, null::text, true
   ) $$,
   'owner can restore a disabled store'
 );
@@ -272,6 +280,7 @@ select throws_ok(
     pg_temp.get_test_trend_id(), 'Member Should Fail Product', 'available', null, null, null, null, null
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot create a product'
 );
 
@@ -281,6 +290,7 @@ select throws_ok(
     'Member Should Fail', null, null, null, null, null
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot update a product'
 );
 
@@ -289,24 +299,27 @@ select throws_ok(
     (select id from public.products where slug = 'catalog-qa-product')
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot disable a product'
 );
 
 select throws_ok(
   $$ select public.admin_create_store(
     'Member Fail Retailer', 'Member Fail Store', '1 Fail Ave', 'Lansing', 'MI', '48910',
-    null, null, null, null
+    null::text, null::numeric, null::numeric
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot create a store'
 );
 
 select throws_ok(
   $$ select public.admin_update_store(
     (select id from public.stores where slug = 'catalog-qa-store-lansing-mi'),
-    'Member Should Fail', null, null, null, null
+    'Member Should Fail', null::text, null::text, null::boolean
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot update a store'
 );
 
@@ -315,18 +328,21 @@ select throws_ok(
     (select id from public.stores where slug = 'catalog-qa-store-lansing-mi')
   ) $$,
   '42501',
+  'Owner access required',
   'member cannot disable a store'
 );
 
 select throws_ok(
   $$ select public.admin_list_products() $$,
   '42501',
+  'Owner access required',
   'member cannot call admin_list_products'
 );
 
 select throws_ok(
   $$ select public.admin_list_stores() $$,
   '42501',
+  'Owner access required',
   'member cannot call admin_list_stores'
 );
 

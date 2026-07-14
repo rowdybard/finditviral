@@ -23,7 +23,11 @@ select ok(
 );
 
 -- Verify the interest_events table still allows NULL email
-select col_is_nullable('private', 'interest_events', 'email', 'email column is nullable');
+select ok(
+  (select is_nullable from information_schema.columns
+   where table_schema = 'private' and table_name = 'interest_events' and column_name = 'email') = 'YES',
+  'email column is nullable'
+);
 
 select finish();
 

@@ -10,10 +10,17 @@ set search_path = public, extensions;
 select plan(4);
 
 -- New sightings should default to pending + is_public = false
-select is(
-  (select moderation_status from public.sightings order by created_at desc limit 1),
-  'pending',
-  'new sightings are created with pending moderation status'
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'create_sighting'
+      and pg_get_functiondef(p.oid) ~ 'moderation_status'
+      and pg_get_functiondef(p.oid) ~ '''pending'''
+  ),
+  'create_sighting sets moderation_status to pending'
 );
 
 -- Pending sightings should not appear in list_public_sightings

@@ -57,10 +57,15 @@ select ok(
 );
 
 -- 6. list_public_bounties returns scope_type column
-select has_column(
-  'public',
-  'list_public_bounties',
-  'scope_type',
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'list_public_bounties'
+      and pg_get_functiondef(p.oid) ~ 'scope_type'
+  ),
   'list_public_bounties returns scope_type column'
 );
 

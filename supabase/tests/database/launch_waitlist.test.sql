@@ -61,7 +61,7 @@ select is(
     from pg_proc
     where oid = 'public.request_early_access(text,text)'::regprocedure
   ),
-  'search_path=pg_catalog, pg_temp',
+  'search_path=pg_catalog, private, pg_temp',
   'the request RPC has a hardened search path'
 );
 

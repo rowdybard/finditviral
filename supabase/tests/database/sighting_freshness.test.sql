@@ -25,10 +25,15 @@ select is(
 );
 
 -- Test that list_public_sightings returns a freshness_status column
-select has_column(
-  'public',
-  'list_public_sightings',
-  'freshness_status',
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'list_public_sightings'
+      and pg_get_functiondef(p.oid) ~ 'freshness_status'
+  ),
   'list_public_sightings returns freshness_status column'
 );
 
