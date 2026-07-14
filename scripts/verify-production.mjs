@@ -124,6 +124,41 @@ await check('FiV Heat endpoint validates product clicks without recording one', 
   assert(body.error === 'invalid_request', `unexpected response: ${JSON.stringify(body)}`)
 })
 
+await check('early access endpoint requires a Turnstile token', async () => {
+  const response = await fetchFromBase('/api/early-access', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: baseUrl.origin,
+    },
+    body: JSON.stringify({
+      email: 'smoke-test@finditviral.com',
+      reason: 'This is a smoke test verification probe with sufficient length.',
+    }),
+  })
+  const body = await response.json().catch(() => ({}))
+  assert(response.status === 400, `expected 400, received ${response.status}`)
+  assert(body.error === 'verification_required', `unexpected response: ${JSON.stringify(body)}`)
+})
+
+await check('early access endpoint rejects an invalid Turnstile token via siteverify', async () => {
+  const response = await fetchFromBase('/api/early-access', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: baseUrl.origin,
+    },
+    body: JSON.stringify({
+      email: 'smoke-test@finditviral.com',
+      reason: 'This is a smoke test verification probe with sufficient length.',
+      turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
+    }),
+  })
+  const body = await response.json().catch(() => ({}))
+  assert(response.status === 400, `expected 400, received ${response.status}`)
+  assert(body.error === 'verification_failed', `unexpected response: ${JSON.stringify(body)}`)
+})
+
 await check('crawler files are real static resources', async () => {
   const [robots, sitemap] = await Promise.all([
     fetchFromBase('/robots.txt'),

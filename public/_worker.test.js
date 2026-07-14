@@ -416,3 +416,128 @@ describe('enforceRateLimit — fail-open hardening', () => {
     consoleSpy.mockRestore()
   })
 })
+
+describe('enforceRateLimit — boundary conditions', () => {
+  function turnstileFetchMock() {
+    return vi.fn(async (url) => {
+      if (String(url).includes('siteverify')) {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(null, { status: 204 })
+    })
+  }
+
+  it('blocks when the primary rolling-window counter is exactly at the limit (5)', async () => {
+    const fetchImpl = turnstileFetchMock()
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '0'
+      if (key.startsWith('early-access:')) return '5'
+      return null
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(429)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('allows when the primary rolling-window counter is one below the limit (4) and increments to 5', async () => {
+    const fetchImpl = turnstileFetchMock()
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '0'
+      if (key.startsWith('early-access:')) return '4'
+      return null
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(204)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const rollingPut = kvPut.mock.calls.find(([key]) => key.startsWith('early-access:'))
+    expect(rollingPut).toBeDefined()
+    expect(rollingPut[1]).toBe('5')
+  })
+
+  it('blocks when the primary rolling-window counter exceeds the limit (6)', async () => {
+    const fetchImpl = turnstileFetchMock()
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '0'
+      if (key.startsWith('early-access:')) return '6'
+      return null
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(429)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('blocks when the daily cap is exactly at the limit (20) even with primary KV available', async () => {
+    const fetchImpl = turnstileFetchMock()
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '20'
+      if (key.startsWith('early-access:')) return '0'
+      return null
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(429)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('allows when the daily cap is one below the limit (19) and primary KV is at 0', async () => {
+    const fetchImpl = turnstileFetchMock()
+    const kvGet = vi.fn(async (key) => {
+      if (key.startsWith('early-access-daily:')) return '19'
+      if (key.startsWith('early-access:')) return '0'
+      return null
+    })
+    const kvPut = vi.fn()
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env({
+      EARLY_ACCESS_RATE_LIMIT: { get: kvGet, put: kvPut },
+    }), fetchImpl)
+
+    expect(response.status).toBe(204)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const dailyPut = kvPut.mock.calls.find(([key]) => key.startsWith('early-access-daily:'))
+    expect(dailyPut).toBeDefined()
+    expect(dailyPut[1]).toBe('20')
+  })
+})

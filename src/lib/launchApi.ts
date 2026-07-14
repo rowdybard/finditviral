@@ -3,6 +3,8 @@ import { supabase } from './supabase'
 import type {
   AdminContribution,
   AdminMemberSearchResult,
+  AdminProduct,
+  AdminStore,
   Bounty,
   BountyClaimView,
   BountyDetailView,
@@ -401,6 +403,8 @@ export async function adminCreateProduct(input: {
   releaseDate: string | null
   sourceUrl: string | null
   brand: string | null
+  category: string | null
+  searchTerms: string | null
 }): RpcResult<string> {
   return callRpc<string>('admin_create_product', {
     p_trend_id: input.trendId,
@@ -409,6 +413,8 @@ export async function adminCreateProduct(input: {
     p_release_date: input.releaseDate,
     p_source_url: input.sourceUrl,
     p_brand: input.brand,
+    p_category: input.category,
+    p_search_terms: input.searchTerms,
   })
 }
 
@@ -418,6 +424,8 @@ export async function adminUpdateProduct(input: {
   availabilityStatus: string | null
   releaseDate: string | null
   isActive: boolean | null
+  category: string | null
+  searchTerms: string | null
 }): RpcResult<null> {
   return callRpc<null>('admin_update_product', {
     p_product_id: input.productId,
@@ -425,11 +433,27 @@ export async function adminUpdateProduct(input: {
     p_availability_status: input.availabilityStatus,
     p_release_date: input.releaseDate,
     p_is_active: input.isActive,
+    p_category: input.category,
+    p_search_terms: input.searchTerms,
   })
 }
 
 export async function adminDisableProduct(productId: string): RpcResult<null> {
   return callRpc<null>('admin_disable_product', { p_product_id: productId })
+}
+
+export async function adminListProducts(includeInactive = false): RpcResult<AdminProduct[]> {
+  return callRpc<AdminProduct[]>('admin_list_products', {
+    p_include_inactive: includeInactive,
+    p_limit: 100,
+  })
+}
+
+export async function adminListStores(includeInactive = false): RpcResult<AdminStore[]> {
+  return callRpc<AdminStore[]>('admin_list_stores', {
+    p_include_inactive: includeInactive,
+    p_limit: 100,
+  })
 }
 
 export async function adminSearchMembers(query: string): RpcResult<AdminMemberSearchResult[]> {

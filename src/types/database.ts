@@ -322,3 +322,28 @@ export type AdminMemberSearchResult = {
   karma: number
   created_at: string
 }
+
+export type AdminProduct = {
+  id: string
+  name: string
+  slug: string
+  trend_name: string
+  brand: string | null
+  category: string | null
+  availability_status: string
+  release_date: string | null
+  is_active: boolean
+  search_terms: string | null
+}
+
+export type AdminStore = {
+  id: string
+  name: string
+  slug: string
+  retailer_name: string
+  address_line1: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+  is_active: boolean
+}

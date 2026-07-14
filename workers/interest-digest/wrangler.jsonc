@@ -16,7 +16,8 @@
   "send_email": [
     {
       "name": "EMAIL",
-      "allowed_sender_addresses": ["digest@finditviral.com"]
+      "allowed_sender_addresses": ["digest@finditviral.com"],
+      "allowed_destination_addresses": ["owner@finditviral.com"]
     }
   ],
   "observability": {

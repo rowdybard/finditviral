@@ -296,7 +296,18 @@ export const mockSupabase = {
     if (name === 'search_products') {
       const query = String(args?.p_query ?? '').trim().toLowerCase()
       const matches = store.products
-        .filter(product => product.is_active && product.name.toLowerCase().includes(query))
+        .filter(product => {
+          if (!product.is_active) return false
+          const trend = store.trends.find(t => t.id === product.trend_id)
+          return [
+            product.name,
+            product.brand,
+            (product as any).category,
+            (product as any).search_terms,
+            trend?.name,
+            trend?.description,
+          ].some(value => value && String(value).toLowerCase().includes(query))
+        })
         .slice(0, Math.min(Number(args?.p_limit) || 12, 12))
         .map(product => ({
           id: product.id,
@@ -386,6 +397,45 @@ export const mockSupabase = {
 
     if (name === 'is_app_owner') {
       return Promise.resolve({ data: currentUserId === 'u1', error: null })
+    }
+
+    if (name === 'admin_list_products') {
+      const includeInactive = Boolean(args?.p_include_inactive)
+      const products = store.products
+        .filter(p => includeInactive || p.is_active)
+        .slice(0, Math.min(Number(args?.p_limit) || 50, 200))
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          trend_name: store.trends.find(t => t.id === p.trend_id)?.name ?? '',
+          brand: p.brand ?? null,
+          category: (p as any).category ?? null,
+          availability_status: p.availability_status,
+          release_date: p.release_date ?? null,
+          is_active: p.is_active,
+          search_terms: (p as any).search_terms ?? null,
+        }))
+      return Promise.resolve({ data: products, error: null })
+    }
+
+    if (name === 'admin_list_stores') {
+      const includeInactive = Boolean(args?.p_include_inactive)
+      const stores = store.stores
+        .filter(s => includeInactive || s.is_active)
+        .slice(0, Math.min(Number(args?.p_limit) || 50, 200))
+        .map(s => ({
+          id: s.id,
+          name: s.store_name,
+          slug: s.slug,
+          retailer_name: s.retailer_name,
+          address_line1: s.address_line1 ?? null,
+          city: s.city ?? null,
+          state: s.state ?? null,
+          zip_code: s.zip_code ?? null,
+          is_active: s.is_active,
+        }))
+      return Promise.resolve({ data: stores, error: null })
     }
 
     if (name === 'get_my_profile') {

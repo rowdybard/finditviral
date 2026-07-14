@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(30);
+select plan(33);
 
 -- ============================================================================
 -- Test fixtures: create two test users, profiles, username claims, app_owners
@@ -511,6 +511,34 @@ select results_eq(
   $$ select count(*) > 0 from public.search_products('UniqueBrandXYZ', 12) $$,
   $$ select true $$,
   'search_products finds products by brand'
+);
+
+-- ============================================================================
+-- 20b. Product search finds by category (behavioral)
+-- ============================================================================
+insert into public.products (trend_id, name, slug, category, is_active, verification_method, verified_at)
+select t.id, 'CategorySearch Test Product', 'categorysearch-test-product', 'UniqueCategoryABC', true, 'owner_verified', now()
+from public.trends t where t.slug = 'community-verified'
+on conflict (slug) do update set category = 'UniqueCategoryABC', is_active = true;
+
+select results_eq(
+  $$ select count(*) > 0 from public.search_products('UniqueCategoryABC', 12) $$,
+  $$ select true $$,
+  'search_products finds products by category'
+);
+
+-- ============================================================================
+-- 20c. Product search finds by search_terms (behavioral)
+-- ============================================================================
+insert into public.products (trend_id, name, slug, search_terms, is_active, verification_method, verified_at)
+select t.id, 'SearchTerms Test Product', 'searchterms-test-product', 'rarekeywordxyz collectible', true, 'owner_verified', now()
+from public.trends t where t.slug = 'community-verified'
+on conflict (slug) do update set search_terms = 'rarekeywordxyz collectible', is_active = true;
+
+select results_eq(
+  $$ select count(*) > 0 from public.search_products('rarekeywordxyz', 12) $$,
+  $$ select true $$,
+  'search_products finds products by search_terms'
 );
 
 -- ============================================================================

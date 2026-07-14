@@ -1,4 +1,4 @@
-import { Check, ClockCounterClockwise, EyeSlash, LinkSimple, ShieldCheck, X } from '@phosphor-icons/react'
+import { ArrowsCounterClockwise, Check, ClockCounterClockwise, EyeSlash, LinkSimple, PencilSimple, ShieldCheck, X } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
@@ -6,22 +6,30 @@ import { mapContributionError } from '../lib/errorMap'
 import {
   adminCreateProduct,
   adminCreateStore,
+  adminDisableProduct,
+  adminDisableStore,
   adminListInterestEvents,
   adminListMemberRestrictions,
   adminListModerationHistory,
+  adminListProducts,
   adminListProductSuggestions,
   adminListRecentContributions,
+  adminListStores,
   adminListStoreSuggestions,
   adminResolveProductSuggestion,
   adminResolveStoreSuggestion,
   adminSearchMembers,
   adminSetContributionModeration,
   adminSetMemberRestriction,
+  adminUpdateProduct,
+  adminUpdateStore,
   isAppOwner,
 } from '../lib/launchApi'
 import type {
   AdminContribution,
   AdminMemberSearchResult,
+  AdminProduct,
+  AdminStore,
   CatalogSuggestion,
   InterestEvent,
   MemberRestriction,
@@ -163,6 +171,132 @@ function SuggestionReviewCard({
   )
 }
 
+function ProductCatalogRow({
+  product,
+  editing,
+  actionLoading,
+  onEdit,
+  onSave,
+  onDisable,
+  onRestore,
+}: {
+  product: AdminProduct
+  editing: boolean
+  actionLoading: boolean
+  onEdit: () => void
+  onSave: (updates: { name: string; availabilityStatus: string; category: string; searchTerms: string }) => void
+  onDisable: () => void
+  onRestore: () => void
+}) {
+  const [name, setName] = useState(product.name)
+  const [availabilityStatus, setAvailabilityStatus] = useState(product.availability_status)
+  const [category, setCategory] = useState(product.category ?? '')
+  const [searchTerms, setSearchTerms] = useState(product.search_terms ?? '')
+
+  return (
+    <article className="card border border-gray-200">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate font-bold text-gray-900">{product.name}</h3>
+            {!product.is_active && <span className="badge bg-red-100 text-red-800">disabled</span>}
+          </div>
+          <p className="mt-0.5 text-sm text-gray-600">
+            {product.trend_name}{product.brand ? ` · ${product.brand}` : ''} · {product.availability_status}
+            {product.category ? ` · ${product.category}` : ''}
+          </p>
+        </div>
+        {!editing && (
+          <div className="flex shrink-0 gap-2">
+            <button type="button" className="btn-ghost" onClick={onEdit} disabled={actionLoading} title="Edit"><PencilSimple size={17} aria-hidden="true" /></button>
+            {product.is_active
+              ? <button type="button" className="btn-ghost text-red-700" onClick={onDisable} disabled={actionLoading} title="Disable"><EyeSlash size={17} aria-hidden="true" /></button>
+              : <button type="button" className="btn-ghost text-brand-700" onClick={onRestore} disabled={actionLoading} title="Restore"><ArrowsCounterClockwise size={17} aria-hidden="true" /></button>}
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-stone-50 p-3">
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" maxLength={160} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select className="input" value={availabilityStatus} onChange={(e) => setAvailabilityStatus(e.target.value)}>
+              <option value="available">Available now</option>
+              <option value="backorder">Backorder</option>
+              <option value="preorder">Preorder</option>
+              <option value="announced">Announced</option>
+              <option value="limited">Limited release</option>
+              <option value="retired">Retired</option>
+            </select>
+            <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" maxLength={120} />
+          </div>
+          <input className="input" value={searchTerms} onChange={(e) => setSearchTerms(e.target.value)} placeholder="Search keywords (space-separated)" maxLength={500} />
+          <div className="flex gap-2">
+            <button type="button" className="btn-primary" onClick={() => onSave({ name, availabilityStatus, category, searchTerms })} disabled={actionLoading}><Check size={17} aria-hidden="true" /> Save</button>
+            <button type="button" className="btn-ghost" onClick={onEdit} disabled={actionLoading}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function StoreCatalogRow({
+  store,
+  editing,
+  actionLoading,
+  onEdit,
+  onSave,
+  onDisable,
+  onRestore,
+}: {
+  store: AdminStore
+  editing: boolean
+  actionLoading: boolean
+  onEdit: () => void
+  onSave: (updates: { name: string; addressLine1: string }) => void
+  onDisable: () => void
+  onRestore: () => void
+}) {
+  const [name, setName] = useState(store.name)
+  const [addressLine1, setAddressLine1] = useState(store.address_line1 ?? '')
+
+  return (
+    <article className="card border border-gray-200">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate font-bold text-gray-900">{store.name}</h3>
+            {!store.is_active && <span className="badge bg-red-100 text-red-800">disabled</span>}
+          </div>
+          <p className="mt-0.5 text-sm text-gray-600">
+            {store.retailer_name}{store.city ? ` · ${store.city}, ${store.state ?? ''}` : ''}{store.zip_code ? ` ${store.zip_code}` : ''}
+          </p>
+        </div>
+        {!editing && (
+          <div className="flex shrink-0 gap-2">
+            <button type="button" className="btn-ghost" onClick={onEdit} disabled={actionLoading} title="Edit"><PencilSimple size={17} aria-hidden="true" /></button>
+            {store.is_active
+              ? <button type="button" className="btn-ghost text-red-700" onClick={onDisable} disabled={actionLoading} title="Disable"><EyeSlash size={17} aria-hidden="true" /></button>
+              : <button type="button" className="btn-ghost text-brand-700" onClick={onRestore} disabled={actionLoading} title="Restore"><ArrowsCounterClockwise size={17} aria-hidden="true" /></button>}
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-stone-50 p-3">
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Store name" maxLength={160} />
+          <input className="input" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Street address" maxLength={200} />
+          <div className="flex gap-2">
+            <button type="button" className="btn-primary" onClick={() => onSave({ name, addressLine1 })} disabled={actionLoading}><Check size={17} aria-hidden="true" /> Save</button>
+            <button type="button" className="btn-ghost" onClick={onEdit} disabled={actionLoading}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
+
 export default function Admin() {
   const [owner, setOwner] = useState<boolean | null>(null)
   const [tab, setTab] = useState<Tab>('suggestions')
@@ -190,8 +324,16 @@ export default function Admin() {
   const [newProductName, setNewProductName] = useState('')
   const [newProductTrend, setNewProductTrend] = useState('')
   const [newProductAvailability, setNewProductAvailability] = useState('available')
+  const [newProductBrand, setNewProductBrand] = useState('')
+  const [newProductCategory, setNewProductCategory] = useState('')
+  const [newProductSearchTerms, setNewProductSearchTerms] = useState('')
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogProducts, setCatalogProducts] = useState<AdminProduct[]>([])
+  const [catalogStores, setCatalogStores] = useState<AdminStore[]>([])
+  const [editingProductId, setEditingProductId] = useState<string | null>(null)
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
+  const [catalogActionId, setCatalogActionId] = useState<string | null>(null)
 
   async function loadAdminData() {
     setLoading(true)
@@ -202,6 +344,8 @@ export default function Admin() {
       adminListInterestEvents(),
       adminListMemberRestrictions(),
       adminListModerationHistory(),
+      adminListProducts(true),
+      adminListStores(true),
     ])
     setProducts(results[0].data ?? [])
     setStores(results[1].data ?? [])
@@ -209,6 +353,8 @@ export default function Admin() {
     setInterests(results[3].data ?? [])
     setRestrictions(results[4].data ?? [])
     setHistory(results[5].data ?? [])
+    setCatalogProducts(results[6].data ?? [])
+    setCatalogStores(results[7].data ?? [])
     setError(results.some((result) => result.error) ? 'Some owner data could not be loaded.' : null)
     setLoading(false)
   }
@@ -285,6 +431,7 @@ export default function Admin() {
     setCatalogLoading(false)
     if (result.error) { setCatalogError(mapContributionError(result.error)); return }
     setNewStoreRetailer(''); setNewStoreName(''); setNewStoreAddress(''); setNewStoreCity(''); setNewStoreState(''); setNewStoreZip('')
+    await loadAdminData()
   }
 
   async function handleCreateProduct(event: React.FormEvent) {
@@ -301,11 +448,106 @@ export default function Admin() {
       availabilityStatus: newProductAvailability,
       releaseDate: null,
       sourceUrl: null,
-      brand: null,
+      brand: newProductBrand.trim() || null,
+      category: newProductCategory.trim() || null,
+      searchTerms: newProductSearchTerms.trim() || null,
     })
     setCatalogLoading(false)
     if (result.error) { setCatalogError(mapContributionError(result.error)); return }
-    setNewProductName(''); setNewProductTrend('')
+    setNewProductName(''); setNewProductTrend(''); setNewProductBrand(''); setNewProductCategory(''); setNewProductSearchTerms('')
+    await loadAdminData()
+  }
+
+  async function handleUpdateProduct(product: AdminProduct, updates: {
+    name: string
+    availabilityStatus: string
+    category: string
+    searchTerms: string
+  }) {
+    setCatalogActionId(product.id)
+    setCatalogError(null)
+    const result = await adminUpdateProduct({
+      productId: product.id,
+      name: updates.name.trim() || null,
+      availabilityStatus: updates.availabilityStatus || null,
+      releaseDate: null,
+      isActive: null,
+      category: updates.category !== product.category ? updates.category : null,
+      searchTerms: updates.searchTerms !== product.search_terms ? updates.searchTerms : null,
+    })
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    setEditingProductId(null)
+    await loadAdminData()
+  }
+
+  async function handleDisableProduct(productId: string) {
+    setCatalogActionId(productId)
+    setCatalogError(null)
+    const result = await adminDisableProduct(productId)
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    await loadAdminData()
+  }
+
+  async function handleRestoreProduct(productId: string) {
+    setCatalogActionId(productId)
+    setCatalogError(null)
+    const result = await adminUpdateProduct({
+      productId,
+      name: null,
+      availabilityStatus: null,
+      releaseDate: null,
+      isActive: true,
+      category: null,
+      searchTerms: null,
+    })
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    await loadAdminData()
+  }
+
+  async function handleUpdateStore(store: AdminStore, updates: {
+    name: string
+    addressLine1: string
+  }) {
+    setCatalogActionId(store.id)
+    setCatalogError(null)
+    const result = await adminUpdateStore({
+      storeId: store.id,
+      storeName: updates.name.trim() || null,
+      addressLine1: updates.addressLine1.trim() || null,
+      sourceUrl: null,
+      isActive: null,
+    })
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    setEditingStoreId(null)
+    await loadAdminData()
+  }
+
+  async function handleDisableStore(storeId: string) {
+    setCatalogActionId(storeId)
+    setCatalogError(null)
+    const result = await adminDisableStore(storeId)
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    await loadAdminData()
+  }
+
+  async function handleRestoreStore(storeId: string) {
+    setCatalogActionId(storeId)
+    setCatalogError(null)
+    const result = await adminUpdateStore({
+      storeId,
+      storeName: null,
+      addressLine1: null,
+      sourceUrl: null,
+      isActive: true,
+    })
+    setCatalogActionId(null)
+    if (result.error) { setCatalogError(mapContributionError(result.error)); return }
+    await loadAdminData()
   }
 
   if (owner === false) return <Navigate to="/home" replace />
@@ -410,6 +652,24 @@ export default function Admin() {
             {catalogError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{catalogError}</p>}
             <button type="submit" className="btn-primary" disabled={catalogLoading}>{catalogLoading ? 'Creating…' : 'Create store'}</button>
           </form>
+
+          {catalogStores.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="font-bold text-gray-900">Manage stores ({catalogStores.length})</h2>
+              {catalogStores.map((store) => (
+                <StoreCatalogRow
+                  key={store.id}
+                  store={store}
+                  editing={editingStoreId === store.id}
+                  actionLoading={catalogActionId === store.id}
+                  onEdit={() => setEditingStoreId(editingStoreId === store.id ? null : store.id)}
+                  onSave={(updates) => void handleUpdateStore(store, updates)}
+                  onDisable={() => void handleDisableStore(store.id)}
+                  onRestore={() => void handleRestoreStore(store.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -419,16 +679,39 @@ export default function Admin() {
             <h2 className="font-bold text-gray-900">Add a product</h2>
             <input className="input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} placeholder="Product name" required />
             <input className="input" value={newProductTrend} onChange={(event) => setNewProductTrend(event.target.value)} placeholder="Trend UUID" required />
-            <select className="input" value={newProductAvailability} onChange={(event) => setNewProductAvailability(event.target.value)}>
-              <option value="available">Available now</option>
-              <option value="backorder">Backorder</option>
-              <option value="preorder">Preorder</option>
-              <option value="announced">Announced</option>
-              <option value="limited">Limited release</option>
-            </select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select className="input" value={newProductAvailability} onChange={(event) => setNewProductAvailability(event.target.value)}>
+                <option value="available">Available now</option>
+                <option value="backorder">Backorder</option>
+                <option value="preorder">Preorder</option>
+                <option value="announced">Announced</option>
+                <option value="limited">Limited release</option>
+              </select>
+              <input className="input" value={newProductBrand} onChange={(event) => setNewProductBrand(event.target.value)} placeholder="Brand (optional)" maxLength={120} />
+            </div>
+            <input className="input" value={newProductCategory} onChange={(event) => setNewProductCategory(event.target.value)} placeholder="Category (optional, e.g. Squishy)" maxLength={120} />
+            <input className="input" value={newProductSearchTerms} onChange={(event) => setNewProductSearchTerms(event.target.value)} placeholder="Search keywords (optional, space-separated)" maxLength={500} />
             {catalogError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{catalogError}</p>}
             <button type="submit" className="btn-primary" disabled={catalogLoading}>{catalogLoading ? 'Creating…' : 'Create product'}</button>
           </form>
+
+          {catalogProducts.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="font-bold text-gray-900">Manage products ({catalogProducts.length})</h2>
+              {catalogProducts.map((product) => (
+                <ProductCatalogRow
+                  key={product.id}
+                  product={product}
+                  editing={editingProductId === product.id}
+                  actionLoading={catalogActionId === product.id}
+                  onEdit={() => setEditingProductId(editingProductId === product.id ? null : product.id)}
+                  onSave={(updates) => void handleUpdateProduct(product, updates)}
+                  onDisable={() => void handleDisableProduct(product.id)}
+                  onRestore={() => void handleRestoreProduct(product.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
