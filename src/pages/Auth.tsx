@@ -8,7 +8,7 @@ import { mapAuthError } from '../lib/errorMap'
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
-const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
 const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
 
 type TurnstileWidget = {
@@ -52,6 +52,7 @@ export default function Auth() {
   }
 
   useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return
     let cancelled = false
 
     function loadTurnstile() {
@@ -299,7 +300,11 @@ export default function Auth() {
                 )}
 
                 <div>
-                  <div ref={turnstileContainerRef} className="cf-turnstile" />
+                  {TURNSTILE_SITE_KEY ? (
+                    <div ref={turnstileContainerRef} className="cf-turnstile" />
+                  ) : (
+                    <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
+                  )}
                   {captchaExpired && (
                     <p className="mt-1 text-xs text-stone-500">CAPTCHA expired. Please verify again.</p>
                   )}
@@ -311,7 +316,7 @@ export default function Auth() {
 
                 <button
                   type="submit"
-                  disabled={loading || !captchaToken}
+                  disabled={loading || !captchaToken || !TURNSTILE_SITE_KEY}
                   className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}

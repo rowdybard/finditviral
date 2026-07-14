@@ -624,4 +624,32 @@ describe('sitemap generation', () => {
 
     expect(env.ASSETS.fetch).toHaveBeenCalledWith(request)
   })
+
+  it('filters out invalid sitemap paths', async () => {
+    const urls = [
+      { url_path: '/', lastmod: '2026-07-14', changefreq: 'weekly', priority: 1.0 },
+      { url_path: '//example', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/../admin', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/auth', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/products/item?unexpected=query', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/stores/item#fragment', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/products/valid-product', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.8 },
+    ]
+    const fetchImpl = sitemapFetchMock(urls)
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const request = new Request('https://finditviral.com/sitemap.xml', { method: 'GET' })
+    const response = await worker.fetch(request, sitemapEnv())
+
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('https://finditviral.com/')
+    expect(body).toContain('https://finditviral.com/products/valid-product')
+    expect(body).not.toContain('//example')
+    expect(body).not.toContain('/../admin')
+    expect(body).not.toContain('/auth')
+    expect(body).not.toContain('?unexpected=query')
+    expect(body).not.toContain('#fragment')
+    vi.unstubAllGlobals()
+  })
 })

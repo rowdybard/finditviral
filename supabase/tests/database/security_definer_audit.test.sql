@@ -95,8 +95,10 @@ select ok(
   'admin_list_stores calls assert_app_owner'
 );
 
--- 8. No SECURITY DEFINER function granted to authenticated lacks authorization
--- (search_products and search_stores are intentionally public, granted to anon+authenticated)
+-- 8. No SECURITY DEFINER function granted to authenticated/anon lacks authorization.
+-- Uses effective ACL (acldefault when proacl is null) to catch default-privileged functions.
+-- Classifies safe public reads by: STABLE volatility + no mutation keywords in body.
+-- Mutating or volatile functions must call assert_app_owner or assert_permanent_member.
 select ok(
   not exists (
     select 1
@@ -104,24 +106,22 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.prosecdef = true
-      and p.proname not in (
-        'search_products', 'search_stores',
-        'get_store_detail', 'get_product_detail',
-        'get_stores', 'get_products',
-        'handle_new_user', 'is_username_available',
-        'is_app_owner'
-      )
-      and pg_get_functiondef(p.oid) !~ 'assert_app_owner'
-      and pg_get_functiondef(p.oid) !~ 'assert_permanent_member'
       and exists (
         select 1
-        from aclexplode(p.proacl) acl
+        from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
         join pg_authid a on a.oid = acl.grantee
         where a.rolname in ('authenticated', 'anon')
           and acl.privilege_type = 'X'
       )
+      and pg_get_functiondef(p.oid) !~ 'assert_app_owner'
+      and pg_get_functiondef(p.oid) !~ 'assert_permanent_member'
+      -- A function is only exempt if it is STABLE (read-only) AND contains no mutation keywords
+      and not (
+        p.provolatile = 's'
+        and pg_get_functiondef(p.oid) !~* '\b(insert|update|delete)\b'
+      )
   ),
-  'No SECURITY DEFINER function granted to authenticated/anon lacks authorization (excluding safe public reads)'
+  'No SECURITY DEFINER function granted to authenticated/anon lacks authorization (effective ACL, property-based safe-read classification)'
 );
 
 select * from finish();

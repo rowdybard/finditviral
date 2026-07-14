@@ -1,13 +1,14 @@
 -- Tests for public.get_sitemap_urls RPC.
 -- Verifies active products/stores are included, inactive excluded,
--- private routes excluded, and max URL count enforced.
+-- inactive parent trends/retailers excluded, private routes excluded,
+-- and max URL count enforced.
 
 begin;
 
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(9);
+select plan(11);
 
 -- 1. Function exists and is executable
 select has_function('public', 'get_sitemap_urls', 'get_sitemap_urls function exists');
@@ -79,6 +80,74 @@ select ok(
     select 1 from public.get_sitemap_urls() where url_path !~ '^/'
   ),
   'all sitemap URL paths start with /'
+);
+
+-- ============================================================================
+-- Fixtures: inactive parent trend with active product, inactive retailer with active store
+-- ============================================================================
+do $$
+declare
+  v_inactive_trend_id uuid;
+  v_inactive_retailer_id uuid;
+  v_product_id uuid;
+  v_store_id uuid;
+begin
+  set local session_replication_role = 'replica';
+
+  -- Inactive trend
+  insert into public.trends (name, slug, description, is_active)
+  values ('Inactive Test Trend', 'inactive-test-trend', 'Test trend for sitemap exclusion', false)
+  on conflict (slug) do update set is_active = false
+  returning id into v_inactive_trend_id;
+
+  -- Active product under inactive trend
+  insert into public.products (trend_id, name, slug, is_active, availability_status, verified_at, verification_method)
+  values (v_inactive_trend_id, 'Inactive Trend Product', 'inactive-trend-product', true,
+    'available', now(), 'owner_verified')
+  on conflict (slug) do update set is_active = true, trend_id = v_inactive_trend_id,
+    availability_status = 'available', verified_at = now(), verification_method = 'owner_verified'
+  returning id into v_product_id;
+
+  -- Inactive retailer
+  insert into public.retailers (name, slug, is_active)
+  values ('Inactive Test Retailer', 'inactive-test-retailer', false)
+  on conflict (slug) do update set is_active = false
+  returning id into v_inactive_retailer_id;
+
+  -- Active store under inactive retailer
+  insert into public.stores (retailer_id, name, slug, address_line1, city, state, zip_code, is_active, verification_method, verified_at)
+  values (v_inactive_retailer_id, 'Inactive Retailer Store', 'inactive-retailer-store',
+    '123 Test St', 'Lansing', 'MI', '48910', true, 'owner_verified', now())
+  on conflict (slug) do update set is_active = true, retailer_id = v_inactive_retailer_id,
+    verification_method = 'owner_verified', verified_at = now()
+  returning id into v_store_id;
+
+  set local session_replication_role = 'origin';
+end;
+$$;
+
+-- 10. Products under inactive trends are excluded from sitemap
+select ok(
+  not exists (
+    select 1
+    from public.get_sitemap_urls() su
+    join public.products p on '/products/' || p.slug = su.url_path
+    join public.trends t on t.id = p.trend_id
+    where not t.is_active
+  ),
+  'products under inactive trends are excluded from sitemap'
+);
+
+-- 11. Stores under inactive retailers are excluded from sitemap
+select ok(
+  not exists (
+    select 1
+    from public.get_sitemap_urls() su
+    join public.stores s on '/stores/' || s.slug = su.url_path
+    join public.retailers r on r.id = s.retailer_id
+    where not r.is_active
+  ),
+  'stores under inactive retailers are excluded from sitemap'
 );
 
 select * from finish();

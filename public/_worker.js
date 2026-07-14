@@ -606,6 +606,20 @@ function escapeXml(text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
 
+const SITEMAP_PATH_WHITELIST = [
+  /^\/$/,
+  /^\/stores\/?$/,
+  /^\/privacy\/?$/,
+  /^\/products\/[^/]+\/?$/,
+  /^\/stores\/[^/]+\/?$/,
+]
+
+function isValidSitemapPath(path) {
+  if (!path || !path.startsWith('/')) return false
+  if (path.includes('//') || path.includes('..') || path.includes('?') || path.includes('#')) return false
+  return SITEMAP_PATH_WHITELIST.some(re => re.test(path))
+}
+
 async function handleSitemap(request, env) {
   const baseUrl = `https://${CANONICAL_HOST}`
 
@@ -647,7 +661,7 @@ async function handleSitemap(request, env) {
   ]
   for (const entry of urls) {
     const rawPath = entry.url_path || ''
-    if (!rawPath.startsWith('/')) continue
+    if (!isValidSitemapPath(rawPath)) continue
     const loc = `${baseUrl}${escapeXml(rawPath)}`
     const rawLastmod = entry.lastmod || new Date().toISOString().slice(0, 10)
     const lastmod = /^\d{4}-\d{2}-\d{2}$/.test(rawLastmod) ? rawLastmod : new Date().toISOString().slice(0, 10)
