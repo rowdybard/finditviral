@@ -197,6 +197,8 @@ describe('handleEarlyAccess', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'verification_failed' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('siteverify')
   })
 })
 

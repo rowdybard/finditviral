@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions, private;
 
-select plan(33);
+select plan(32);
 
 -- ============================================================================
 -- Test fixtures: create two test users, profiles, username claims, app_owners
@@ -470,13 +470,10 @@ select lives_ok(
 
 -- 18. Admin product creation with brand (behavioral)
 select lives_ok(
-  $$ do $$
-  declare v_trend_id uuid;
-  begin
-    select id into v_trend_id from public.trends where slug = 'community-verified';
-    perform public.admin_create_product(v_trend_id, 'Test Product Alpha', 'available', null, null, 'TestBrand');
-  end;
-  $$ $$,
+  $$ select public.admin_create_product(
+    (select id from public.trends where slug = 'community-verified'),
+    'Test Product Alpha', 'available', null, null, 'TestBrand', null, null
+  ) $$,
   'admin_create_product succeeds with brand column'
 );
 
@@ -502,10 +499,10 @@ select throws_ok(
 -- ============================================================================
 -- 20. Product search finds by brand (behavioral)
 -- ============================================================================
-insert into public.products (trend_id, name, slug, brand, is_active, verification_method, verified_at)
-select t.id, 'BrandSearch Test Product', 'brandsearch-test-product', 'UniqueBrandXYZ', true, 'owner_verified', now()
+insert into public.products (trend_id, name, slug, brand, is_active, availability_status, verification_method, verified_at)
+select t.id, 'BrandSearch Test Product', 'brandsearch-test-product', 'UniqueBrandXYZ', true, 'available', 'owner_verified', now()
 from public.trends t where t.slug = 'community-verified'
-on conflict (slug) do update set brand = 'UniqueBrandXYZ', is_active = true;
+on conflict (slug) do update set brand = 'UniqueBrandXYZ', is_active = true, availability_status = 'available';
 
 select results_eq(
   $$ select count(*) > 0 from public.search_products('UniqueBrandXYZ', 12) $$,
@@ -516,10 +513,10 @@ select results_eq(
 -- ============================================================================
 -- 20b. Product search finds by category (behavioral)
 -- ============================================================================
-insert into public.products (trend_id, name, slug, category, is_active, verification_method, verified_at)
-select t.id, 'CategorySearch Test Product', 'categorysearch-test-product', 'UniqueCategoryABC', true, 'owner_verified', now()
+insert into public.products (trend_id, name, slug, category, is_active, availability_status, verification_method, verified_at)
+select t.id, 'CategorySearch Test Product', 'categorysearch-test-product', 'UniqueCategoryABC', true, 'available', 'owner_verified', now()
 from public.trends t where t.slug = 'community-verified'
-on conflict (slug) do update set category = 'UniqueCategoryABC', is_active = true;
+on conflict (slug) do update set category = 'UniqueCategoryABC', is_active = true, availability_status = 'available';
 
 select results_eq(
   $$ select count(*) > 0 from public.search_products('UniqueCategoryABC', 12) $$,
@@ -530,10 +527,10 @@ select results_eq(
 -- ============================================================================
 -- 20c. Product search finds by search_terms (behavioral)
 -- ============================================================================
-insert into public.products (trend_id, name, slug, search_terms, is_active, verification_method, verified_at)
-select t.id, 'SearchTerms Test Product', 'searchterms-test-product', 'rarekeywordxyz collectible', true, 'owner_verified', now()
+insert into public.products (trend_id, name, slug, search_terms, is_active, availability_status, verification_method, verified_at)
+select t.id, 'SearchTerms Test Product', 'searchterms-test-product', 'rarekeywordxyz collectible', true, 'available', 'owner_verified', now()
 from public.trends t where t.slug = 'community-verified'
-on conflict (slug) do update set search_terms = 'rarekeywordxyz collectible', is_active = true;
+on conflict (slug) do update set search_terms = 'rarekeywordxyz collectible', is_active = true, availability_status = 'available';
 
 select results_eq(
   $$ select count(*) > 0 from public.search_products('rarekeywordxyz', 12) $$,

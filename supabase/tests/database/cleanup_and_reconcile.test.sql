@@ -50,8 +50,8 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'submit_bounty_claim'
-      and pg_get_functiondef(p.oid) ~ "interval '5 minutes'"
-      and pg_get_functiondef(p.oid) !~ "interval '15 minutes'"
+      and pg_get_functiondef(p.oid) ~ 'interval ''5 minutes'''
+      and pg_get_functiondef(p.oid) !~ 'interval ''15 minutes'''
   ),
   'submit_bounty_claim uses 5-minute future check (not 15)'
 );

@@ -118,7 +118,7 @@ select lives_ok(
   $$select private.validate_draft_payload(
     'bounty',
     jsonb_build_object(
-      'version', 1, 'product', null, 'scope', 'area', 'store', null,
+      'version', 1, 'product', null, 'scope', 'region', 'store', null,
       'zipCode', '48910', 'radiusMiles', '50', 'rewardAmount', '20.00',
       'deadline', '2026-07-20T12:00', 'requirements', ''
     )

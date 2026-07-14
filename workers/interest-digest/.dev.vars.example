@@ -1,4 +1,4 @@
 # Copy to .dev.vars for local development only. Never commit real values.
 SUPABASE_SECRET_KEY=sb_secret_REPLACE_WITH_DIGEST_WORKER_KEY
-DIGEST_TO_EMAIL=verified-owner@example.com
+DIGEST_TO_EMAIL=owner@finditviral.com
 

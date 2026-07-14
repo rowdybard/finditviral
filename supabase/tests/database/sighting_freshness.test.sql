@@ -41,7 +41,7 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'list_public_sightings'
-      and pg_get_functiondef(p.oid) ~ "interval '72 hours'"
+      and pg_get_functiondef(p.oid) ~ 'interval ''72 hours'''
   ),
   'list_public_sightings filters at 72 hours'
 );
