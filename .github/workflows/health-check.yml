@@ -30,3 +30,10 @@ jobs:
         run: npm run smoke:web
         env:
           LAUNCH_BASE_URL: ${{ env.LAUNCH_BASE_URL }}
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Health Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** $LAUNCH_BASE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

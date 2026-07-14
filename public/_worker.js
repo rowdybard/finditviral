@@ -618,14 +618,10 @@ async function handleSitemap(request, env) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
     const response = await fetch(
-      `${env.SUPABASE_URL}/rest/v1/rpc/get_sitemap_urls`,
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/get_sitemap_urls`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${env.SUPABASE_SECRET_KEY}`,
-          'apikey': env.SUPABASE_SECRET_KEY,
-        },
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
         body: '{}',
         signal: controller.signal,
       },
@@ -650,14 +646,18 @@ async function handleSitemap(request, env) {
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
   ]
   for (const entry of urls) {
-    const loc = `${baseUrl}${escapeXml(entry.url_path || '')}`
-    const lastmod = entry.lastmod || new Date().toISOString().slice(0, 10)
+    const rawPath = entry.url_path || ''
+    if (!rawPath.startsWith('/')) continue
+    const loc = `${baseUrl}${escapeXml(rawPath)}`
+    const rawLastmod = entry.lastmod || new Date().toISOString().slice(0, 10)
+    const lastmod = /^\d{4}-\d{2}-\d{2}$/.test(rawLastmod) ? rawLastmod : new Date().toISOString().slice(0, 10)
     const changefreq = escapeXml(entry.changefreq || 'weekly')
-    const priority = String(entry.priority ?? 0.5)
+    const rawPriority = Number(entry.priority)
+    const priority = String(isFinite(rawPriority) ? Math.max(0, Math.min(1, rawPriority)) : 0.5)
     xmlParts.push(
       '  <url>',
       `    <loc>${loc}</loc>`,
-      `    <lastmod>${lastmod}</lastmod>`,
+      `    <lastmod>${escapeXml(lastmod)}</lastmod>`,
       `    <changefreq>${changefreq}</changefreq>`,
       `    <priority>${priority}</priority>`,
       '  </url>',

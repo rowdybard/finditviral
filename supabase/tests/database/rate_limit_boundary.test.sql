@@ -18,6 +18,7 @@ do $$
 declare
   v_owner_id uuid := '00000000-0000-4000-8000-000000000001';
   v_member_id uuid := '00000000-0000-4000-8000-000000000002';
+  v_finder_id uuid := '00000000-0000-4000-8000-000000000003';
 begin
   set local session_replication_role = 'replica';
 
@@ -35,6 +36,11 @@ begin
   update public.profiles set username = 'ratemember' where id = v_member_id;
   update private.username_claims set claimed_username = 'ratemember', normalized_username = 'ratemember' where user_id = v_member_id;
 
+  insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+  values (v_finder_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+          'finder@test.local', 'test', now(), now(), now())
+  on conflict (id) do nothing;
+
   insert into public.profiles (id, username, onboarding_completed, karma, created_at)
   values (v_owner_id, 'rateowner', true, 100, now())
   on conflict (id) do update set onboarding_completed = true, username = 'rateowner';
@@ -43,6 +49,10 @@ begin
   values (v_member_id, 'ratemember', true, 50, now())
   on conflict (id) do update set onboarding_completed = true, username = 'ratemember';
 
+  insert into public.profiles (id, username, onboarding_completed, karma, created_at)
+  values (v_finder_id, 'ratefinder', true, 50, now())
+  on conflict (id) do update set onboarding_completed = true, username = 'ratefinder';
+
   insert into private.username_claims (user_id, claimed_username, normalized_username, protection_name, is_legacy)
   values (v_owner_id, 'rateowner', 'rateowner', 'rateowner', false)
   on conflict (user_id) do update set claimed_username = 'rateowner', normalized_username = 'rateowner', protection_name = 'rateowner', is_legacy = false;
@@ -50,6 +60,10 @@ begin
   insert into private.username_claims (user_id, claimed_username, normalized_username, protection_name, is_legacy)
   values (v_member_id, 'ratemember', 'ratemember', 'ratemember', false)
   on conflict (user_id) do update set claimed_username = 'ratemember', normalized_username = 'ratemember', protection_name = 'ratemember', is_legacy = false;
+
+  insert into private.username_claims (user_id, claimed_username, normalized_username, protection_name, is_legacy)
+  values (v_finder_id, 'ratefinder', 'ratefinder', 'ratefinder', false)
+  on conflict (user_id) do update set claimed_username = 'ratefinder', normalized_username = 'ratefinder', protection_name = 'ratefinder', is_legacy = false;
 
   insert into private.app_owners (user_id)
   values (v_owner_id)
@@ -75,6 +89,16 @@ returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
     '{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated","is_anonymous":false}',
+    true);
+end;
+$$;
+
+-- Helper: set JWT claims for finder
+create or replace function pg_temp.set_finder_ctx()
+returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-8000-000000000003","role":"authenticated","is_anonymous":false}',
     true);
 end;
 $$;
@@ -292,7 +316,7 @@ select throws_ok(
 );
 
 -- ============================================================================
--- 9. Duplicate bounty claim by same user is rejected
+-- 9. Duplicate bounty claim by same finder is rejected
 -- ============================================================================
 select throws_ok(
   $test$
@@ -302,11 +326,9 @@ select throws_ok(
     v_store_id uuid := pg_temp.get_test_store_id();
     v_member_id uuid := '00000000-0000-4000-8000-000000000002';
     v_bounty_id uuid;
-    v_sighting_id uuid;
   begin
+    -- Member creates a bounty (owner)
     perform pg_temp.set_member_ctx();
-
-    -- Create a bounty owned by member
     insert into public.bounties (user_id, product_id, reward_amount, reward_cents,
       zip_code, radius_miles, notes, requirements, deadline, status, moderation_status,
       scope_type)
@@ -314,24 +336,18 @@ select throws_ok(
       'test', 'test', now() + interval '7 days', 'open', 'approved', 'region')
     returning id into v_bounty_id;
 
-    -- Create a sighting to use for the claim
-    insert into public.sightings (user_id, product_id, store_id, store_name, city, state, zip_code,
-      stock_level, availability, seen_at, is_public, moderation_status)
-    values (v_member_id, v_product_id, v_store_id, 'Test Store', 'Lansing', 'MI', '48910',
-      'in_stock', 'in_stock', now() - interval '5 minutes', false, 'approved')
-    returning id into v_sighting_id;
+    -- Finder submits first claim (should succeed)
+    perform pg_temp.set_finder_ctx();
+    perform public.submit_bounty_claim(v_bounty_id, v_store_id, now() - interval '1 minute', 'in_stock');
 
-    -- First claim should succeed
-    perform public.submit_bounty_claim(v_bounty_id, v_sighting_id);
-
-    -- Second claim on same bounty by same user should fail (duplicate)
-    perform public.submit_bounty_claim(v_bounty_id, v_sighting_id);
+    -- Finder submits second claim on same bounty (should fail: duplicate)
+    perform public.submit_bounty_claim(v_bounty_id, v_store_id, now() - interval '1 minute', 'in_stock');
   end;
   $body$;
   $test$,
   '23505',
-  'Duplicate bounty claim should be rejected with unique constraint violation',
-  'Duplicate bounty claim by same user is rejected'
+  'duplicate key value violates unique constraint "bounty_claims_bounty_id_finder_id_key"',
+  'Duplicate bounty claim by same finder is rejected'
 );
 
 select * from finish();

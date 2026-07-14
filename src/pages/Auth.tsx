@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/analytics'
 import { mapAuthError } from '../lib/errorMap'
 
@@ -20,6 +21,7 @@ type TurnstileWidget = {
     size?: 'normal' | 'compact'
   }) => string
   remove: (widgetId: string) => void
+  reset: (widgetId: string) => void
 }
 
 export default function Auth() {
@@ -35,8 +37,19 @@ export default function Auth() {
   const [confirmationPending, setConfirmationPending] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaExpired, setCaptchaExpired] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendSent, setResendSent] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetId = useRef<string | null>(null)
+
+  function resetTurnstile() {
+    const ts = (window as unknown as { turnstile?: TurnstileWidget }).turnstile
+    if (turnstileWidgetId.current && ts) {
+      ts.reset(turnstileWidgetId.current)
+    }
+    setCaptchaToken(null)
+    setCaptchaExpired(false)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -125,6 +138,7 @@ export default function Auth() {
       if (result.error) {
         console.error('sign_up error:', result.error)
         setError(mapAuthError(result.error, true))
+        resetTurnstile()
         setLoading(false)
         return
       }
@@ -150,6 +164,7 @@ export default function Auth() {
     if (signInError) {
       console.error('sign_in error:', signInError)
       setError(mapAuthError(signInError, false))
+      resetTurnstile()
       setLoading(false)
       return
     }
@@ -181,6 +196,31 @@ export default function Auth() {
               <p className="mt-2 text-sm leading-6 text-stone-600">
                 Open the confirmation link we sent to <strong className="text-stone-800">{email.trim()}</strong>, then finish setting up your Greater Lansing profile.
               </p>
+              {resendSent ? (
+                <p className="mt-4 text-sm font-medium text-green-700">Confirmation email resent. Check your inbox.</p>
+              ) : (
+                <button
+                  type="button"
+                  disabled={resending}
+                  onClick={async () => {
+                    setResending(true)
+                    const { error: resendError } = await supabase.auth.resend({
+                      type: 'signup',
+                      email: email.trim().toLowerCase(),
+                      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+                    })
+                    setResending(false)
+                    if (resendError) {
+                      setError(mapAuthError(resendError.message, true))
+                    } else {
+                      setResendSent(true)
+                    }
+                  }}
+                  className="mt-4 text-sm font-medium text-brand-700 underline-offset-4 hover:underline disabled:opacity-60"
+                >
+                  {resending ? 'Resending…' : 'Resend confirmation email'}
+                </button>
+              )}
               <Link to="/auth" className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
                 Back to sign in
               </Link>

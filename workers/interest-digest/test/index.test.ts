@@ -267,8 +267,8 @@ describe('retry attempt (attempt_number=2)', () => {
   })
 })
 
-describe('exhaustion after attempt 3', () => {
-  it('processes a claim with attempt_number=3', async () => {
+describe('retry exhaustion at attempt 3', () => {
+  it('processes a successful send on attempt 3', async () => {
     const claim = makeClaim({ attempt_number: 3 })
     const send = vi.fn().mockResolvedValue({ messageId: 'msg-attempt-3' })
     const fetchMock = claimFetchMock(claim)
@@ -281,6 +281,24 @@ describe('exhaustion after attempt 3', () => {
 
     const completionBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>
     expect(completionBody.p_outcome).toBe('accepted')
+  })
+
+  it('records transient_failure on attempt 3 with transient error (no escalation in worker)', async () => {
+    const claim = makeClaim({ attempt_number: 3 })
+    const transientError = Object.assign(new Error('Rate limited'), { code: 'E_RATE_LIMIT_EXCEEDED' })
+    const send = vi.fn().mockRejectedValue(transientError)
+    const fetchMock = claimFetchMock(claim)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const env = makeEnv({ EMAIL: { send } })
+    await expect(
+      processScheduledDigest(Date.parse('2026-07-14T13:00:00.000Z'), env),
+    ).rejects.toThrow('transient_failure')
+
+    const completionBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<string, unknown>
+    expect(completionBody.p_outcome).toBe('transient_failure')
+    expect(completionBody.p_error_code).toBe('E_RATE_LIMIT_EXCEEDED')
+    expect(completionBody.p_attempt_number).toBeUndefined()
   })
 })
 

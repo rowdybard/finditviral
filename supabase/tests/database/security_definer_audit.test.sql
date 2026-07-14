@@ -42,6 +42,7 @@ select ok(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'get_bounty_detail'
+    limit 1
   ),
   'get_bounty_detail calls assert_permanent_member'
 );
@@ -53,6 +54,7 @@ select ok(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'create_sighting'
+    limit 1
   ),
   'create_sighting calls assert_permanent_member'
 );
@@ -64,6 +66,7 @@ select ok(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'create_bounty'
+    limit 1
   ),
   'create_bounty calls assert_permanent_member'
 );
@@ -75,6 +78,7 @@ select ok(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'admin_list_products'
+    limit 1
   ),
   'admin_list_products calls assert_app_owner'
 );
@@ -86,6 +90,7 @@ select ok(
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'admin_list_stores'
+    limit 1
   ),
   'admin_list_stores calls assert_app_owner'
 );
@@ -110,9 +115,10 @@ select ok(
       and pg_get_functiondef(p.oid) !~ 'assert_permanent_member'
       and exists (
         select 1
-        from pg_proc_proargs pp
-        join pg_authid a on a.oid = any(pp.grantees)
-        where pp.oid = p.oid and a.rolname in ('authenticated', 'anon')
+        from aclexplode(p.proacl) acl
+        join pg_authid a on a.oid = acl.grantee
+        where a.rolname in ('authenticated', 'anon')
+          and acl.privilege_type = 'X'
       )
   ),
   'No SECURITY DEFINER function granted to authenticated/anon lacks authorization (excluding safe public reads)'

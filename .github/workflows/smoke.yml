@@ -24,6 +24,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run build
       - name: Run web smoke tests
         run: npm run smoke:web
         env:
