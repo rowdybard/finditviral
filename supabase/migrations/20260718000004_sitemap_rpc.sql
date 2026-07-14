@@ -25,12 +25,12 @@ as $$
   product_urls as (
     select
       '/products/' || p.slug as url_path,
-      coalesce(p.updated_at::date, p.verified_at::date, p.created_at::date) as lastmod,
+      coalesce(p.verified_at::date, p.created_at::date) as lastmod,
       'weekly' as changefreq,
       0.8 as priority
     from public.products p
     where p.is_active
-    order by p.updated_at desc
+    order by p.created_at desc
     limit 500
   ),
   store_urls as (
