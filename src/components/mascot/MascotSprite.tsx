@@ -92,13 +92,10 @@ export default function MascotSprite({ mood = 'idle' }: { mood?: MascotMood }) {
         </>
       )}
 
-      {/* Magnifying glass */}
-      <g transform="translate(52 44)">
-        <circle cx="0" cy="0" r="7" fill="none" stroke="#1c1917" strokeWidth="2.5" />
-        <circle cx="0" cy="0" r="5" fill="rgba(255,253,247,0.4)" />
-        <line x1="5" y1="5" x2="10" y2="10" stroke="#1c1917" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="7.5" cy="7.5" r="3.5" fill="#f97316" stroke="#1c1917" strokeWidth="1.5" />
-      </g>
+      {/* Monocle */}
+      <circle cx="47" cy="32" r="6" fill="rgba(255,253,247,0.3)" stroke="#1c1917" strokeWidth="2" />
+      <path d="M43.5 29.5 Q45 27.8 46.8 27.5" stroke="#fff" strokeWidth="1" opacity="0.7" fill="none" strokeLinecap="round" />
+      <path d="M51.5 36.5 Q56 44 54 52" stroke="#1c1917" strokeWidth="1.2" fill="none" />
 
       {/* Sleep zzz */}
       {mood === 'sleeping' && (
