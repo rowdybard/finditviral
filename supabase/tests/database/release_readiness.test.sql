@@ -238,9 +238,37 @@ select lives_ok(
 );
 
 -- 9. Reject claim from out-of-scope retailer (behavioral)
+-- Use a second bounty to avoid unique(bounty_id, finder_id) conflict from test 8
+do $$
+declare
+  v_bounty_id2 uuid;
+begin
+  insert into public.bounties (
+    user_id, product_id, store_id, reward_amount, reward_cents,
+    zip_code, radius_miles, notes, requirements, deadline,
+    status, moderation_status, scope_type
+  ) values (
+    '00000000-0000-4000-8000-000000000001',
+    pg_temp.get_test_product_id(),
+    null,
+    5.00, 500,
+    '48910', 50,
+    'Claim test retailer bounty 2', 'Claim test retailer bounty 2',
+    now() + interval '7 days',
+    'open', 'approved', 'retailers'
+  )
+  returning id into v_bounty_id2;
+
+  insert into public.bounty_retailers (bounty_id, retailer_id)
+  select v_bounty_id2, id from public.retailers where slug in ('target', 'walmart');
+
+  perform set_config('pg_temp.test_bounty_id2', v_bounty_id2::text, true);
+end;
+$$;
+
 select throws_ok(
   $$ select public.submit_bounty_claim(
-    (select current_setting('pg_temp.test_bounty_id', true))::uuid,
+    (select current_setting('pg_temp.test_bounty_id2', true))::uuid,
     pg_temp.get_store_id('best-buy-lansing-803'),
     now() - interval '30 minutes',
     'in_stock',
@@ -255,7 +283,7 @@ select pg_temp.set_owner_ctx();
 
 select throws_ok(
   $$ select public.submit_bounty_claim(
-    (select current_setting('pg_temp.test_bounty_id', true))::uuid,
+    (select current_setting('pg_temp.test_bounty_id2', true))::uuid,
     pg_temp.get_store_id('target-east-lansing-downtown'),
     now() - interval '10 minutes',
     'in_stock',
