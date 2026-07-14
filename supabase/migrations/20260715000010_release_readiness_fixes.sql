@@ -760,6 +760,8 @@ to authenticated;
 -- ---------------------------------------------------------------------------
 -- 2A. Recreate admin_create_store: remove phone/website_url, use real schema
 -- ---------------------------------------------------------------------------
+drop function if exists public.admin_create_store(text, text, text, text, text, text, text, text, numeric, numeric);
+
 create or replace function public.admin_create_store(
   p_retailer_name text,
   p_store_name text,
@@ -842,6 +844,8 @@ end;
 $$;
 
 -- Recreate admin_update_store: remove phone/website_url
+drop function if exists public.admin_update_store(uuid, text, text, text, text, boolean);
+
 create or replace function public.admin_update_store(
   p_store_id uuid,
   p_store_name text default null,
