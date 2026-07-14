@@ -27,9 +27,21 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
     ? bounty.reward_cents / 100
     : bounty.reward_amount ?? 0
   const exactStore = bounty.store?.store_name ?? bounty.store_name
-  const locationLabel = exactStore
+  const scopeType = bounty.scope_type ?? (exactStore ? 'stores' : 'region')
+  const locationLabel = scopeType === 'retailers'
+    ? 'Any store in selected retailers'
+    : scopeType === 'stores' && !exactStore
+    ? 'Selected stores'
+    : exactStore
     ? `${exactStore}${bounty.store?.city ? ` in ${bounty.store.city}` : ''}`
     : `ZIP ${bounty.zip_code ?? '48910'}`
+  const scopeDetail = scopeType === 'retailers'
+    ? 'Retailer scope'
+    : scopeType === 'stores' && !exactStore
+    ? 'Multi-store'
+    : exactStore
+    ? 'Exact store'
+    : `${bounty.radius_miles ?? 50} mi radius`
   const shareText = `Help find ${productName} near ${locationLabel} for a ${cardReward(rewardAmount)} reward.`
 
   return (
@@ -90,7 +102,7 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
                   <span>
                     <strong className="block text-sm font-black text-red-600">{exactStore ?? bounty.zip_code ?? 'Local'}</strong>
                     <span className="block text-[10px] font-bold uppercase leading-tight text-stone-600">
-                      {exactStore ? 'Exact store' : `${bounty.radius_miles ?? 50} mi radius`}
+                      {scopeDetail}
                     </span>
                   </span>
                 </dd>
