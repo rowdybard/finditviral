@@ -3,6 +3,7 @@ const REDIRECT_HOSTS = new Set(['finditviral.pages.dev', 'www.finditviral.com'])
 
 const EARLY_ACCESS_PATH = '/api/early-access'
 const PRODUCT_CLICK_PATH = '/api/product-click'
+const SITEMAP_PATH = '/sitemap.xml'
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -601,6 +602,78 @@ function applyPageMetadata(response, metadata) {
     .transform(securedResponse)
 }
 
+function escapeXml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
+async function handleSitemap(request, env) {
+  const baseUrl = `https://${CANONICAL_HOST}`
+
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
+    return env.ASSETS.fetch(request)
+  }
+
+  let urls
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
+    const response = await fetch(
+      `${env.SUPABASE_URL}/rest/v1/rpc/get_sitemap_urls`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${env.SUPABASE_SECRET_KEY}`,
+          'apikey': env.SUPABASE_SECRET_KEY,
+        },
+        body: '{}',
+        signal: controller.signal,
+      },
+    )
+    clearTimeout(timeout)
+    if (!response.ok) throw new Error(`Supabase returned ${response.status}`)
+    urls = await response.json()
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: 'sitemap RPC failed, falling back to static',
+      error: error instanceof Error ? error.message : String(error),
+    }))
+    return env.ASSETS.fetch(request)
+  }
+
+  if (!Array.isArray(urls) || urls.length === 0) {
+    return env.ASSETS.fetch(request)
+  }
+
+  const xmlParts = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  ]
+  for (const entry of urls) {
+    const loc = `${baseUrl}${escapeXml(entry.url_path || '')}`
+    const lastmod = entry.lastmod || new Date().toISOString().slice(0, 10)
+    const changefreq = escapeXml(entry.changefreq || 'weekly')
+    const priority = String(entry.priority ?? 0.5)
+    xmlParts.push(
+      '  <url>',
+      `    <loc>${loc}</loc>`,
+      `    <lastmod>${lastmod}</lastmod>`,
+      `    <changefreq>${changefreq}</changefreq>`,
+      `    <priority>${priority}</priority>`,
+      '  </url>',
+    )
+  }
+  xmlParts.push('</urlset>')
+
+  return new Response(xmlParts.join('\n'), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
@@ -617,6 +690,10 @@ export default {
 
     if (url.pathname === PRODUCT_CLICK_PATH) {
       return handleProductClick(request, env)
+    }
+
+    if (url.pathname === SITEMAP_PATH) {
+      return handleSitemap(request, env)
     }
 
     try {

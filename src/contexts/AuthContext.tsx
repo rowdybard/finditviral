@@ -65,7 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: { captchaToken },
     })
-    if (error) return { error: error.message }
+    if (error) {
+      console.error(JSON.stringify({ event: 'auth_signin_failed', code: error.code ?? 'unknown', message: error.message }))
+      return { error: error.message }
+    }
     setSession(data.session)
     await fetchProfile(data.user.id)
     return { error: null }
@@ -82,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     if (error) {
+      console.error(JSON.stringify({ event: 'auth_signup_failed', code: error.code ?? 'unknown', message: error.message }))
       return { error: error.message, needsEmailConfirmation: false }
     }
 

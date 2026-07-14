@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getPageMetadata, handleEarlyAccess, handleProductClick } from './_worker.js'
+import worker from './_worker.js'
 
 const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 const VISITOR_ID = '11111111-1111-4111-8111-111111111111'
@@ -560,5 +561,67 @@ describe('enforceRateLimit — boundary conditions', () => {
 
     expect(response.status).toBe(400)
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe('sitemap generation', () => {
+  function sitemapEnv(overrides = {}) {
+    return {
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SECRET_KEY: 'sb_secret_test_key_long_enough',
+      ASSETS: {
+        fetch: vi.fn().mockResolvedValue(
+          new Response('<xml>static</xml>', { status: 200, headers: { 'Content-Type': 'application/xml' } }),
+        ),
+      },
+      ...overrides,
+    }
+  }
+
+  function sitemapFetchMock(urls) {
+    return vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(urls), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    )
+  }
+
+  it('returns dynamic XML with product URLs from Supabase RPC', async () => {
+    const urls = [
+      { url_path: '/', lastmod: '2026-07-14', changefreq: 'weekly', priority: 1.0 },
+      { url_path: '/products/test-product', lastmod: '2026-07-13', changefreq: 'weekly', priority: 0.8 },
+      { url_path: '/stores/test-store', lastmod: '2026-07-12', changefreq: 'weekly', priority: 0.6 },
+    ]
+    const fetchImpl = sitemapFetchMock(urls)
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const request = new Request('https://finditviral.com/sitemap.xml', { method: 'GET' })
+    const response = await worker.fetch(request, sitemapEnv())
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('application/xml; charset=utf-8')
+    const body = await response.text()
+    expect(body).toContain('<urlset')
+    expect(body).toContain('https://finditviral.com/products/test-product')
+    expect(body).toContain('https://finditviral.com/stores/test-store')
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to static sitemap when Supabase is unreachable', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('Connection refused'))
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const env = sitemapEnv()
+    const request = new Request('https://finditviral.com/sitemap.xml', { method: 'GET' })
+    const response = await worker.fetch(request, env)
+
+    expect(env.ASSETS.fetch).toHaveBeenCalledWith(request)
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to static sitemap when Supabase config is missing', async () => {
+    const env = sitemapEnv({ SUPABASE_URL: undefined, SUPABASE_SECRET_KEY: undefined })
+    const request = new Request('https://finditviral.com/sitemap.xml', { method: 'GET' })
+    const response = await worker.fetch(request, env)
+
+    expect(env.ASSETS.fetch).toHaveBeenCalledWith(request)
   })
 })

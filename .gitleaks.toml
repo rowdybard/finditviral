@@ -1,0 +1,48 @@
+title = "FindItViral Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "CI placeholder environment values"
+paths = [
+  '''\.github/workflows/.*\.yml''',
+]
+regexes = [
+  '''ci-placeholder''',
+  '''ci-publishable-key''',
+  '''1x00000000000000000000AA''',
+]
+
+[[allowlists]]
+description = "Turnstile test site key (Cloudflare documentation placeholder)"
+paths = [
+  '''src/pages/Auth\.tsx''',
+  '''\.github/workflows/.*\.yml''',
+]
+regexes = [
+  '''1x00000000000000000000AA''',
+]
+
+[[allowlists]]
+description = "Test and example files with placeholder Supabase keys"
+paths = [
+  '''public/_worker\.test\.js''',
+  '''workers/interest-digest/test/.*\.ts''',
+  '''workers/interest-digest/\.dev\.vars\.example''',
+  '''workers/interest-digest/README\.md''',
+  '''scripts/verify-production\.mjs''',
+]
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_]+''',
+  '''sb_secret_[A-Za-z0-9_]+''',
+]
+
+[[allowlists]]
+description = "Local .env file with non-secret placeholder values"
+paths = [
+  '''\.env''',
+]
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_]+''',
+]

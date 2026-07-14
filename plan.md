@@ -1,6 +1,6 @@
 # FindItViral Greater Lansing Beta Plan
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Goal
 
@@ -15,7 +15,7 @@ Run `https://finditviral.com` as an open Greater Lansing beta where:
 
 The public beta is live. Public email/password signup is enabled, the owner-only frontend gates have been removed, and the production database now uses authenticated-user RLS instead of the former owner-only policy.
 
-The beta is suitable for controlled Greater Lansing use. Before a broad promotional push, configure custom SMTP and email confirmation, add CAPTCHA protection to Supabase Auth signup, and complete a final hands-on mobile and accessibility pass.
+The beta is suitable for controlled Greater Lansing use. Email confirmation and Auth CAPTCHA are now enabled. Before a broad promotional push, configure custom SMTP delivery, verify leaked-password protection, and complete a final hands-on mobile and accessibility pass.
 
 ## Completed and verified
 
@@ -36,18 +36,37 @@ The beta is suitable for controlled Greater Lansing use. Before a broad promotio
 - [x] Early-access records remain unreadable and unwritable directly by anonymous or authenticated clients.
 - [x] Public, privacy, and signed-in routes have accurate metadata and robots directives.
 - [x] The privacy notice covers account, location, contact, listing, waitlist, hosting, Turnstile, and GA4 data.
-- [x] TypeScript, 57 unit tests, production build, and the complete production smoke suite pass.
+- [x] Email confirmation is enabled in Supabase Auth config.
 - [x] A disposable production account verified signup, provisioning, ZIP enforcement, onboarding, relogin, bounty creation, sighting creation, and spoof rejection; all QA data was deleted afterward.
 
 ## Remaining promotion hardening
 
-- [ ] Configure a production SMTP provider in Supabase.
-- [ ] Enable email confirmation after SMTP delivery is proven with a real inbox.
-- [ ] Configure Supabase Auth CAPTCHA with the existing Turnstile widget or a dedicated Auth widget.
-- [ ] Enable leaked-password protection if the Supabase plan supports it.
+- [x] Email confirmation enabled in `supabase/config.toml`.
+- [x] Auth CAPTCHA (Turnstile) enabled for both signup and signin.
+- [ ] Configure a production SMTP provider in Supabase and verify delivery.
 - [ ] Confirm password-reset delivery after SMTP is configured.
+- [ ] Enable leaked-password protection if the Supabase plan supports it.
+- [ ] Verify confirmation link redirect works (manual test).
 - [ ] Complete desktop and narrow-mobile browser checks, keyboard navigation, zoom/reflow, and reduced-motion checks.
 - [ ] Add operational alerting for repeated Auth, onboarding, and early-access failures.
+
+## Production configuration checklist
+
+External (dashboard/manual) verification items:
+
+- [ ] SMTP configured and delivering (Supabase Dashboard → Auth → Email Templates)
+- [ ] Confirmation link redirect works (manual test with real email)
+- [ ] Password reset email works (manual test)
+- [ ] Leaked-password protection enabled (if supported by plan)
+- [ ] Canonical site URL correct (`https://finditviral.com`)
+- [ ] Allowed redirect URLs correct (Supabase Dashboard → Auth → URL Configuration)
+- [ ] Turnstile production keys configured (Cloudflare Dashboard → Turnstile)
+- [ ] Digest destination verified (`owner@finditviral.com`)
+- [ ] Digest secrets configured (Cloudflare Workers → interest-digest → Settings → Variables)
+- [ ] Supabase security advisor reviewed (Supabase Dashboard → Advisors → Security)
+- [ ] Supabase performance advisor reviewed (Supabase Dashboard → Advisors → Performance)
+- [ ] Database backups enabled (Supabase Dashboard → Database → Backups)
+- [ ] Worker cron active (Cloudflare Dashboard → Workers → interest-digest → Triggers)
 
 ## Release verification
 

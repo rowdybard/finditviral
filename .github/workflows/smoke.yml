@@ -1,0 +1,43 @@
+name: Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Base URL to test'
+        required: false
+        default: 'https://finditviral.com'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      LAUNCH_BASE_URL: ${{ github.event.inputs.url || 'https://finditviral.com' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run web smoke tests
+        run: npm run smoke:web
+        env:
+          LAUNCH_BASE_URL: ${{ env.LAUNCH_BASE_URL }}
+      - name: Verify no secrets in public bundle
+        run: |
+          ! grep -rE '(sb_secret_|sk_live_|-----BEGIN PRIVATE KEY)' dist/ && echo "No secrets found in bundle"
+      - name: Verify early-access rejects missing Turnstile
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LAUNCH_BASE_URL/api/early-access" \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"test@example.com","reason":"test reason for smoke"}')
+          if [ "$STATUS" != "400" ]; then
+            echo "Expected 400 for missing Turnstile token, got $STATUS"
+            exit 1
+          fi
+          echo "Early-access correctly rejects missing Turnstile token ($STATUS)"
