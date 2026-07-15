@@ -77,6 +77,14 @@ export function getPageMetadata(pathname: string): PageMetadata {
       robots: 'index, follow',
     }
   }
+  if (normalizedPathname.startsWith('/leads/')) {
+    return {
+      title: 'Restock Lead - FindItViral',
+      description: 'Community-shared restock lead for a viral or hard-to-find product in Greater Lansing.',
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+      robots: 'index, follow',
+    }
+  }
   return {
     ...PRIVATE_METADATA,
     canonicalUrl: `https://finditviral.com${normalizedPathname}`,
@@ -121,6 +129,18 @@ export function getPageMetadataForStore(
   return {
     title: `${storeName} - FindItViral`,
     description: `See fresh, community-reported product sightings at ${storeName}${location}.`,
+    canonicalUrl: `https://finditviral.com${pathname}`,
+    robots: 'index, follow',
+  }
+}
+
+export function getPageMetadataForLead(
+  pathname: string,
+  lead: { headline: string; product_name: string },
+): PageMetadata {
+  return {
+    title: `${lead.headline} - FindItViral`,
+    description: `Restock lead for ${lead.product_name} in Greater Lansing. Vote on credibility or confirm with a sighting.`,
     canonicalUrl: `https://finditviral.com${pathname}`,
     robots: 'index, follow',
   }

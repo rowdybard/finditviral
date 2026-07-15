@@ -22,6 +22,13 @@ describe('public catalog metadata', () => {
     expect(await getPageMetadata('/admin')).toMatchObject({ robots: 'noindex, nofollow' })
   })
 
+  it('makes lead detail routes indexable in worker metadata', async () => {
+    expect(await getPageMetadata('/leads/squishmallow-restock')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/leads/squishmallow-restock',
+      robots: 'index, follow',
+    })
+  })
+
   it('injects product name into metadata when Supabase returns data', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
       if (String(url).includes('get_public_product')) {

@@ -9,6 +9,7 @@ import BountyDetail from './pages/BountyDetail'
 import Home from './pages/Home'
 import Drafts from './pages/Drafts'
 import NewBounty from './pages/NewBounty'
+import NewLead from './pages/NewLead'
 import NewSighting from './pages/NewSighting'
 import Onboarding from './pages/Onboarding'
 import Profile from './pages/Profile'
@@ -47,6 +48,7 @@ export default function PrivateApp() {
                   <Route path="/bounties/:id" element={<BountyDetail />} />
                   <Route path="/sightings" element={<Sightings />} />
                   <Route path="/sightings/new" element={<NewSighting />} />
+                  <Route path="/leads/new" element={<NewLead />} />
                   <Route path="/profile/:username" element={<Profile />} />
                   <Route path="*" element={<Navigate to="/home" replace />} />
                 </Routes>

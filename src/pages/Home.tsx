@@ -1,31 +1,35 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import type { Trend, Bounty, Sighting, Product } from '../types/database'
+import type { Trend, Bounty, Sighting, Product, Lead } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
+import LeadCard from '../components/LeadCard'
+import PostMenu from '../components/PostMenu'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
-import { listPublicBounties, listPublicSightings } from '../lib/launchApi'
+import { listPublicBounties, listPublicSightings, listPublicLeads } from '../lib/launchApi'
 
 export default function Home() {
   const [trends, setTrends] = useState<Trend[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const [trendsRes, productsRes, bountiesRes, sightingsRes] = await Promise.all([
+      const [trendsRes, productsRes, bountiesRes, sightingsRes, leadsRes] = await Promise.all([
         supabase.from('trends').select('*').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('products').select('*, trend:trends(*)').eq('is_active', true).order('name'),
         listPublicBounties({ limit: 5 }),
         listPublicSightings({ limit: 5 }),
+        listPublicLeads({ limit: 5 }),
       ])
 
-      if (trendsRes.error || productsRes.error || bountiesRes.error || sightingsRes.error) {
+      if (trendsRes.error || productsRes.error || bountiesRes.error || sightingsRes.error || leadsRes.error) {
         setError('Failed to load content. Please try again.')
         setLoading(false)
         return
@@ -35,6 +39,7 @@ export default function Home() {
       setProducts(productsRes.data as Product[] ?? [])
       setBounties(bountiesRes.data as Bounty[] ?? [])
       setSightings(sightingsRes.data as Sighting[] ?? [])
+      setLeads(leadsRes.data as Lead[] ?? [])
       setLoading(false)
     }
     load()
@@ -67,12 +72,7 @@ export default function Home() {
           <Link to="/sightings" className="btn-primary">
             Browse sightings
           </Link>
-          <Link to="/sightings/new" className="btn-secondary">
-            Report a sighting
-          </Link>
-          <Link to="/bounties/new" className="btn-secondary">
-            Post a bounty
-          </Link>
+          <PostMenu />
         </div>
       </section>
 
@@ -108,6 +108,28 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Recent Leads</h2>
+          <Link to="/sightings" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+            View all →
+          </Link>
+        </div>
+        {leads.length > 0 ? (
+          <div className="space-y-3">
+            {leads.map((l) => (
+              <LeadCard key={l.id} lead={l} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No leads shared yet"
+            message="Share a restock lead to help fellow shoppers find products."
+            action={<Link to="/leads/new" className="btn-primary">Share a Lead</Link>}
+          />
+        )}
+      </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">

@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import { applyPageMetadata, getPageMetadata } from './lib/pageMetadata'
 import { trackPageView } from './lib/analytics'
 import EarlyAccess from './pages/EarlyAccess'
+import LeadDetail from './pages/LeadDetail'
 import Privacy from './pages/Privacy'
 import ProductPage from './pages/ProductPage'
 import StorePage from './pages/StorePage'
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/products/:slug" element={<PublicCatalogLayout><ProductPage /></PublicCatalogLayout>} />
       <Route path="/stores" element={<PublicCatalogLayout><Stores /></PublicCatalogLayout>} />
       <Route path="/stores/:slug" element={<PublicCatalogLayout><StorePage /></PublicCatalogLayout>} />
+      <Route path="/leads/:slug" element={<PublicCatalogLayout><LeadDetail /></PublicCatalogLayout>} />
       <Route
         path="*"
         element={

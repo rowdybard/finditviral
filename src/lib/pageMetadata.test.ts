@@ -46,6 +46,13 @@ describe('getPageMetadata', () => {
     })
   })
 
+  it('makes lead detail routes indexable', () => {
+    expect(getPageMetadata('/leads/squishmallow-phoenix-restock')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/leads/squishmallow-phoenix-restock',
+      robots: 'index, follow',
+    })
+  })
+
   it('keeps admin and private draft routes out of search results', () => {
     expect(getPageMetadata('/admin').robots).toBe('noindex, nofollow')
     expect(getPageMetadata('/drafts').robots).toBe('noindex, nofollow')

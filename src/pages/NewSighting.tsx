@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -7,8 +7,10 @@ import CatalogSuggestionForm, {
 } from '../components/CatalogSuggestionForm'
 import ContributionDraftNotice from '../components/ContributionDraftNotice'
 import {
+  confirmLeadWithSighting,
   createSighting,
   discardContributionDraft,
+  getLeadDetail,
   getMyContributionDrafts,
   saveContributionDraft,
   searchProducts,
@@ -18,7 +20,7 @@ import {
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
-import type { ContributionDraft } from '../types/database'
+import type { ContributionDraft, LeadDetailView } from '../types/database'
 
 type SightingPayload = {
   version: 1
@@ -46,6 +48,8 @@ function isSelection(value: unknown): value is CatalogSelection {
 }
 
 export default function NewSighting() {
+  const [searchParams] = useSearchParams()
+  const leadSlug = searchParams.get('lead')
   const [product, setProduct] = useState<CatalogSelection | null>(null)
   const [store, setStore] = useState<CatalogSelection | null>(null)
   const [seenAt, setSeenAt] = useState(() => localDateTime(new Date()))
@@ -59,6 +63,8 @@ export default function NewSighting() {
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [lead, setLead] = useState<LeadDetailView | null>(null)
+  const [leadLoading, setLeadLoading] = useState(false)
 
   function currentPayload(): SightingPayload {
     return { version: 1, product, store, seenAt, availability, quantity, notes }
@@ -98,6 +104,23 @@ export default function NewSighting() {
   useEffect(() => {
     void loadDraft()
   }, [])
+
+  useEffect(() => {
+    if (!leadSlug) return
+    setLeadLoading(true)
+    getLeadDetail(leadSlug).then(({ data, error: leadError }) => {
+      setLeadLoading(false)
+      if (leadError || !data) {
+        setError('Could not load the lead for confirmation.')
+        return
+      }
+      setLead(data)
+      setProduct({ id: data.product_id, slug: data.product_slug, label: data.product_name, detail: '' })
+      if (data.store_id && data.store_name) {
+        setStore({ id: data.store_id, slug: data.store_slug ?? '', label: data.store_name, detail: [data.store_city, data.store_state].filter(Boolean).join(', ') })
+      }
+    })
+  }, [leadSlug])
 
   async function saveDraft() {
     setError(null)
@@ -185,6 +208,24 @@ export default function NewSighting() {
     }
 
     setLoading(true)
+    if (lead) {
+      const { error: confirmError } = await confirmLeadWithSighting({
+        leadId: lead.id,
+        storeId: store.id,
+        seenAt: seenDate.toISOString(),
+        availability,
+        quantity: parsedQuantity,
+        notes: notes.trim() || null,
+      })
+      setLoading(false)
+      if (confirmError) {
+        setError(mapContributionError(confirmError))
+        return
+      }
+      trackEvent('confirm_lead', { availability })
+      setSubmitted(true)
+      return
+    }
     const { error: createError } = await createSighting({
       productId: product.id,
       storeId: store.id,
@@ -206,10 +247,23 @@ export default function NewSighting() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <Link to="/sightings" className="text-sm text-gray-500 hover:text-gray-700">← Sightings</Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">Report a Sighting</h1>
-        <p className="mt-1 text-sm text-gray-500">Share a fresh, exact store sighting so another shopper can act on it.</p>
+        <Link to={lead ? `/leads/${lead.slug}` : '/sightings'} className="text-sm text-gray-500 hover:text-gray-700">← {lead ? 'Back to lead' : 'Sightings'}</Link>
+        <h1 className="mt-2 text-2xl font-bold text-gray-900">{lead ? 'Confirm Lead with Sighting' : 'Report a Sighting'}</h1>
+        <p className="mt-1 text-sm text-gray-500">{lead ? 'Report what you saw to confirm this restock lead.' : 'Share a fresh, exact store sighting so another shopper can act on it.'}</p>
       </div>
+
+      {lead && (
+        <div className="rounded-xl border-2 border-brand-200 bg-brand-50 px-4 py-3">
+          <p className="text-sm font-bold text-brand-700">Confirming lead: {lead.headline}</p>
+          <p className="mt-1 text-xs text-brand-600">{lead.product_name}</p>
+        </div>
+      )}
+
+      {leadLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
+        </div>
+      )}
 
       {submitted && (
         <div className="card space-y-3 border-2 border-green-500 bg-green-50">
@@ -222,7 +276,7 @@ export default function NewSighting() {
         </div>
       )}
 
-      {!submitted && (
+      {!submitted && !leadLoading && (
         <>
       {draft && <ContributionDraftNotice draft={draft} onDiscard={discardDraft} discarding={draftLoading} />}
 
@@ -314,7 +368,7 @@ export default function NewSighting() {
             {draftLoading ? 'Saving…' : 'Save private draft'}
           </button>
           <button type="submit" className="btn-primary sm:flex-[2]" disabled={loading || draftLoading}>
-            {loading ? 'Submitting…' : 'Submit for review'}
+            {loading ? 'Submitting…' : lead ? 'Confirm lead' : 'Submit for review'}
           </button>
         </div>
       </form>

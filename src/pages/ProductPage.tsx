@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import BountyCard from '../components/BountyCard'
 import EmptyState from '../components/EmptyState'
+import LeadCard from '../components/LeadCard'
 import SightingCard from '../components/SightingCard'
-import { getPublicProduct, listPublicBounties, listPublicSightings } from '../lib/launchApi'
+import { getPublicProduct, listPublicBounties, listPublicSightings, listPublicLeads } from '../lib/launchApi'
 import { applyPageMetadata, getPageMetadataForProduct } from '../lib/pageMetadata'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
-import type { Bounty, PublicProduct, Sighting } from '../types/database'
+import type { Bounty, Lead, PublicProduct, Sighting } from '../types/database'
 
 function freshnessBadge(status: Sighting['freshness_status']) {
   if (!status) return null
@@ -20,6 +21,7 @@ export default function ProductPage() {
   const [product, setProduct] = useState<PublicProduct | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,14 +39,16 @@ export default function ProductPage() {
       }
 
       setProduct(productResult.data)
-      const [bountyResult, sightingResult] = await Promise.all([
+      const [bountyResult, sightingResult, leadsResult] = await Promise.all([
         listPublicBounties({ productId: productResult.data.id, limit: 50 }),
         listPublicSightings({ productId: productResult.data.id, limit: 50 }),
+        listPublicLeads({ productId: productResult.data.id, limit: 50 }),
       ])
       if (!active) return
       setBounties(bountyResult.data ?? [])
       setSightings(sightingResult.data ?? [])
-      setError(bountyResult.error || sightingResult.error ? 'Some recent activity could not be loaded.' : null)
+      setLeads(leadsResult.data ?? [])
+      setError(bountyResult.error || sightingResult.error || leadsResult.error ? 'Some recent activity could not be loaded.' : null)
       setLoading(false)
     }
     void load()
@@ -106,6 +110,17 @@ export default function ProductPage() {
               </div>
             ))}</div>
           : <EmptyState title="No fresh sightings" message="Inventory reports expire quickly. Sign in to share what you find." action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>} />
+        }
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-gray-900">Restock Leads</h2>
+          <Link to="/leads/new" className="text-sm font-semibold text-brand-700">Share one →</Link>
+        </div>
+        {leads.length > 0
+          ? <div className="space-y-3">{leads.map((lead) => <LeadCard key={lead.id} lead={lead} />)}</div>
+          : <EmptyState title="No restock leads" message="Share a lead if you hear about an upcoming restock for this product." action={<Link to="/leads/new" className="btn-secondary">Share a Lead</Link>} />
         }
       </section>
 

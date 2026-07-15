@@ -155,6 +155,7 @@ export type Sighting = {
   moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden'
   is_public?: boolean
   bounty_id?: string | null
+  lead_id?: string | null
   photo_urls?: string[] | null
   created_at: string
   product?: Product
@@ -346,4 +347,69 @@ export type AdminStore = {
   state: string | null
   zip_code: string | null
   is_active: boolean
+}
+
+export type LeadSourceType = 'employee_tip' | 'social_media' | 'press_release' | 'restock_schedule' | 'other'
+export type LeadStatus = 'pending' | 'active' | 'confirmed' | 'expired' | 'hidden'
+export type LeadScope = 'region' | 'retailers' | 'stores'
+
+export type Lead = {
+  id: string
+  product_id: string
+  product_name?: string
+  product_slug?: string
+  slug: string
+  headline: string
+  details: string | null
+  expected_date: string | null
+  scope_type: LeadScope
+  store_id: string | null
+  store_name?: string | null
+  store_slug?: string | null
+  zip_code: string | null
+  radius_miles: number | null
+  source_type: LeadSourceType
+  source_url: string | null
+  status: LeadStatus
+  confirmed_sighting_id: string | null
+  expires_at: string
+  created_at: string
+  username?: string | null
+  credible_count?: number
+  doubtful_count?: number
+  net_score?: number
+  distance_miles?: number | null
+}
+
+export type LeadDetailView = {
+  id: string
+  product_id: string
+  product_name: string
+  product_slug: string
+  slug: string
+  headline: string
+  details: string | null
+  expected_date: string | null
+  scope_type: LeadScope
+  store_id: string | null
+  store_name: string | null
+  store_slug: string | null
+  store_city: string | null
+  store_state: string | null
+  zip_code: string | null
+  radius_miles: number | null
+  source_type: LeadSourceType
+  source_url: string | null
+  status: LeadStatus
+  confirmed_sighting_id: string | null
+  confirmed_store_name: string | null
+  confirmed_seen_at: string | null
+  expires_at: string
+  created_at: string
+  username: string | null
+  is_owner: boolean
+  caller_vote: 'credible' | 'doubtful' | null
+  credible_count: number
+  doubtful_count: number
+  net_score: number
 }

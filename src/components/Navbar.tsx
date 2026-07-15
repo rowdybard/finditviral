@@ -1,5 +1,6 @@
 import { NavLink, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import PostMenu from './PostMenu'
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
@@ -49,6 +50,7 @@ export default function Navbar() {
               Drafts
             </NavLink>
           )}
+          {user && <PostMenu />}
           {user ? (
             <div className="flex items-center gap-1 sm:gap-2">
               {profile?.username ? (

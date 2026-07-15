@@ -12,6 +12,8 @@ import type {
   ContributionDraft,
   ContributionDraftType,
   InterestEvent,
+  Lead,
+  LeadDetailView,
   MemberRestriction,
   ModerationEvent,
   PersonalNotification,
@@ -460,5 +462,88 @@ export async function adminSearchMembers(query: string): RpcResult<AdminMemberSe
   return callRpc<AdminMemberSearchResult[]>('admin_search_members', {
     p_query: query.trim(),
     p_limit: 20,
+  })
+}
+
+export async function createLead(input: {
+  productId: string
+  headline: string
+  details: string | null
+  expectedDate: string | null
+  scopeType: 'region' | 'retailers' | 'stores'
+  storeId: string | null
+  zipCode: string | null
+  radiusMiles: number | null
+  sourceType: 'employee_tip' | 'social_media' | 'press_release' | 'restock_schedule' | 'other'
+  sourceUrl: string | null
+}): RpcResult<string> {
+  return callRpc<string>('create_lead', {
+    p_product_id: input.productId,
+    p_headline: input.headline,
+    p_details: input.details,
+    p_expected_date: input.expectedDate,
+    p_scope_type: input.scopeType,
+    p_store_id: input.storeId,
+    p_zip_code: input.zipCode,
+    p_radius_miles: input.radiusMiles,
+    p_source_type: input.sourceType,
+    p_source_url: input.sourceUrl,
+  })
+}
+
+export async function listPublicLeads(filters: {
+  productId?: string | null
+  limit?: number
+  zipCode?: string | null
+  radiusMiles?: number | null
+} = {}): RpcResult<Lead[]> {
+  return callRpc<Lead[]>('list_public_leads', {
+    p_product_id: filters.productId ?? null,
+    p_limit: filters.limit ?? 50,
+    p_zip_code: filters.zipCode === undefined ? '48910' : filters.zipCode,
+    p_radius_miles: filters.radiusMiles === undefined ? 50 : filters.radiusMiles,
+  })
+}
+
+export async function getLeadDetail(slug: string): RpcResult<LeadDetailView | null> {
+  const result = await callRpc<LeadDetailView | LeadDetailView[]>('get_lead_detail', { p_lead_slug: slug })
+  return { data: firstRow(result.data), error: result.error }
+}
+
+export async function voteOnLead(leadId: string, vote: 'credible' | 'doubtful'): RpcResult<null> {
+  return callRpc<null>('vote_on_lead', { p_lead_id: leadId, p_vote: vote })
+}
+
+export async function removeLeadVote(leadId: string): RpcResult<null> {
+  return callRpc<null>('remove_lead_vote', { p_lead_id: leadId })
+}
+
+export async function confirmLeadWithSighting(input: {
+  leadId: string
+  storeId: string
+  seenAt: string
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
+  quantity: number | null
+  notes: string | null
+}): RpcResult<string> {
+  return callRpc<string>('confirm_lead_with_sighting', {
+    p_lead_id: input.leadId,
+    p_store_id: input.storeId,
+    p_seen_at: input.seenAt,
+    p_availability: input.availability,
+    p_quantity: input.quantity,
+    p_notes: input.notes,
+  })
+}
+
+export async function adminSetLeadModeration(input: {
+  leadId: string
+  action: 'approve' | 'hide' | 'restore'
+  reason: string | null
+}): RpcResult<null> {
+  return callRpc<null>('admin_set_lead_moderation', {
+    p_lead_id: input.leadId,
+    p_action: input.action,
+    p_reason: input.reason,
   })
 }

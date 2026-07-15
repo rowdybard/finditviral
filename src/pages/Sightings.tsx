@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import type { Sighting, Product, Trend } from '../types/database'
+import type { Sighting, Product, Trend, Lead } from '../types/database'
 import SightingCard from '../components/SightingCard'
+import LeadCard from '../components/LeadCard'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
-import { listPublicSightings } from '../lib/launchApi'
+import { listPublicSightings, listPublicLeads } from '../lib/launchApi'
+
+type Tab = 'all' | 'sightings' | 'leads'
+
+type FeedItem =
+  | { kind: 'sighting'; data: Sighting; sortKey: string }
+  | { kind: 'lead'; data: Lead; sortKey: string }
 
 export default function Sightings() {
   const [sightings, setSightings] = useState<Sighting[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [trends, setTrends] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
@@ -16,6 +24,7 @@ export default function Sightings() {
   const [productFilter, setProductFilter] = useState('')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const [radiusFilter, setRadiusFilter] = useState('50')
+  const [tab, setTab] = useState<Tab>('all')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -34,30 +43,64 @@ export default function Sightings() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data, error: queryError } = await listPublicSightings({
-        productId: productFilter || null,
-        limit: 50,
-        zipCode: zipFilter.trim() || null,
-        radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
-      })
-      if (queryError) {
+      const [sightingsRes, leadsRes] = await Promise.all([
+        listPublicSightings({
+          productId: productFilter || null,
+          limit: 50,
+          zipCode: zipFilter.trim() || null,
+          radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+        }),
+        listPublicLeads({
+          productId: productFilter || null,
+          limit: 50,
+          zipCode: zipFilter.trim() || null,
+          radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+        }),
+      ])
+
+      if (sightingsRes.error) {
         setError('Failed to load sightings. Please try again.')
         setSightings([])
+        setLeads([])
         setLoading(false)
         return
       }
-      setError(null)
-      let results = data as Sighting[] ?? []
-      if (!productFilter && trendFilter) {
-        const trendProductIds = new Set(products.filter((product) => product.trend_id === trendFilter).map((product) => product.id))
-        results = results.filter((sighting) => trendProductIds.has(sighting.product_id))
+      if (leadsRes.error) {
+        setError('Failed to load leads. Please try again.')
+        setLeads([])
+        setLoading(false)
+        return
       }
 
-      setSightings(results)
+      setError(null)
+      let sightingResults = sightingsRes.data as Sighting[] ?? []
+      let leadResults = leadsRes.data as Lead[] ?? []
+
+      if (!productFilter && trendFilter) {
+        const trendProductIds = new Set(products.filter((product) => product.trend_id === trendFilter).map((product) => product.id))
+        sightingResults = sightingResults.filter((sighting) => trendProductIds.has(sighting.product_id))
+        leadResults = leadResults.filter((lead) => trendProductIds.has(lead.product_id))
+      }
+
+      setSightings(sightingResults)
+      setLeads(leadResults)
       setLoading(false)
     }
     load()
   }, [productFilter, trendFilter, zipFilter, radiusFilter, products])
+
+  const feedItems: FeedItem[] = []
+  if (tab === 'all' || tab === 'sightings') {
+    for (const s of sightings) {
+      feedItems.push({ kind: 'sighting', data: s, sortKey: s.seen_at ?? s.created_at })
+    }
+  }
+  if (tab === 'all' || tab === 'leads') {
+    for (const l of leads) {
+      feedItems.push({ kind: 'lead', data: l, sortKey: l.created_at })
+    }
+  }
+  feedItems.sort((a, b) => b.sortKey.localeCompare(a.sortKey))
 
   return (
     <div className="space-y-4">
@@ -69,6 +112,21 @@ export default function Sightings() {
         <Link to="/sightings/new" className="btn-primary text-sm">
           + Report Sighting
         </Link>
+      </div>
+
+      <div className="flex gap-1 rounded-lg bg-stone-100 p-1">
+        {(['all', 'sightings', 'leads'] as Tab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-bold capitalize transition ${
+              tab === t ? 'bg-white text-brand-700 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -120,17 +178,24 @@ export default function Sightings() {
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
         </div>
-      ) : sightings.length > 0 ? (
+      ) : feedItems.length > 0 ? (
         <div className="space-y-3">
-          {sightings.map((s) => (
-            <SightingCard key={s.id} sighting={s} />
-          ))}
+          {feedItems.map((item) =>
+            item.kind === 'sighting'
+              ? <SightingCard key={`s-${item.data.id}`} sighting={item.data} />
+              : <LeadCard key={`l-${item.data.id}`} lead={item.data} />
+          )}
         </div>
       ) : (
         <EmptyState
-          title="No sightings reported yet"
-          message={zipFilter ? 'No sightings within your search radius.' : 'Check back later, report what you find, or post a bounty for local help.'}
-          action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
+          title={tab === 'leads' ? 'No leads shared yet' : 'No sightings reported yet'}
+          message={zipFilter ? 'No results within your search radius.' : 'Check back later, report what you find, or share a restock lead.'}
+          action={
+            <div className="flex gap-2">
+              <Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>
+              <Link to="/leads/new" className="btn-primary">Share a Lead</Link>
+            </div>
+          }
         />
       )}
     </div>

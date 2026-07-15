@@ -23,6 +23,7 @@ const PUBLIC_SPA_ROUTES = [
   /^\/products\/[^/]+\/?$/,
   /^\/stores\/?$/,
   /^\/stores\/[^/]+\/?$/,
+  /^\/leads\/[^/]+\/?$/,
 ]
 
 const PRIVATE_SPA_ROUTES = [
@@ -33,6 +34,7 @@ const PRIVATE_SPA_ROUTES = [
   /^\/trends\//,
   /^\/bounties(?:\/|$)/,
   /^\/sightings(?:\/|$)/,
+  /^\/leads(?:\/|$)/,
   /^\/profile\//,
   /^\/drafts\/?$/,
   /^\/admin(?:\/|$)/,
@@ -542,6 +544,14 @@ export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
     return {
       ...PUBLIC_STORES_METADATA,
       canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+    }
+  }
+  if (normalizedPathname.startsWith('/leads/')) {
+    return {
+      title: 'Restock Lead - FindItViral',
+      description: 'Community-shared restock lead for a viral or hard-to-find product in Greater Lansing.',
+      canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+      robots: 'index, follow',
     }
   }
   if (isSpaRoute(pathname)) {
