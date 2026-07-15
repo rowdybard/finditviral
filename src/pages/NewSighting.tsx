@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarBlank, Clock, ShieldCheck, Storefront, Users, ShoppingCart } from '@phosphor-icons/react'
+import { CalendarBlank, ShieldCheck, Storefront, Users, ShoppingCart } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -59,6 +59,8 @@ export default function NewSighting() {
   const [storeQuery, setStoreQuery] = useState('')
   const [storeResults, setStoreResults] = useState<StoreSearchResult[]>([])
   const [seenAt, setSeenAt] = useState(() => localDateTime(new Date()))
+  const [whenSeen, setWhenSeen] = useState<'today' | 'yesterday' | 'older'>('today')
+  const [olderDate, setOlderDate] = useState('')
   const [availability, setAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
   const [quantity, setQuantity] = useState('')
   const [notes, setNotes] = useState('')
@@ -104,7 +106,15 @@ export default function NewSighting() {
     setProduct(isSelection(payload.product) ? payload.product : null)
     if (Array.isArray(payload.selectedStores)) setSelectedStores(payload.selectedStores.filter(isSelection))
     else if (isSelection((payload as Record<string, unknown>).store)) setSelectedStores([(payload as Record<string, unknown>).store as CatalogSelection])
-    if (typeof payload.seenAt === 'string') setSeenAt(payload.seenAt)
+    if (typeof payload.seenAt === 'string') {
+      setSeenAt(payload.seenAt)
+      const restoredDate = payload.seenAt.slice(0, 10)
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+      if (restoredDate === todayStr) setWhenSeen('today')
+      else if (restoredDate === yesterdayStr) setWhenSeen('yesterday')
+      else { setWhenSeen('older'); setOlderDate(restoredDate) }
+    }
     if (payload.availability === 'in_stock' || payload.availability === 'low_stock' || payload.availability === 'sold_out' || payload.availability === 'unknown') {
       setAvailability(payload.availability)
     }
@@ -134,6 +144,18 @@ export default function NewSighting() {
   useEffect(() => {
     void loadDraft()
   }, [])
+
+  useEffect(() => {
+    if (whenSeen === 'today') {
+      setSeenAt(localDateTime(new Date()))
+    } else if (whenSeen === 'yesterday') {
+      const y = new Date()
+      y.setDate(y.getDate() - 1)
+      setSeenAt(`${localDateTime(y).slice(0, 10)}T12:00`)
+    } else if (whenSeen === 'older' && olderDate) {
+      setSeenAt(`${olderDate}T12:00`)
+    }
+  }, [whenSeen, olderDate])
 
   useEffect(() => {
     if (!leadSlug) return
@@ -279,15 +301,14 @@ export default function NewSighting() {
     setSubmitted(true)
   }
 
-  const seenDate = seenAt.slice(0, 10)
-  const seenTime = seenAt.slice(11, 16)
+  const whenSeenOptions = [
+    { value: 'today' as const, label: 'Today' },
+    { value: 'yesterday' as const, label: 'Yesterday' },
+    { value: 'older' as const, label: '2+ days ago' },
+  ]
 
-  function updateSeenDate(date: string) {
-    setSeenAt(`${date}T${seenTime || '12:00'}`)
-  }
-  function updateSeenTime(time: string) {
-    setSeenAt(`${seenDate}T${time}`)
-  }
+  const olderDateMin = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const olderDateMax = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
   const availabilityOptions = [
     { value: 'in_stock', label: 'In Stock', activeClass: 'border-green-600 bg-green-50 text-green-700' },
@@ -450,41 +471,38 @@ export default function NewSighting() {
 
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
-          {/* Step 4: Date & Time */}
+          {/* Step 4: When did you see it? */}
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> When did you see it?</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <fieldset>
+              <legend className="sr-only">When did you see it?</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {whenSeenOptions.map((opt) => (
+                  <label key={opt.value} className={`fiv-availability-btn ${whenSeen === opt.value ? 'border-brand-600 bg-brand-50 text-brand-700' : 'fiv-availability-btn-inactive'}`}>
+                    <input className="sr-only" type="radio" name="whenSeen" value={opt.value} checked={whenSeen === opt.value} onChange={() => setWhenSeen(opt.value)} />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {whenSeen === 'older' && (
               <div>
-                <label className="label" htmlFor="seen-date">Date</label>
+                <label className="label" htmlFor="seen-date">Pick a date</label>
                 <div className="relative">
                   <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     id="seen-date"
                     className="input pr-10"
                     type="date"
-                    value={seenDate}
-                    min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
-                    max={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 10)}
-                    onChange={(event) => updateSeenDate(event.target.value)}
+                    value={olderDate}
+                    min={olderDateMin}
+                    max={olderDateMax}
+                    onChange={(event) => setOlderDate(event.target.value)}
                     required
                   />
                 </div>
               </div>
-              <div>
-                <label className="label" htmlFor="seen-time">Time</label>
-                <div className="relative">
-                  <Clock size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    id="seen-time"
-                    className="input pr-10"
-                    type="time"
-                    value={seenTime}
-                    onChange={(event) => updateSeenTime(event.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Step 5: Photo Upload */}
