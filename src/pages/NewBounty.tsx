@@ -456,7 +456,7 @@ export default function NewBounty() {
                 {storeResults.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
-                      <button key={s.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreQuery(''); setStoreResults([]) }}>
+                      <button key={s.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreResults([]) }}>
                         {s.store_name || s.retailer_name} — {s.city}, {s.state}
                       </button>
                     ))}
