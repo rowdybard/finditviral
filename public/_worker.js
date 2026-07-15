@@ -72,11 +72,11 @@ function createContentSecurityPolicy(nonce) {
   return [
     "default-src 'self'",
     "base-uri 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com https://www.google-analytics.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com https://www.google-analytics.com https://nominatim.openstreetmap.org",
     "font-src 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "frame-src https://challenges.cloudflare.com",
+    "frame-src https://challenges.cloudflare.com https://www.openstreetmap.org",
     "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com",
     "manifest-src 'self'",
     "object-src 'none'",
