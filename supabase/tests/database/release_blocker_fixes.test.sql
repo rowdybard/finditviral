@@ -107,9 +107,9 @@ select ok(
     where n.nspname = 'public'
       and p.proname = 'admin_list_recent_contributions'
       and pg_get_functiondef(p.oid) ~ '''lead''::text'
-      and pg_get_functiondef(p.oid) ~ 'l.status = ''pending'''
+      and pg_get_functiondef(p.oid) !~ 'l.status = ''pending'''
   ),
-  'pending Leads appear in the admin moderation queue'
+  'all Leads appear in the admin moderation queue (not just pending)'
 );
 
 -- Fixtures for behavioral confirmation and batch-transaction tests.
