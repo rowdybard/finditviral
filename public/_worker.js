@@ -20,6 +20,7 @@ const RATE_LIMIT_DAILY_WINDOW_SECONDS = 60 * 60 * 24
 const UPSTREAM_TIMEOUT_MS = 10_000
 
 const PUBLIC_SPA_ROUTES = [
+  /^\/products\/?$/,
   /^\/products\/[^/]+\/?$/,
   /^\/stores\/?$/,
   /^\/stores\/[^/]+\/?$/,

@@ -27,6 +27,11 @@ export default function App() {
       <Route path="/products/:slug" element={<PublicCatalogLayout><ProductPage /></PublicCatalogLayout>} />
       <Route path="/stores" element={<PublicCatalogLayout><Stores /></PublicCatalogLayout>} />
       <Route path="/stores/:slug" element={<PublicCatalogLayout><StorePage /></PublicCatalogLayout>} />
+      <Route path="/leads/new" element={
+        <Suspense fallback={<div className="min-h-screen bg-stone-50" aria-label="Loading" />}>
+          <PrivateApp />
+        </Suspense>
+      } />
       <Route path="/leads/:slug" element={<PublicCatalogLayout><LeadDetail /></PublicCatalogLayout>} />
       <Route
         path="*"
