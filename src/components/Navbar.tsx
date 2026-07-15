@@ -1,9 +1,11 @@
-import { NavLink, Link } from 'react-router-dom'
+import { NavLink, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import PostMenu from './PostMenu'
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
+  const { pathname } = useLocation()
+  const showPostMenu = user && pathname === '/home'
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur">
@@ -50,7 +52,7 @@ export default function Navbar() {
               Drafts
             </NavLink>
           )}
-          {user && <PostMenu />}
+          {showPostMenu && <PostMenu />}
           {user ? (
             <div className="flex items-center gap-1 sm:gap-2">
               {profile?.username ? (
