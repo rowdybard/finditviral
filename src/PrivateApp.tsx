@@ -15,6 +15,7 @@ import Onboarding from './pages/Onboarding'
 import Profile from './pages/Profile'
 import Sightings from './pages/Sightings'
 import TrendPage from './pages/TrendPage'
+import { buildOnboardingPath, locationReturnPath } from './lib/authReturn'
 
 function OnboardingRedirect({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth()
@@ -23,7 +24,7 @@ function OnboardingRedirect({ children }: { children: React.ReactNode }) {
   if (loading || !user) return <>{children}</>
   const needsOnboarding = !profile || !profile.onboarding_completed
   if (needsOnboarding && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace />
+    return <Navigate to={buildOnboardingPath(locationReturnPath(location))} replace />
   }
   return <>{children}</>
 }

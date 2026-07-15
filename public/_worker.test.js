@@ -112,6 +112,13 @@ describe('public catalog metadata', () => {
     })
   })
 
+  it('keeps the Lead creation route private in worker metadata', async () => {
+    expect(await getPageMetadata('/leads/new')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/leads/new',
+      robots: 'noindex, nofollow',
+    })
+  })
+
   it('injects product name into metadata when Supabase returns data', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
       if (String(url).includes('get_public_product')) {
@@ -888,6 +895,7 @@ describe('sitemap generation', () => {
       { url_path: '//example', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/../admin', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/auth', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
+      { url_path: '/leads/new', lastmod: '2026-07-14', changefreq: 'daily', priority: 0.5 },
       { url_path: '/products/item?unexpected=query', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/stores/item#fragment', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/products/valid-product', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.8 },
@@ -907,6 +915,7 @@ describe('sitemap generation', () => {
     expect(body).not.toContain('//example')
     expect(body).not.toContain('/../admin')
     expect(body).not.toContain('/auth')
+    expect(body).not.toContain('/leads/new')
     expect(body).not.toContain('?unexpected=query')
     expect(body).not.toContain('#fragment')
     vi.unstubAllGlobals()

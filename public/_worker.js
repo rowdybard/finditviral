@@ -27,7 +27,7 @@ const PUBLIC_SPA_ROUTES = [
   /^\/products\/[^/]+\/?$/,
   /^\/stores\/?$/,
   /^\/stores\/[^/]+\/?$/,
-  /^\/leads\/[^/]+\/?$/,
+  /^\/leads\/(?!new\/?$)[^/]+\/?$/,
 ]
 
 const PRIVATE_SPA_ROUTES = [
@@ -667,6 +667,12 @@ export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
       canonicalUrl: `https://finditviral.com${normalizedPathname}`,
     }
   }
+  if (normalizedPathname === '/leads/new') {
+    return {
+      ...PRIVATE_METADATA,
+      canonicalUrl: 'https://finditviral.com/leads/new',
+    }
+  }
   if (normalizedPathname.startsWith('/leads/')) {
     const slug = normalizedPathname.slice('/leads/'.length)
     const lead = env ? await fetchPublicLead(env, slug, fetchImpl) : null
@@ -754,7 +760,7 @@ const SITEMAP_PATH_WHITELIST = [
   /^\/privacy\/?$/,
   /^\/products\/[^/]+\/?$/,
   /^\/stores\/[^/]+\/?$/,
-  /^\/leads\/[^/]+\/?$/,
+  /^\/leads\/(?!new\/?$)[^/]+\/?$/,
 ]
 
 function isValidSitemapPath(path) {

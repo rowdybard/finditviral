@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/analytics'
 import { mapAuthError } from '../lib/errorMap'
+import { buildAuthPath, buildOnboardingPath, sanitizeReturnPath } from '../lib/authReturn'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -29,6 +30,10 @@ export default function Auth() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get('mode') === 'signup'
+  const returnTo = sanitizeReturnPath(searchParams.get('returnTo'))
+  const signInPath = buildAuthPath(returnTo)
+  const signUpPath = buildAuthPath(returnTo, 'signup')
+  const onboardingPath = buildOnboardingPath(returnTo)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -135,7 +140,7 @@ export default function Auth() {
         setLoading(false)
         return
       }
-      const result = await signUp(normalizedEmail, password, captchaToken)
+      const result = await signUp(normalizedEmail, password, captchaToken, returnTo)
       if (result.error) {
         console.error('sign_up error:', result.error)
         setError(mapAuthError(result.error, true))
@@ -151,7 +156,7 @@ export default function Auth() {
         return
       }
 
-      navigate('/onboarding', { replace: true })
+      navigate(onboardingPath, { replace: true })
       return
     }
 
@@ -171,7 +176,7 @@ export default function Auth() {
     }
 
     trackEvent('login', { method: 'email' })
-    navigate('/home', { replace: true })
+    navigate(returnTo, { replace: true })
   }
 
   return (
@@ -208,7 +213,7 @@ export default function Auth() {
                     const { error: resendError } = await supabase.auth.resend({
                       type: 'signup',
                       email: email.trim().toLowerCase(),
-                      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+                      options: { emailRedirectTo: `${window.location.origin}${onboardingPath}` },
                     })
                     setResending(false)
                     if (resendError) {
@@ -222,7 +227,7 @@ export default function Auth() {
                   {resending ? 'Resending…' : 'Resend confirmation email'}
                 </button>
               )}
-              <Link to="/auth" className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+              <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
                 Back to sign in
               </Link>
             </div>
@@ -238,13 +243,13 @@ export default function Auth() {
 
               <div className="mt-6 grid grid-cols-2 rounded-xl border-2 border-stone-900 bg-stone-100 p-1" aria-label="Account action">
                 <Link
-                  to="/auth"
+                  to={signInPath}
                   className={`rounded-lg px-3 py-2 text-center text-sm font-bold ${!isSignUp ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
                 >
                   Sign in
                 </Link>
                 <Link
-                  to="/auth?mode=signup"
+                  to={signUpPath}
                   className={`rounded-lg px-3 py-2 text-center text-sm font-bold ${isSignUp ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
                 >
                   Create account

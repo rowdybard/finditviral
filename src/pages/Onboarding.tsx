@@ -1,11 +1,12 @@
 ﻿import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
 import { supabase } from '../lib/supabase'
 import { USERNAME_MAX, normalizeUsername, validateUsername } from '../lib/username'
 import { errorMap } from '../lib/errorMap'
+import { buildAuthPath, sanitizeReturnPath } from '../lib/authReturn'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -14,6 +15,8 @@ const STEPS = ['Username', 'Location', 'Interests'] as const
 export default function Onboarding() {
   const { user, refreshProfile } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = sanitizeReturnPath(searchParams.get('returnTo'))
   const [step, setStep] = useState(0)
   const [username, setUsername] = useState('')
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
@@ -52,8 +55,8 @@ export default function Onboarding() {
   }, [username, checkUsername])
 
   useEffect(() => {
-    if (!user) navigate('/auth', { replace: true })
-  }, [user, navigate])
+    if (!user) navigate(buildAuthPath(returnTo), { replace: true })
+  }, [user, navigate, returnTo])
 
   async function handleFinish() {
     if (!user) return
@@ -94,7 +97,7 @@ export default function Onboarding() {
       const mapped = errorMap(rpcError)
       if (mapped.code === 'ONBOARDING_ALREADY_COMPLETED') {
         await refreshProfile()
-        navigate('/home', { replace: true })
+        navigate(returnTo, { replace: true })
         return
       }
       setError(mapped.message)
@@ -108,7 +111,7 @@ export default function Onboarding() {
       has_zip: true,
       city_count: preferredCities.length,
     })
-    navigate('/home', { replace: true })
+    navigate(returnTo, { replace: true })
   }
 
   function handleNext(event: FormEvent<HTMLFormElement>) {

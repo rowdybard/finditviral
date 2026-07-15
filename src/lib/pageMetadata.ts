@@ -77,6 +77,12 @@ export function getPageMetadata(pathname: string): PageMetadata {
       robots: 'index, follow',
     }
   }
+  if (normalizedPathname === '/leads/new') {
+    return {
+      ...PRIVATE_METADATA,
+      canonicalUrl: 'https://finditviral.com/leads/new',
+    }
+  }
   if (normalizedPathname.startsWith('/leads/')) {
     return {
       title: 'Restock Lead - FindItViral',

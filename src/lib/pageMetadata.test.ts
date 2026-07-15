@@ -53,6 +53,13 @@ describe('getPageMetadata', () => {
     })
   })
 
+  it('keeps the Lead creation route private', () => {
+    expect(getPageMetadata('/leads/new')).toMatchObject({
+      canonicalUrl: 'https://finditviral.com/leads/new',
+      robots: 'noindex, nofollow',
+    })
+  })
+
   it('keeps admin and private draft routes out of search results', () => {
     expect(getPageMetadata('/admin').robots).toBe('noindex, nofollow')
     expect(getPageMetadata('/drafts').robots).toBe('noindex, nofollow')

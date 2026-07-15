@@ -27,7 +27,7 @@ export default function App() {
       <Route path="/products/:slug" element={<CatalogLayout><ProductPage /></CatalogLayout>} />
       <Route path="/stores" element={<CatalogLayout><Stores /></CatalogLayout>} />
       <Route path="/stores/:slug" element={<CatalogLayout><StorePage /></CatalogLayout>} />
-      <Route path="/leads/new" element={
+      <Route path="/leads/new/*" element={
         <Suspense fallback={<div className="min-h-screen bg-stone-50" aria-label="Loading" />}>
           <PrivateApp />
         </Suspense>

@@ -2,6 +2,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types/database'
+import { buildOnboardingPath } from '../lib/authReturn'
 
 type AuthContextType = {
   session: Session | null
@@ -9,7 +10,7 @@ type AuthContextType = {
   profile: Profile | null
   loading: boolean
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: string | null }>
-  signUp: (email: string, password: string, captchaToken?: string) => Promise<{
+  signUp: (email: string, password: string, captchaToken?: string, returnTo?: string) => Promise<{
     error: string | null
     needsEmailConfirmation: boolean
   }>
@@ -74,12 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
-  async function signUp(email: string, password: string, captchaToken?: string) {
+  async function signUp(email: string, password: string, captchaToken?: string, returnTo = '/home') {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: `${window.location.origin}${buildOnboardingPath(returnTo)}`,
         captchaToken,
       },
     })
