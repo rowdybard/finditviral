@@ -2,6 +2,10 @@
 const webOnly = args.has('--web-only')
 const baseUrl = new URL(process.env.LAUNCH_BASE_URL || 'https://finditviral.com')
 const isCanonicalProduction = baseUrl.origin === 'https://finditviral.com'
+const usePagesOriginHealthCheck = (
+  baseUrl.hostname === 'finditviral.pages.dev'
+  && process.env.HEALTH_CHECK_ORIGIN_BYPASS === '1'
+)
 
 let failures = 0
 
@@ -51,8 +55,16 @@ function getTitle(html) {
   return html.match(/<title>(.*?)<\/title>/i)?.[1] ?? ''
 }
 
+async function fetchWithHealthHeaders(input, init = {}) {
+  const headers = new Headers(init.headers)
+  if (usePagesOriginHealthCheck) {
+    headers.set('X-FindItViral-Health-Check', 'pages-origin')
+  }
+  return fetch(input, { ...init, headers })
+}
+
 async function fetchFromBase(pathname, init = {}) {
-  return fetch(new URL(pathname, baseUrl), init)
+  return fetchWithHealthHeaders(new URL(pathname, baseUrl), init)
 }
 
 let rootHtml = ''
@@ -110,54 +122,58 @@ await check('missing JavaScript asset returns a real 404', async () => {
   assert(response.status === 404, `expected 404, received ${response.status}`)
 })
 
-await check('FiV Heat endpoint validates product clicks without recording one', async () => {
-  const response = await fetchFromBase('/api/product-click', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Origin: baseUrl.origin,
-    },
-    body: JSON.stringify({ productId: 'invalid-smoke-probe' }),
+if (usePagesOriginHealthCheck) {
+  console.log('↷ Pages-origin mode skips POST endpoint probes; the origin bypass is GET/HEAD-only.')
+} else {
+  await check('FiV Heat endpoint validates product clicks without recording one', async () => {
+    const response = await fetchFromBase('/api/product-click', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: baseUrl.origin,
+      },
+      body: JSON.stringify({ productId: 'invalid-smoke-probe' }),
+    })
+    const body = await response.json().catch(() => ({}))
+    assert(response.status === 400, `expected 400, received ${response.status}`)
+    assert(body.error === 'invalid_request', `unexpected response: ${JSON.stringify(body)}`)
   })
-  const body = await response.json().catch(() => ({}))
-  assert(response.status === 400, `expected 400, received ${response.status}`)
-  assert(body.error === 'invalid_request', `unexpected response: ${JSON.stringify(body)}`)
-})
 
-await check('early access endpoint requires a Turnstile token', async () => {
-  const response = await fetchFromBase('/api/early-access', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Origin: baseUrl.origin,
-    },
-    body: JSON.stringify({
-      email: 'smoke-test@finditviral.com',
-      reason: 'This is a smoke test verification probe with sufficient length.',
-    }),
+  await check('early access endpoint requires a Turnstile token', async () => {
+    const response = await fetchFromBase('/api/early-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: baseUrl.origin,
+      },
+      body: JSON.stringify({
+        email: 'smoke-test@finditviral.com',
+        reason: 'This is a smoke test verification probe with sufficient length.',
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    assert(response.status === 400, `expected 400, received ${response.status}`)
+    assert(body.error === 'verification_required', `unexpected response: ${JSON.stringify(body)}`)
   })
-  const body = await response.json().catch(() => ({}))
-  assert(response.status === 400, `expected 400, received ${response.status}`)
-  assert(body.error === 'verification_required', `unexpected response: ${JSON.stringify(body)}`)
-})
 
-await check('early access endpoint rejects an invalid Turnstile token via siteverify', async () => {
-  const response = await fetchFromBase('/api/early-access', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Origin: baseUrl.origin,
-    },
-    body: JSON.stringify({
-      email: 'smoke-test@finditviral.com',
-      reason: 'This is a smoke test verification probe with sufficient length.',
-      turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
-    }),
+  await check('early access endpoint rejects an invalid Turnstile token via siteverify', async () => {
+    const response = await fetchFromBase('/api/early-access', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: baseUrl.origin,
+      },
+      body: JSON.stringify({
+        email: 'smoke-test@finditviral.com',
+        reason: 'This is a smoke test verification probe with sufficient length.',
+        turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
+      }),
+    })
+    const body = await response.json().catch(() => ({}))
+    assert(response.status === 400, `expected 400, received ${response.status}`)
+    assert(body.error === 'verification_failed', `unexpected response: ${JSON.stringify(body)}`)
   })
-  const body = await response.json().catch(() => ({}))
-  assert(response.status === 400, `expected 400, received ${response.status}`)
-  assert(body.error === 'verification_failed', `unexpected response: ${JSON.stringify(body)}`)
-})
+}
 
 await check('crawler files are real static resources', async () => {
   const [robots, sitemap] = await Promise.all([
@@ -222,7 +238,7 @@ await check('public bundle contains only browser-safe Supabase configuration', a
   if (dynamicChunkMatch) {
     try {
       const dynamicChunkUrl = new URL(dynamicChunkMatch[1], new URL(assetPath, baseUrl))
-      const resp = await fetch(dynamicChunkUrl)
+      const resp = await fetchWithHealthHeaders(dynamicChunkUrl)
       allJsTexts.push(await resp.text())
     } catch { /* ignore */ }
   }

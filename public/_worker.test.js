@@ -5,6 +5,89 @@ import worker from './_worker.js'
 const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 const VISITOR_ID = '11111111-1111-4111-8111-111111111111'
 
+describe('Pages health-check origin bypass', () => {
+  function assetEnv() {
+    return {
+      ASSETS: {
+        fetch: vi.fn().mockResolvedValue(new Response('healthy', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        })),
+      },
+    }
+  }
+
+  it('keeps ordinary Pages requests redirected to the canonical hostname', async () => {
+    const env = assetEnv()
+    const response = await worker.fetch(new Request('https://finditviral.pages.dev/health.txt'), env)
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://finditviral.com/health.txt')
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled()
+  })
+
+  it('serves the Pages origin only for the exact health-check header', async () => {
+    const env = assetEnv()
+    const request = new Request('https://finditviral.pages.dev/health.txt', {
+      headers: { 'X-FindItViral-Health-Check': 'pages-origin' },
+    })
+    const response = await worker.fetch(request, env)
+
+    expect(response.status).toBe(200)
+    await expect(response.text()).resolves.toBe('healthy')
+    expect(env.ASSETS.fetch).toHaveBeenCalledWith(request)
+  })
+
+  it('never lets the health header bypass redirects for POST requests', async () => {
+    const env = assetEnv()
+    const response = await worker.fetch(new Request('https://finditviral.pages.dev/api/product-click', {
+      method: 'POST',
+      headers: { 'X-FindItViral-Health-Check': 'pages-origin' },
+    }), env)
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://finditviral.com/api/product-click')
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled()
+  })
+
+  it('marks health-check HTML as noindex and no-store', async () => {
+    vi.stubGlobal('HTMLRewriter', class {
+      on() { return this }
+      transform(response) { return response }
+    })
+    const env = {
+      ASSETS: {
+        fetch: vi.fn().mockResolvedValue(new Response('<html></html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        })),
+      },
+    }
+
+    try {
+      const response = await worker.fetch(new Request('https://finditviral.pages.dev/', {
+        headers: { 'X-FindItViral-Health-Check': 'pages-origin' },
+      }), env)
+
+      expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow, noarchive')
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('never lets the health header bypass the www redirect', async () => {
+    const env = assetEnv()
+    const response = await worker.fetch(new Request('https://www.finditviral.com/privacy', {
+      headers: { 'X-FindItViral-Health-Check': 'pages-origin' },
+    }), env)
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('Location')).toBe('https://finditviral.com/privacy')
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled()
+  })
+})
+
 describe('public catalog metadata', () => {
   it('keeps product and store routes indexable while admin routes stay private', async () => {
     expect(await getPageMetadata('/products/test-product')).toMatchObject({

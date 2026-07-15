@@ -1,5 +1,8 @@
 ﻿const CANONICAL_HOST = 'finditviral.com'
 const REDIRECT_HOSTS = new Set(['finditviral.pages.dev', 'www.finditviral.com'])
+const HEALTH_CHECK_ORIGIN_HOST = 'finditviral.pages.dev'
+const HEALTH_CHECK_HEADER = 'X-FindItViral-Health-Check'
+const HEALTH_CHECK_HEADER_VALUE = 'pages-origin'
 
 const EARLY_ACCESS_PATH = '/api/early-access'
 const PRODUCT_CLICK_PATH = '/api/product-click'
@@ -707,7 +710,7 @@ function setAttribute(name, value) {
   }
 }
 
-function applyPageMetadata(response, metadata) {
+function applyPageMetadata(response, metadata, forceNoIndex = false) {
   if (!response.headers.get('Content-Type')?.includes('text/html')) {
     return response
   }
@@ -715,9 +718,10 @@ function applyPageMetadata(response, metadata) {
   const nonce = createNonce()
   const headers = new Headers(response.headers)
   headers.set('Content-Security-Policy', createContentSecurityPolicy(nonce))
-  if (metadata?.robots.startsWith('noindex')) {
+  if (forceNoIndex || metadata?.robots.startsWith('noindex')) {
     headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive')
   }
+  if (forceNoIndex) headers.set('Cache-Control', 'no-store')
   const securedResponse = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -830,8 +834,13 @@ async function handleSitemap(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
+    const isPagesHealthCheck = (
+      (request.method === 'GET' || request.method === 'HEAD')
+      && url.hostname === HEALTH_CHECK_ORIGIN_HOST
+      && request.headers.get(HEALTH_CHECK_HEADER) === HEALTH_CHECK_HEADER_VALUE
+    )
 
-    if (REDIRECT_HOSTS.has(url.hostname)) {
+    if (REDIRECT_HOSTS.has(url.hostname) && !isPagesHealthCheck) {
       url.hostname = CANONICAL_HOST
       url.protocol = 'https:'
       return Response.redirect(url.toString(), 301)
@@ -868,7 +877,11 @@ export default {
         response = await env.ASSETS.fetch(new Request(indexUrl, request))
       }
 
-      return applyPageMetadata(response, await getPageMetadata(url.pathname, env))
+      return applyPageMetadata(
+        response,
+        await getPageMetadata(url.pathname, env),
+        isPagesHealthCheck,
+      )
     } catch (error) {
       console.error(JSON.stringify({
         message: 'asset request failed',

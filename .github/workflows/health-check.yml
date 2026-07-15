@@ -1,14 +1,21 @@
 name: Health Check
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/health-check.yml'
+      - 'public/_worker.js'
+      - 'scripts/verify-production.mjs'
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       url:
-        description: 'Base URL to test'
+        description: 'Origin URL to test'
         required: false
-        default: 'https://finditviral.com'
+        default: 'https://finditviral.pages.dev'
 
 permissions:
   contents: read
@@ -16,9 +23,12 @@ permissions:
 jobs:
   health:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
-      LAUNCH_BASE_URL: ${{ github.event.inputs.url || 'https://finditviral.com' }}
+      # GitHub-hosted runner IPs are challenged on the canonical hostname. Probe
+      # the same deployed Worker and assets through the Pages origin instead.
+      LAUNCH_BASE_URL: ${{ github.event.inputs.url || 'https://finditviral.pages.dev' }}
+      HEALTH_CHECK_ORIGIN_BYPASS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +36,22 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Wait for the Pages deployment
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --header 'X-FindItViral-Health-Check: pages-origin' \
+              "$LAUNCH_BASE_URL/")"
+            if [ "$status" = '200' ]; then
+              exit 0
+            fi
+            echo "Pages deployment is not ready yet (HTTP $status, attempt $attempt/30)."
+            sleep 10
+          done
+          echo 'Timed out waiting for the Pages deployment.' >&2
+          exit 1
       - name: Run web smoke tests
         run: npm run smoke:web
         env:
