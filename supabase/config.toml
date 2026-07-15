@@ -24,7 +24,7 @@ sql_paths = []
 [auth]
 enabled = true
 site_url = "https://finditviral.com"
-additional_redirect_urls = ["https://finditviral.com", "https://finditviral.com/onboarding"]
+additional_redirect_urls = ["https://finditviral.com", "https://finditviral.com/onboarding", "https://finditviral.com/auth"]
 enable_signup = true
 enable_anonymous_sign_ins = false
 minimum_password_length = 8

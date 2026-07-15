@@ -26,13 +26,15 @@ type TurnstileWidget = {
 }
 
 export default function Auth() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, passwordRecovery, requestPasswordReset, updatePassword } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get('mode') === 'signup'
+  const isForgot = searchParams.get('mode') === 'forgot'
   const returnTo = sanitizeReturnPath(searchParams.get('returnTo'))
   const signInPath = buildAuthPath(returnTo)
   const signUpPath = buildAuthPath(returnTo, 'signup')
+  const forgotPath = `/auth?mode=forgot${returnTo !== '/home' ? `&returnTo=${encodeURIComponent(returnTo)}` : ''}`
   const onboardingPath = buildOnboardingPath(returnTo)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,6 +46,8 @@ export default function Auth() {
   const [captchaExpired, setCaptchaExpired] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [passwordUpdated, setPasswordUpdated] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetId = useRef<string | null>(null)
 
@@ -117,6 +121,41 @@ export default function Auth() {
       setCaptchaExpired(false)
     }
   }, [])
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setLoading(true)
+    const normalizedEmail = email.trim().toLowerCase()
+    const { error: resetError } = await requestPasswordReset(normalizedEmail)
+    setLoading(false)
+    if (resetError) {
+      setError(mapAuthError(resetError, true))
+      return
+    }
+    setResetSent(true)
+  }
+
+  async function handleUpdatePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    setLoading(true)
+    const { error: updateError } = await updatePassword(password)
+    setLoading(false)
+    if (updateError) {
+      setError(mapAuthError(updateError, false))
+      return
+    }
+    setPasswordUpdated(true)
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -231,6 +270,129 @@ export default function Auth() {
                 Back to sign in
               </Link>
             </div>
+          ) : isForgot ? (
+            <>
+              {resetSent ? (
+                <div role="status" aria-live="polite" className="py-4 text-center">
+                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
+                  <h1 className="mt-4 text-2xl font-extrabold">Check your email</h1>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">
+                    We sent a password reset link to <strong className="text-stone-800">{email.trim()}</strong>. Click the link in the email to set a new password.
+                  </p>
+                  <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                    Back to sign in
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Greater Lansing beta</p>
+                  <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Reset your password</h1>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">
+                    Enter your email and we'll send you a link to set a new password.
+                  </p>
+
+                  <form onSubmit={handleForgotPassword} className="mt-6 space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-email">Email address</label>
+                      <input
+                        id="auth-email"
+                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        maxLength={320}
+                      />
+                    </div>
+
+                    {error && (
+                      <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {loading ? 'Sending…' : 'Send reset link'}
+                    </button>
+                  </form>
+
+                  <p className="mt-4 text-center text-sm text-stone-600">
+                    <Link to={signInPath} className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Back to sign in</Link>
+                  </p>
+                </>
+              )}
+            </>
+          ) : passwordRecovery ? (
+            <>
+              {passwordUpdated ? (
+                <div role="status" aria-live="polite" className="py-4 text-center">
+                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
+                  <h1 className="mt-4 text-2xl font-extrabold">Password updated</h1>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">
+                    Your password has been changed. You can now sign in with your new password.
+                  </p>
+                  <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                    Back to sign in
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Greater Lansing beta</p>
+                  <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Set a new password</h1>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">
+                    Choose a new password for your account.
+                  </p>
+
+                  <form onSubmit={handleUpdatePassword} className="mt-6 space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-password">New password</label>
+                      <input
+                        id="auth-password"
+                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="At least 8 characters"
+                        required
+                        minLength={8}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-confirm-password">Confirm password</label>
+                      <input
+                        id="auth-confirm-password"
+                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder="Repeat your password"
+                        required
+                        minLength={8}
+                      />
+                    </div>
+
+                    {error && (
+                      <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {loading ? 'Updating…' : 'Update password'}
+                    </button>
+                  </form>
+                </>
+              )}
+            </>
           ) : (
             <>
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Greater Lansing beta</p>
@@ -326,6 +488,12 @@ export default function Auth() {
                 >
                   {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}
                 </button>
+
+                {!isSignUp && (
+                  <p className="text-center text-sm text-stone-600">
+                    <Link to={forgotPath} className="font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline">Forgot your password?</Link>
+                  </p>
+                )}
               </form>
             </>
           )}

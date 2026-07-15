@@ -9,6 +9,7 @@ type AuthContextType = {
   user: User | null
   profile: Profile | null
   loading: boolean
+  passwordRecovery: boolean
   signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, captchaToken?: string, returnTo?: string) => Promise<{
     error: string | null
@@ -16,6 +17,8 @@ type AuthContextType = {
   }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -24,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -36,7 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
+      (event, newSession) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setPasswordRecovery(true)
+        }
         setSession(newSession)
         if (newSession) {
           setLoading(true)
@@ -109,6 +116,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session) await fetchProfile(session.user.id)
   }
 
+  async function requestPasswordReset(email: string) {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email,
+      { redirectTo: `${window.location.origin}/auth` },
+    )
+    return { error: resetError ? resetError.message : null }
+  }
+
+  async function updatePassword(newPassword: string) {
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    if (!updateError) {
+      setPasswordRecovery(false)
+    }
+    return { error: updateError ? updateError.message : null }
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -116,10 +139,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
+        passwordRecovery,
         signIn,
         signUp,
         signOut,
         refreshProfile,
+        requestPasswordReset,
+        updatePassword,
       }}
     >
       {children}
