@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
 import { discardContributionDraft, getMyContributionDrafts } from '../lib/launchApi'
+import { useMascotToast } from '../contexts/MascotToastContext'
 import type { ContributionDraft, ContributionDraftState } from '../types/database'
 
 const stateBadge: Record<ContributionDraftState, { label: string; class: string }> = {
@@ -25,6 +26,7 @@ export default function Drafts() {
   const [loading, setLoading] = useState(true)
   const [discarding, setDiscarding] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const toast = useMascotToast()
 
   async function load() {
     const result = await getMyContributionDrafts()
@@ -40,7 +42,10 @@ export default function Drafts() {
     const result = await discardContributionDraft(id)
     setDiscarding(null)
     if (result.error) setError(result.error.message)
-    else await load()
+    else {
+      toast('Draft discarded', 'Scout cleaned that up.')
+      await load()
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>

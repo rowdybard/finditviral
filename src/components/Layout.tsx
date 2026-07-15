@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import Navbar from './Navbar'
-import Mascot from './mascot/Mascot'
 import MascotRestoreButton from './mascot/MascotRestoreButton'
 import { activeMarket } from '../lib/market'
 
@@ -19,7 +18,6 @@ export default function Layout({ children }: { children: ReactNode }) {
         FindItViral — {activeMarket.betaLabel}
         <MascotRestoreButton />
       </footer>
-      <Mascot />
     </div>
   )
 }

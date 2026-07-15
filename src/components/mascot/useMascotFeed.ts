@@ -95,9 +95,15 @@ export function useMascotFeed({ muted = false }: { muted?: boolean } = {}) {
     setUnread(0)
   }, [])
 
+  const enqueue = useCallback((notification: MascotNotification) => {
+    setQueue((prev) => [...prev, notification])
+    setHistory((prev) => [notification, ...prev].slice(0, HISTORY_LIMIT))
+  }, [])
+
   return {
     current: queue[0] ?? null,
     dequeue,
+    enqueue,
     queueLength: queue.length,
     history,
     unread,

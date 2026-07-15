@@ -4,13 +4,16 @@ import { BrowserRouter } from 'react-router-dom'
 import '@fontsource-variable/space-grotesk'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
+import { MascotToastProvider } from './contexts/MascotToastContext'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter future={{ v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <App />
+        <MascotToastProvider>
+          <App />
+        </MascotToastProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

@@ -21,6 +21,7 @@ import {
 import { activeMarket } from '../lib/market'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
+import { useMascotToast } from '../contexts/MascotToastContext'
 import type { ContributionDraft, RetailerSearchResult, StoreSearchResult } from '../types/database'
 
 type BountyPayload = {
@@ -81,6 +82,7 @@ export default function NewBounty() {
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const toast = useMascotToast()
 
   function currentPayload(): BountyPayload {
     return { version: 1, product, scope, store, zipCode, radiusMiles, rewardAmount, deadline, requirements, quantityNeeded, variantRequirements, acceptEquivalent, selectedRetailers, selectedStores }
@@ -155,6 +157,7 @@ export default function NewBounty() {
       setError(mapContributionError(saveError))
       return
     }
+    toast('Draft saved!', 'Scout tucked it away safely.')
     await loadDraft()
   }
 
@@ -167,6 +170,7 @@ export default function NewBounty() {
       setError(mapContributionError(discardError))
       return
     }
+    toast('Draft discarded', 'Scout cleaned that up.')
     setDraft(null)
   }
 
@@ -194,6 +198,7 @@ export default function NewBounty() {
       setSuggestionError(result.error.message)
       return
     }
+    toast('Suggestion submitted!', 'Scout sent it for review.')
     setSuggestion(null)
     await loadDraft()
   }

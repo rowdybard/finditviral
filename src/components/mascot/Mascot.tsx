@@ -3,7 +3,6 @@ import MascotSprite, { type MascotMood } from './MascotSprite'
 import MascotBubble, { type BubblePlacement, type MascotNotification } from './MascotBubble'
 import MascotOnboarding, { hasSeenMascotOnboarding } from './MascotOnboarding'
 import MascotPanel from './MascotPanel'
-import { useMascotFeed } from './useMascotFeed'
 import { useTabFlash } from './useTabFlash'
 import { useMascotPrefs } from './mascotPrefs'
 import './mascotAnimations.css'
@@ -40,9 +39,16 @@ function clampPos(pos: Pos): Pos {
   }
 }
 
-export default function Mascot() {
+export type MascotFeedProps = {
+  current: MascotNotification | null
+  dequeue: () => void
+  history: MascotNotification[]
+  unread: number
+  markAllRead: () => void
+}
+
+export default function Mascot({ current, dequeue, history, unread, markAllRead }: MascotFeedProps) {
   const prefs = useMascotPrefs()
-  const { current, dequeue, history, unread, markAllRead } = useMascotFeed({ muted: prefs.muted })
   const [pos, setPos] = useState<Pos>(() => loadPos())
   const [dragging, setDragging] = useState(false)
   const [snapping, setSnapping] = useState(false)

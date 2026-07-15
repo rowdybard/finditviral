@@ -22,6 +22,7 @@ import {
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
+import { useMascotToast } from '../contexts/MascotToastContext'
 import type { ContributionDraft, LeadDetailView, StoreSearchResult } from '../types/database'
 
 type SightingPayload = {
@@ -71,6 +72,7 @@ export default function NewSighting() {
   const [lead, setLead] = useState<LeadDetailView | null>(null)
   const [leadLoading, setLeadLoading] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
+  const toast = useMascotToast()
 
   function currentPayload(): SightingPayload {
     return { version: 2, product, selectedStores, seenAt, availability, quantity, notes, photoUrls }
@@ -165,6 +167,7 @@ export default function NewSighting() {
       setError(mapContributionError(saveError))
       return
     }
+    toast('Draft saved!', 'Scout tucked it away safely.')
     await loadDraft()
   }
 
@@ -177,6 +180,7 @@ export default function NewSighting() {
       setError(mapContributionError(discardError))
       return
     }
+    toast('Draft discarded', 'Scout cleaned that up.')
     setDraft(null)
   }
 
@@ -204,6 +208,7 @@ export default function NewSighting() {
       setSuggestionError(result.error.message)
       return
     }
+    toast('Suggestion submitted!', 'Scout sent it for review.')
     setSuggestion(null)
     await loadDraft()
   }
