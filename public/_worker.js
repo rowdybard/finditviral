@@ -78,7 +78,7 @@ function createContentSecurityPolicy(nonce) {
     "form-action 'self'",
     "frame-ancestors 'none'",
     "frame-src https://challenges.cloudflare.com",
-    "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com",
+    "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com https://*.supabase.co",
     "manifest-src 'self'",
     "object-src 'none'",
     `script-src 'self' 'nonce-${nonce}' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com`,
