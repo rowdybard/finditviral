@@ -1,15 +1,15 @@
-import { Crosshair, Eye, FileText, Trash } from '@phosphor-icons/react'
+import { FileText, Notepad, Trash } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
 import { discardContributionDraft, getMyContributionDrafts } from '../lib/launchApi'
 import type { ContributionDraft, ContributionDraftState } from '../types/database'
 
-const stateTheme: Record<ContributionDraftState, { rail: string; badge: string; label: string }> = {
-  editing: { rail: 'bg-brand-500', badge: 'border-brand-500 text-brand-700', label: 'Editing' },
-  waiting_for_approval: { rail: 'bg-amber-400', badge: 'border-amber-500 text-amber-800', label: 'Waiting' },
-  ready: { rail: 'bg-green-600', badge: 'border-green-600 text-green-700', label: 'Ready' },
-  needs_attention: { rail: 'bg-red-600', badge: 'border-red-500 text-red-700', label: 'Needs attention' },
+const stateBadge: Record<ContributionDraftState, { label: string; class: string }> = {
+  editing: { label: 'Editing', class: 'bg-blue-100 text-blue-800' },
+  waiting_for_approval: { label: 'Waiting for approval', class: 'bg-amber-100 text-amber-800' },
+  ready: { label: 'Ready', class: 'bg-green-100 text-green-800' },
+  needs_attention: { label: 'Needs attention', class: 'bg-red-100 text-red-800' },
 }
 
 function draftProductName(draft: ContributionDraft): string {
@@ -46,64 +46,45 @@ export default function Drafts() {
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Link to="/home" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">Contribution Drafts</h1>
-        <p className="mt-1 text-sm text-gray-500">Private to you · Suggestions never publish automatically. Return here after owner review, reopen the form, and confirm the final contribution.</p>
+        <div className="mt-3 flex items-center gap-4">
+          <div className="fiv-step-badge text-lg"><Notepad size={16} weight="bold" aria-hidden="true" /></div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Contribution Drafts</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Private to you · Suggestions never publish automatically. Return here after owner review, reopen the form, and confirm the final contribution.</p>
+          </div>
+          <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
+            <Notepad size={32} weight="duotone" className="text-brand-600" />
+          </div>
+        </div>
       </div>
 
       {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {drafts.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {drafts.map((draft) => {
-            const theme = stateTheme[draft.state]
-            const isSighting = draft.draft_type === 'sighting'
+            const badge = stateBadge[draft.state]
             return (
-              <article
-                key={draft.id}
-                className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#0c251d] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#0c251d]"
-              >
-                <div className={`flex flex-col items-center justify-between py-3 text-white ${theme.rail}`}>
-                  <span className="rotate-180 text-sm font-black tracking-[0.18em] [writing-mode:vertical-rl]">
-                    {isSighting ? 'SIGHTING' : 'BOUNTY'}
-                  </span>
-                  {isSighting
-                    ? <Eye aria-hidden="true" size={24} weight="bold" />
-                    : <Crosshair aria-hidden="true" size={24} weight="bold" />}
-                </div>
-
-                <div className="min-w-0">
-                  <div className="p-3 sm:p-4">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded-md border-2 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${theme.badge}`}>
-                        {theme.label}
-                      </span>
+              <article key={draft.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#0c251d]">
+                <div className="flex min-w-0 items-start gap-4">
+                  <span className="shrink-0 rounded-xl bg-brand-100 p-3 text-brand-700"><FileText size={24} weight="bold" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-black uppercase tracking-wide text-brand-700">{draft.draft_type}</span>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${badge.class}`}>{badge.label}</span>
                     </div>
-                    <h2 className="mt-2 truncate text-xl font-black leading-tight tracking-tight text-stone-950 sm:text-2xl">
-                      {draftProductName(draft)}
-                    </h2>
-                    <p className="mt-1 text-xs text-stone-500">Updated {new Date(draft.updated_at).toLocaleString()}</p>
+                    <h2 className="mt-1 truncate text-lg font-black text-stone-950">{draftProductName(draft)}</h2>
+                    <p className="mt-0.5 text-xs text-gray-500">Updated {new Date(draft.updated_at).toLocaleString()}</p>
                   </div>
-
-                  <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-stone-300 px-3 sm:px-4">
-                    <Link
-                      to={isSighting ? '/sightings/new' : '/bounties/new'}
-                      className="inline-flex min-h-11 items-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
-                    >
-                      Open draft
-                    </Link>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
-                      aria-label="Discard draft"
-                      disabled={discarding === draft.id}
-                      onClick={() => void discard(draft.id)}
-                    >
-                      {discarding === draft.id ? 'Discarding…' : <><Trash size={16} weight="bold" aria-hidden="true" /> Discard</>}
-                    </button>
-                  </footer>
+                </div>
+                <div className="flex gap-2">
+                  <Link to={draft.draft_type === 'sighting' ? '/sightings/new' : '/bounties/new'} className="btn-primary">Open draft</Link>
+                  <button type="button" className="btn-ghost px-3 text-red-700" aria-label="Discard draft" disabled={discarding === draft.id} onClick={() => void discard(draft.id)}>
+                    {discarding === draft.id ? 'Discarding…' : <Trash size={18} weight="bold" aria-hidden="true" />}
+                  </button>
                 </div>
               </article>
             )
