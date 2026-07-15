@@ -17,7 +17,7 @@ import Sightings from './pages/Sightings'
 import TrendPage from './pages/TrendPage'
 import { buildOnboardingPath, locationReturnPath } from './lib/authReturn'
 
-function OnboardingRedirect({ children }: { children: React.ReactNode }) {
+export function OnboardingRedirect({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth()
   const location = useLocation()
 
