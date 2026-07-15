@@ -151,10 +151,10 @@ export default function LeadDetail() {
                 {lead.confirmed_seen_at && <> on {new Date(lead.confirmed_seen_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
               </p>
               <Link
-                to={`/sightings`}
+                to={`/sightings?product=${lead.product_id}`}
                 className="mt-2 inline-flex text-sm font-bold text-green-700 hover:text-green-800"
               >
-                View sighting →
+                View {lead.product_name} sightings →
               </Link>
             </div>
           )}

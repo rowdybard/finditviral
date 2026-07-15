@@ -149,8 +149,8 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <EmptyState
-        title="User not found"
-        message="This user may not exist."
+        title="Member profiles are private during the beta"
+        message="You can only view your own profile right now."
         action={<Link to="/home" className="btn-primary">Go home</Link>}
       />
     )

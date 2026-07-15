@@ -688,7 +688,7 @@ export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
       title: 'Restock Lead - FindItViral',
       description: 'Community-shared restock lead for a viral or hard-to-find product in Greater Lansing.',
       canonicalUrl: `https://finditviral.com${normalizedPathname}`,
-      robots: 'index, follow',
+      robots: 'noindex, follow',
     }
   }
   if (isSpaRoute(pathname)) {

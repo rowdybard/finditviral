@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Sighting, Product, Trend, Lead } from '../types/database'
 import SightingCard from '../components/SightingCard'
@@ -15,13 +15,14 @@ type FeedItem =
   | { kind: 'lead'; data: Lead; sortKey: string }
 
 export default function Sightings() {
+  const [searchParams] = useSearchParams()
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [trends, setTrends] = useState<Trend[]>([])
   const [loading, setLoading] = useState(true)
   const [trendFilter, setTrendFilter] = useState('')
-  const [productFilter, setProductFilter] = useState('')
+  const [productFilter, setProductFilter] = useState(searchParams.get('product') ?? '')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const [radiusFilter, setRadiusFilter] = useState('50')
   const [tab, setTab] = useState<Tab>('all')
