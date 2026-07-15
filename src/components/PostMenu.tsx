@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, Megaphone, X, CaretDown, Lightning } from '@phosphor-icons/react'
+import { Eye, Megaphone, CaretDown, Lightning } from '@phosphor-icons/react'
 
 export default function PostMenu() {
   const [open, setOpen] = useState(false)
@@ -74,27 +74,11 @@ export default function PostMenu() {
       {open && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/20 sm:hidden"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
             ref={menuRef}
             role="dialog"
             aria-label="Post menu"
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-stone-200 bg-white p-4 shadow-xl sm:absolute sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 sm:rounded-2xl sm:border sm:p-2"
+            className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-stone-200 bg-white p-2 shadow-xl"
           >
-            <div className="mb-3 flex items-center justify-between sm:hidden">
-              <h2 className="text-lg font-bold text-stone-900">Post</h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close menu"
-                className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100"
-              >
-                <X size={20} weight="bold" />
-              </button>
-            </div>
             <ul className="space-y-1">
               {options.map((opt) => (
                 <li key={opt.path}>

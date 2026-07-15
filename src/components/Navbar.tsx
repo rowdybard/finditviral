@@ -17,7 +17,7 @@ export default function Navbar() {
           <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">Beta</span>
         </Link>
 
-        <nav className="flex w-full items-center justify-between gap-0.5 border-t border-stone-200 pt-2 sm:w-auto sm:justify-start sm:gap-1 sm:border-t-0 sm:pt-0">
+        <nav className="relative flex w-full items-center justify-between gap-0.5 border-t border-stone-200 pt-2 sm:w-auto sm:justify-start sm:gap-1 sm:border-t-0 sm:pt-0">
           <NavLink
             to="/bounties"
             className={({ isActive }) =>

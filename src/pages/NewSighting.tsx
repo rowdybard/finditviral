@@ -392,7 +392,6 @@ export default function NewSighting() {
                       className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50"
                       onClick={() => {
                         addStore({ id: s.id, slug: s.slug, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` })
-                        setStoreQuery('')
                         setStoreResults([])
                       }}
                     >
