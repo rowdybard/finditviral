@@ -107,11 +107,8 @@ export default function Sightings() {
       {error && (
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
-      <div className="flex items-center justify-between">
+      <div>
         <h1 className="text-2xl font-bold text-gray-900">Local Sightings</h1>
-        <Link to="/sightings/new" className="btn-primary text-sm">
-          + Report Sighting
-        </Link>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-stone-100 p-1">

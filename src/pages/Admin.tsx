@@ -20,6 +20,7 @@ import {
   adminResolveStoreSuggestion,
   adminSearchMembers,
   adminSetContributionModeration,
+  adminSetLeadModeration,
   adminSetMemberRestriction,
   adminUpdateProduct,
   adminUpdateStore,
@@ -372,6 +373,19 @@ export default function Admin() {
 
   async function moderate(contribution: AdminContribution, action: 'approve' | 'hide' | 'restore' | 'reject') {
     setActionId(contribution.contribution_id)
+    if (contribution.contribution_type === 'lead') {
+      if (action === 'reject') {
+        setActionId(null)
+        setError('Leads cannot be rejected.')
+        return
+      }
+      const result = await adminSetLeadModeration({ leadId: contribution.contribution_id, action, reason: null })
+      setActionId(null)
+      if (result.error) setError(mapContributionError(result.error))
+      else await loadAdminData()
+      return
+    }
+
     const result = await adminSetContributionModeration({ kind: contribution.contribution_type, id: contribution.contribution_id, action, reason: null })
     setActionId(null)
     if (result.error) setError(mapContributionError(result.error))

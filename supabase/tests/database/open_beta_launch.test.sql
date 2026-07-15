@@ -39,7 +39,7 @@ select is(
 
 select has_function('public', 'search_products', array['text', 'integer'], 'product search RPC exists');
 select has_function('public', 'search_stores', array['text', 'integer'], 'store search RPC exists');
-select has_function('public', 'create_sighting', array['uuid', 'uuid', 'timestamp with time zone', 'text', 'integer', 'text', 'uuid'], 'sighting creation RPC exists');
+select has_function('public', 'create_sighting', array['uuid', 'uuid', 'timestamp with time zone', 'text', 'integer', 'text', 'uuid', 'text[]'], 'sighting creation RPC exists');
 select has_function('public', 'create_bounty', array['uuid', 'uuid', 'text', 'integer', 'integer', 'timestamp with time zone', 'text', 'uuid'], 'bounty creation RPC exists');
 select has_function('public', 'claim_interest_digest_attempt', array['timestamp with time zone'], 'digest claim RPC exists');
 select has_function('public', 'complete_interest_digest_attempt', array['uuid', 'uuid', 'text', 'text', 'text', 'text'], 'digest completion RPC exists');
@@ -53,7 +53,7 @@ select ok(
   'anon can use sanitized sighting discovery'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.create_sighting(uuid,uuid,timestamp with time zone,text,integer,text,uuid)', 'execute'),
+  has_function_privilege('authenticated', 'public.create_sighting(uuid,uuid,timestamp with time zone,text,integer,text,uuid,text[])', 'execute'),
   'members can call sighting creation'
 );
 select ok(

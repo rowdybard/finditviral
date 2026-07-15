@@ -12,6 +12,7 @@ import type { Sighting } from '../types/database'
 import { timeAgo } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
+import SightingPhoto from './SightingPhoto'
 
 const stockThemes = {
   in_stock: {
@@ -119,10 +120,11 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
             </div>
 
             {photoUrl && (
-              <img
-                src={photoUrl}
+              <SightingPhoto
+                photoPath={photoUrl}
                 alt={`${productName} at ${sighting.store_name}`}
                 onError={() => setPhotoFailed(true)}
+                onUnavailable={() => setPhotoFailed(true)}
                 className="h-28 w-full rounded-lg border-2 border-stone-900 object-cover shadow-[3px_3px_0_0_#1c1917] sm:h-full sm:min-h-28"
               />
             )}

@@ -13,7 +13,6 @@ const sourceTypeLabels: Record<string, string> = {
 
 const scopeLabels: Record<string, string> = {
   region: 'Region',
-  retailers: 'Retailers',
   stores: 'Store',
 }
 

@@ -10,7 +10,7 @@ import ContributionDraftNotice from '../components/ContributionDraftNotice'
 import PhotoUpload from '../components/PhotoUpload'
 import {
   confirmLeadWithSighting,
-  createSighting,
+  createSightingsBatch,
   discardContributionDraft,
   getLeadDetail,
   getMyContributionDrafts,
@@ -255,26 +255,19 @@ export default function NewSighting() {
       setSubmitted(true)
       return
     }
-    let lastError: string | null = null
-    for (let i = 0; i < selectedStores.length; i++) {
-      const { error: createError } = await createSighting({
-        productId: product.id,
-        storeId: selectedStores[i].id,
-        seenAt: seenDate.toISOString(),
-        availability,
-        quantity: parsedQuantity,
-        notes: notes.trim() || null,
-        draftId: i === 0 ? (draft?.id ?? null) : null,
-        photoUrls: photoUrls.length > 0 ? photoUrls : null,
-      })
-      if (createError) {
-        lastError = mapContributionError(createError)
-        break
-      }
-    }
+    const { error: createError } = await createSightingsBatch({
+      productId: product.id,
+      storeIds: selectedStores.map((store) => store.id),
+      seenAt: seenDate.toISOString(),
+      availability,
+      quantity: parsedQuantity,
+      notes: notes.trim() || null,
+      draftId: draft?.id ?? null,
+      photoUrls: photoUrls.length > 0 ? photoUrls : null,
+    })
     setLoading(false)
-    if (lastError) {
-      setError(lastError)
+    if (createError) {
+      setError(mapContributionError(createError))
       return
     }
     trackEvent('report_sighting', { availability, store_count: selectedStores.length })

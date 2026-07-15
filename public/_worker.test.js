@@ -87,6 +87,39 @@ describe('public catalog metadata', () => {
     expect(metadata.description).toContain('Lansing Mall')
     expect(metadata.description).toContain('Lansing, MI')
   })
+
+  it('injects Lead details into metadata when Supabase returns data', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).includes('get_lead_detail')) {
+        return new Response(JSON.stringify([{
+          headline: 'Phoenix Squishmallow restock expected Friday',
+          product_name: 'Squishmallow Phoenix',
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(null, { status: 404 })
+    })
+
+    const metadata = await getPageMetadata(
+      '/leads/phoenix-restock',
+      { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' },
+      fetchImpl,
+    )
+
+    expect(metadata.title).toBe('Phoenix Squishmallow restock expected Friday - FindItViral')
+    expect(metadata.description).toContain('Squishmallow Phoenix')
+    expect(metadata.robots).toBe('index, follow')
+  })
+
+  it('falls back to generic Lead metadata when Supabase fails', async () => {
+    const metadata = await getPageMetadata(
+      '/leads/unknown-lead',
+      { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test' },
+      vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
+    )
+
+    expect(metadata.title).toBe('Restock Lead - FindItViral')
+    expect(metadata.robots).toBe('index, follow')
+  })
 })
 
 function env(overrides = {}) {
@@ -126,6 +159,17 @@ function productClickRequest(body, { cookie, origin = 'https://finditviral.com' 
   })
 }
 
+function isAuthoritativeRateLimitRequest(url) {
+  return String(url).includes('/rpc/consume_public_request_limit')
+}
+
+function allowedAuthoritativeRateLimitResponse() {
+  return new Response('true', {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 describe('handleEarlyAccess', () => {
   it('requires Turnstile verification before persistence', async () => {
     const fetchImpl = vi.fn()
@@ -141,6 +185,16 @@ describe('handleEarlyAccess', () => {
 
   it('uses a modern secret key only in the Supabase apikey header', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) {
+        expect(init.headers.apikey).toBe('sb_secret_test')
+        expect(init.headers.Authorization).toBeUndefined()
+        expect(JSON.parse(init.body)).toMatchObject({
+          p_scope: 'early_access',
+          p_key_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        })
+        expect(init.body).not.toContain('203.0.113.10')
+        return allowedAuthoritativeRateLimitResponse()
+      }
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -164,12 +218,17 @@ describe('handleEarlyAccess', () => {
     }), env(), fetchImpl)
 
     expect(response.status).toBe(204)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
 
   it('keeps the Bearer header for a legacy service-role JWT', async () => {
     const legacyKey = 'eyJlegacy.header.signature'
     const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) {
+        expect(init.headers.apikey).toBe(legacyKey)
+        expect(init.headers.Authorization).toBe(`Bearer ${legacyKey}`)
+        return allowedAuthoritativeRateLimitResponse()
+      }
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -192,10 +251,13 @@ describe('handleEarlyAccess', () => {
   })
 
   it('fails closed when Turnstile rejects the token', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchImpl = vi.fn(async (url) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
+      return new Response(JSON.stringify({ success: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
 
     const response = await handleEarlyAccess(request({
       email: 'shopper@example.com',
@@ -205,8 +267,58 @@ describe('handleEarlyAccess', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'verification_failed' })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain('siteverify')
+  })
+
+  it('fails closed before Turnstile when the authoritative limiter is unavailable', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
+
+    const response = await handleEarlyAccess(request({
+      email: 'shopper@example.com',
+      reason: 'I want to find limited local products.',
+      turnstileToken: 'valid-token',
+    }), env(), fetchImpl)
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('60')
     expect(fetchImpl).toHaveBeenCalledTimes(1)
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('siteverify')
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('consume_public_request_limit')
+    consoleSpy.mockRestore()
+  })
+
+  it('allows only five concurrent requests to reach verification and persistence', async () => {
+    let consumed = 0
+    let turnstileCalls = 0
+    let persistenceCalls = 0
+    const fetchImpl = vi.fn(async (url) => {
+      if (isAuthoritativeRateLimitRequest(url)) {
+        consumed += 1
+        return new Response(String(consumed <= 5), { status: 200 })
+      }
+      if (String(url).includes('siteverify')) {
+        turnstileCalls += 1
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      persistenceCalls += 1
+      return new Response(null, { status: 204 })
+    })
+
+    const responses = await Promise.all(Array.from({ length: 6 }, (_, index) => (
+      handleEarlyAccess(request({
+        email: `shopper${index}@example.com`,
+        reason: 'I want to find limited local products.',
+        turnstileToken: 'valid-token',
+      }), env(), fetchImpl)
+    )))
+
+    expect(responses.map((response) => response.status).sort()).toEqual([204, 204, 204, 204, 204, 429])
+    expect(turnstileCalls).toBe(5)
+    expect(persistenceCalls).toBe(5)
   })
 })
 
@@ -237,7 +349,15 @@ describe('handleProductClick', () => {
   })
 
   it('creates an opaque first-party cookie and persists only a product-specific digest', async () => {
-    const fetchImpl = vi.fn(async (_url, init) => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) {
+        expect(JSON.parse(init.body)).toMatchObject({
+          p_scope: 'product_click',
+          p_key_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        })
+        expect(init.body).not.toContain('203.0.113.10')
+        return allowedAuthoritativeRateLimitResponse()
+      }
       expect(init.headers.apikey).toBe('sb_secret_test')
       expect(init.headers.Authorization).toBeUndefined()
       const payload = JSON.parse(init.body)
@@ -259,7 +379,7 @@ describe('handleProductClick', () => {
     expect(response.headers.get('Set-Cookie')).toMatch(
       /^__Host-fiv_heat=[0-9a-f-]+; Path=\/; Max-Age=2592000; Secure; HttpOnly; SameSite=Lax$/,
     )
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('caps chunked bodies even when Content-Length is absent', async () => {
@@ -277,7 +397,8 @@ describe('handleProductClick', () => {
   })
 
   it('reuses a valid cookie without exposing it to Postgres', async () => {
-    const fetchImpl = vi.fn(async (_url, init) => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
       const payload = JSON.parse(init.body)
       expect(payload.p_click_key).toMatch(/^[0-9a-f]{64}$/)
       expect(payload.p_click_key).not.toContain(VISITOR_ID)
@@ -295,7 +416,7 @@ describe('handleProductClick', () => {
 
     expect(response.status).toBe(204)
     expect(response.headers.get('Set-Cookie')).toBeNull()
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('fails closed for counting when the coarse abuse limit is unavailable', async () => {
@@ -333,11 +454,52 @@ describe('handleProductClick', () => {
     expect(response.status).toBe(204)
     expect(fetchImpl).not.toHaveBeenCalled()
   })
+
+  it('fails closed for counting when the authoritative limiter is unavailable', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
+
+    const response = await handleProductClick(
+      productClickRequest({ productId: PRODUCT_ID }),
+      env(),
+      fetchImpl,
+    )
+
+    expect(response.status).toBe(204)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('consume_public_request_limit')
+    consoleSpy.mockRestore()
+  })
+
+  it('allows only sixty concurrent clicks to reach the persistence RPC', async () => {
+    let consumed = 0
+    let persistenceCalls = 0
+    const fetchImpl = vi.fn(async (url) => {
+      if (isAuthoritativeRateLimitRequest(url)) {
+        consumed += 1
+        return new Response(String(consumed <= 60), { status: 200 })
+      }
+      persistenceCalls += 1
+      return new Response('true', { status: 200 })
+    })
+
+    const responses = await Promise.all(Array.from({ length: 61 }, () => (
+      handleProductClick(
+        productClickRequest({ productId: PRODUCT_ID }),
+        env(),
+        fetchImpl,
+      )
+    )))
+
+    expect(responses.every((response) => response.status === 204)).toBe(true)
+    expect(persistenceCalls).toBe(60)
+  })
 })
 
 describe('enforceRateLimit — fail-open hardening', () => {
   it('blocks requests when the daily cap is reached even if primary KV fails', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -367,6 +529,7 @@ describe('enforceRateLimit — fail-open hardening', () => {
 
   it('allows requests when KV fails but daily cap has not been reached', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -392,13 +555,14 @@ describe('enforceRateLimit — fail-open hardening', () => {
     }), fetchImpl)
 
     expect(response.status).toBe(204)
-    expect(fetchImpl).toHaveBeenCalledTimes(2) // Turnstile + Supabase
+    expect(fetchImpl).toHaveBeenCalledTimes(3) // authoritative gate + Turnstile + persistence
     expect(consoleSpy).toHaveBeenCalled() // high-priority logging
     consoleSpy.mockRestore()
   })
 
   it('allows requests when both KV reads fail (total KV outage)', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -421,7 +585,7 @@ describe('enforceRateLimit — fail-open hardening', () => {
     }), fetchImpl)
 
     expect(response.status).toBe(204)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()
   })
@@ -430,6 +594,7 @@ describe('enforceRateLimit — fail-open hardening', () => {
 describe('enforceRateLimit — boundary conditions', () => {
   function turnstileFetchMock() {
     return vi.fn(async (url) => {
+      if (isAuthoritativeRateLimitRequest(url)) return allowedAuthoritativeRateLimitResponse()
       if (String(url).includes('siteverify')) {
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
@@ -479,7 +644,7 @@ describe('enforceRateLimit — boundary conditions', () => {
     }), fetchImpl)
 
     expect(response.status).toBe(204)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
     const rollingPut = kvPut.mock.calls.find(([key]) => key.startsWith('early-access:'))
     expect(rollingPut).toBeDefined()
     expect(rollingPut[1]).toBe('5')
@@ -545,7 +710,7 @@ describe('enforceRateLimit — boundary conditions', () => {
     }), fetchImpl)
 
     expect(response.status).toBe(204)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
     const dailyPut = kvPut.mock.calls.find(([key]) => key.startsWith('early-access-daily:'))
     expect(dailyPut).toBeDefined()
     expect(dailyPut[1]).toBe('20')
@@ -596,6 +761,7 @@ describe('sitemap generation', () => {
       { url_path: '/', lastmod: '2026-07-14', changefreq: 'weekly', priority: 1.0 },
       { url_path: '/products/test-product', lastmod: '2026-07-13', changefreq: 'weekly', priority: 0.8 },
       { url_path: '/stores/test-store', lastmod: '2026-07-12', changefreq: 'weekly', priority: 0.6 },
+      { url_path: '/leads/test-lead', lastmod: '2026-07-11', changefreq: 'daily', priority: 0.5 },
     ]
     const fetchImpl = sitemapFetchMock(urls)
     vi.stubGlobal('fetch', fetchImpl)
@@ -609,6 +775,7 @@ describe('sitemap generation', () => {
     expect(body).toContain('<urlset')
     expect(body).toContain('https://finditviral.com/products/test-product')
     expect(body).toContain('https://finditviral.com/stores/test-store')
+    expect(body).toContain('https://finditviral.com/leads/test-lead')
     vi.unstubAllGlobals()
   })
 
@@ -641,6 +808,7 @@ describe('sitemap generation', () => {
       { url_path: '/products/item?unexpected=query', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/stores/item#fragment', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.5 },
       { url_path: '/products/valid-product', lastmod: '2026-07-14', changefreq: 'weekly', priority: 0.8 },
+      { url_path: '/leads/valid-lead', lastmod: '2026-07-14', changefreq: 'daily', priority: 0.5 },
     ]
     const fetchImpl = sitemapFetchMock(urls)
     vi.stubGlobal('fetch', fetchImpl)
@@ -652,6 +820,7 @@ describe('sitemap generation', () => {
     const body = await response.text()
     expect(body).toContain('https://finditviral.com/')
     expect(body).toContain('https://finditviral.com/products/valid-product')
+    expect(body).toContain('https://finditviral.com/leads/valid-lead')
     expect(body).not.toContain('//example')
     expect(body).not.toContain('/../admin')
     expect(body).not.toContain('/auth')

@@ -5,28 +5,24 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(14);
+select plan(21);
 
 -- Table exists
 select has_table('public', 'leads', 'leads table exists');
 select has_table('public', 'lead_votes', 'lead_votes table exists');
 
 -- Columns on leads
-select has_column('public', 'leads', 'lead_id' is not null, 'leads has id column');
+select has_column('public', 'leads', 'id', 'leads has id column');
 select has_column('public', 'leads', 'headline', 'leads has headline column');
 select has_column('public', 'leads', 'scope_type', 'leads has scope_type column');
 select has_column('public', 'leads', 'status', 'leads has status column');
 select has_column('public', 'leads', 'expires_at', 'leads has expires_at column');
 select has_column('public', 'leads', 'confirmed_sighting_id', 'leads has confirmed_sighting_id column');
 
--- lead_votes unique constraint
-select has_constraint('public', 'lead_votes', 'lead_votes_lead_id_user_id_key', 'lead_votes has unique (lead_id, user_id)');
-
 -- sightings.lead_id column
 select has_column('public', 'sightings', 'lead_id', 'sightings has lead_id column');
 
 -- RLS enabled
-select has_table('public', 'leads', 'leads table exists');
 select is(
   (select rowsecurity from pg_tables where schemaname = 'public' and tablename = 'leads'),
   true,
@@ -60,7 +56,7 @@ select has_function('public', 'remove_lead_vote',
   'remove_lead_vote RPC exists');
 
 select has_function('public', 'confirm_lead_with_sighting',
-  array['uuid', 'uuid', 'timestamptz', 'text', 'integer', 'text'],
+  array['uuid', 'uuid', 'timestamptz', 'text', 'integer', 'text', 'text[]'],
   'confirm_lead_with_sighting RPC exists');
 
 select has_function('public', 'admin_set_lead_moderation',

@@ -20,7 +20,7 @@ export default function NewLead() {
   const [headline, setHeadline] = useState('')
   const [details, setDetails] = useState('')
   const [expectedDate, setExpectedDate] = useState('')
-  const [scope, setScope] = useState<'region' | 'retailers' | 'stores'>('region')
+  const [scope, setScope] = useState<'region' | 'stores'>('region')
   const [store, setStore] = useState<CatalogSelection | null>(null)
   const [zipCode, setZipCode] = useState(activeMarket.defaultZip)
   const [radiusMiles, setRadiusMiles] = useState('50')
@@ -54,10 +54,6 @@ export default function NewLead() {
       setError('Enter a valid 5-digit ZIP code.')
       return
     }
-    if (scope === 'retailers' && !/^[0-9]{5}$/.test(zipCode)) {
-      setError('Enter a valid 5-digit ZIP code.')
-      return
-    }
 
     setLoading(true)
     const { data: leadId, error: createError } = await createLead({
@@ -67,8 +63,8 @@ export default function NewLead() {
       expectedDate: expectedDate || null,
       scopeType: scope,
       storeId: scope === 'stores' ? store?.id ?? null : null,
-      zipCode: scope === 'region' || scope === 'retailers' ? zipCode : null,
-      radiusMiles: scope === 'region' || scope === 'retailers' ? Number(radiusMiles) : null,
+      zipCode: scope === 'region' ? zipCode : null,
+      radiusMiles: scope === 'region' ? Number(radiusMiles) : null,
       sourceType,
       sourceUrl: sourceUrl.trim() || null,
     })
@@ -157,14 +153,10 @@ export default function NewLead() {
 
           <fieldset>
             <legend className="label">Where is this lead about? *</legend>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
                 <input className="sr-only" type="radio" name="scope" checked={scope === 'region'} onChange={() => setScope('region')} />
                 ZIP Radius
-              </label>
-              <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'retailers' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-                <input className="sr-only" type="radio" name="scope" checked={scope === 'retailers'} onChange={() => setScope('retailers')} />
-                Retailers
               </label>
               <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
                 <input className="sr-only" type="radio" name="scope" checked={scope === 'stores'} onChange={() => setScope('stores')} />
@@ -185,7 +177,7 @@ export default function NewLead() {
             </>
           )}
 
-          {(scope === 'region' || scope === 'retailers') && (
+          {scope === 'region' && (
             <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
               <div>
                 <label className="label" htmlFor="zip">Origin ZIP *</label>

@@ -215,7 +215,7 @@ export type InterestEvent = {
 }
 
 export type AdminContribution = {
-  contribution_type: 'sighting' | 'bounty'
+  contribution_type: 'sighting' | 'bounty' | 'lead'
   contribution_id: string
   username: string | null
   product_name: string
@@ -226,7 +226,7 @@ export type AdminContribution = {
 
 export type ModerationEvent = {
   id: string
-  contribution_type: 'sighting' | 'bounty'
+  contribution_type: 'sighting' | 'bounty' | 'lead'
   contribution_id: string
   actor_id: string
   previous_status: string | null
@@ -351,7 +351,7 @@ export type AdminStore = {
 
 export type LeadSourceType = 'employee_tip' | 'social_media' | 'press_release' | 'restock_schedule' | 'other'
 export type LeadStatus = 'pending' | 'active' | 'confirmed' | 'expired' | 'hidden'
-export type LeadScope = 'region' | 'retailers' | 'stores'
+export type LeadScope = 'region' | 'stores'
 
 export type Lead = {
   id: string

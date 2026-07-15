@@ -155,6 +155,28 @@ export async function createSighting(input: {
   })
 }
 
+export async function createSightingsBatch(input: {
+  productId: string
+  storeIds: string[]
+  seenAt: string
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
+  quantity: number | null
+  notes: string | null
+  draftId: string | null
+  photoUrls: string[] | null
+}): RpcResult<string[]> {
+  return callRpc<string[]>('create_sightings_batch', {
+    p_product_id: input.productId,
+    p_store_ids: input.storeIds,
+    p_seen_at: input.seenAt,
+    p_availability: input.availability,
+    p_quantity: input.quantity,
+    p_notes: input.notes,
+    p_draft_id: input.draftId,
+    p_photo_urls: input.photoUrls,
+  })
+}
+
 export async function createBounty(input: {
   productId: string
   scopeType: 'region' | 'retailers' | 'stores'
@@ -472,7 +494,7 @@ export async function createLead(input: {
   headline: string
   details: string | null
   expectedDate: string | null
-  scopeType: 'region' | 'retailers' | 'stores'
+  scopeType: 'region' | 'stores'
   storeId: string | null
   zipCode: string | null
   radiusMiles: number | null

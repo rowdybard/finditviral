@@ -197,6 +197,79 @@ async function createSha256Hex(value) {
     .join('')
 }
 
+async function readResponseTextWithByteLimit(response, maxBytes) {
+  const contentLength = Number(response.headers.get('Content-Length') ?? '0')
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return null
+  if (!response.body) return ''
+
+  const reader = response.body.getReader()
+  const chunks = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        return null
+      }
+      chunks.push(value)
+    }
+
+    const body = new Uint8Array(totalBytes)
+    let offset = 0
+    for (const chunk of chunks) {
+      body.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    return new TextDecoder().decode(body)
+  } catch {
+    try {
+      await reader.cancel()
+    } catch {
+      // The stream may already be closed or errored.
+    }
+    return null
+  }
+}
+
+async function enforceAuthoritativeRateLimit(env, scope, clientIp, fetchImpl) {
+  if (!clientIp) return 'unavailable'
+
+  try {
+    const keyHash = await createSha256Hex(`${env.SUPABASE_SECRET_KEY}:${clientIp}`)
+    const response = await fetchImpl(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/consume_public_request_limit`,
+      {
+        method: 'POST',
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
+        body: JSON.stringify({ p_scope: scope, p_key_hash: keyHash }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
+    )
+
+    if (!response.ok) {
+      logApiEvent('error', 'authoritative rate limit failed', { scope, status: response.status })
+      return 'unavailable'
+    }
+
+    const result = (await readResponseTextWithByteLimit(response, 16))?.trim()
+    if (result === 'true') return 'allowed'
+    if (result === 'false') return 'limited'
+
+    logApiEvent('error', 'authoritative rate limit returned an invalid response', { scope })
+    return 'unavailable'
+  } catch (error) {
+    logApiEvent('error', 'authoritative rate limit unavailable', {
+      scope,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return 'unavailable'
+  }
+}
+
 async function enforceProductClickRateLimit(env, clientIp) {
   if (!clientIp) return 'allowed'
 
@@ -322,6 +395,16 @@ export async function handleProductClick(request, env, fetchImpl = fetch) {
     return createApiResponse(204, null, cookieHeaders)
   }
 
+  const authoritativeRateLimit = await enforceAuthoritativeRateLimit(
+    env,
+    'product_click',
+    clientIp,
+    fetchImpl,
+  )
+  if (authoritativeRateLimit !== 'allowed') {
+    return createApiResponse(204, null, cookieHeaders)
+  }
+
   const clickKey = await createSha256Hex(`${visitorId}:${productId}`)
 
   try {
@@ -423,6 +506,19 @@ export async function handleEarlyAccess(request, env, fetchImpl = fetch) {
     return createApiResponse(429, { error: 'rate_limited' }, { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) })
   }
 
+  const authoritativeRateLimit = await enforceAuthoritativeRateLimit(
+    env,
+    'early_access',
+    clientIp,
+    fetchImpl,
+  )
+  if (authoritativeRateLimit === 'limited') {
+    return createApiResponse(429, { error: 'rate_limited' }, { 'Retry-After': String(RATE_LIMIT_WINDOW_SECONDS) })
+  }
+  if (authoritativeRateLimit !== 'allowed') {
+    return createApiResponse(503, { error: 'unavailable' }, { 'Retry-After': '60' })
+  }
+
   if (!(await verifyTurnstileToken(env, token, clientIp, fetchImpl))) {
     return createApiResponse(400, { error: 'verification_failed' })
   }
@@ -503,6 +599,27 @@ async function fetchPublicStore(env, slug, fetchImpl = fetch) {
   }
 }
 
+async function fetchPublicLead(env, slug, fetchImpl = fetch) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return null
+  try {
+    const response = await fetchImpl(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/get_lead_detail`,
+      {
+        method: 'POST',
+        headers: createSupabaseServerHeaders(env.SUPABASE_SECRET_KEY),
+        body: JSON.stringify({ p_lead_slug: slug }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    if (Array.isArray(data)) return data[0] ?? null
+    return data && typeof data === 'object' ? data : null
+  } catch {
+    return null
+  }
+}
+
 export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
   const normalizedPathname = normalizePathname(pathname)
   if (normalizedPathname === '/') return ROOT_METADATA
@@ -548,6 +665,16 @@ export async function getPageMetadata(pathname, env = null, fetchImpl = fetch) {
     }
   }
   if (normalizedPathname.startsWith('/leads/')) {
+    const slug = normalizedPathname.slice('/leads/'.length)
+    const lead = env ? await fetchPublicLead(env, slug, fetchImpl) : null
+    if (lead && lead.headline && lead.product_name) {
+      return {
+        title: `${lead.headline} - FindItViral`,
+        description: `Community-shared restock lead for ${lead.product_name} in Greater Lansing.`,
+        canonicalUrl: `https://finditviral.com${normalizedPathname}`,
+        robots: 'index, follow',
+      }
+    }
     return {
       title: 'Restock Lead - FindItViral',
       description: 'Community-shared restock lead for a viral or hard-to-find product in Greater Lansing.',
@@ -623,6 +750,7 @@ const SITEMAP_PATH_WHITELIST = [
   /^\/privacy\/?$/,
   /^\/products\/[^/]+\/?$/,
   /^\/stores\/[^/]+\/?$/,
+  /^\/leads\/[^/]+\/?$/,
 ]
 
 function isValidSitemapPath(path) {

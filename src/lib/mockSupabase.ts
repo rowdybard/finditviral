@@ -292,6 +292,26 @@ class Builder {
 
 export const mockSupabase = {
   from(t: string) { return new Builder(t) },
+  storage: {
+    from(_bucket: string) {
+      return {
+        upload(path: string) {
+          return Promise.resolve({ data: { path }, error: null })
+        },
+        remove(_paths: string[]) {
+          return Promise.resolve({ data: [], error: null })
+        },
+        createSignedUrl(path: string) {
+          return Promise.resolve({
+            data: {
+              signedUrl: `https://images.unsplash.com/photo-1558862107-49d60d35c045?w=400&mock_path=${encodeURIComponent(path)}`,
+            },
+            error: null,
+          })
+        },
+      }
+    },
+  },
   rpc(name: string, args: any) {
     if (name === 'search_products') {
       const query = String(args?.p_query ?? '').trim().toLowerCase()

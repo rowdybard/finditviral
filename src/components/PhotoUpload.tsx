@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, TrashSimple } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
+import SightingPhoto from './SightingPhoto'
 
 type Props = {
   photoUrls: string[]
@@ -27,7 +28,6 @@ export default function PhotoUpload({
   const [uploadingItems, setUploadingItems] = useState<UploadingItem[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const storagePathsRef = useRef<Map<string, string>>(new Map())
   const photoUrlsRef = useRef(photoUrls)
   photoUrlsRef.current = photoUrls
   const uploadingItemsRef = useRef(uploadingItems)
@@ -77,16 +77,16 @@ export default function PhotoUpload({
     setIsUploading(true)
 
     for (const file of validFiles) {
-      const id = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const id = crypto.randomUUID()
       const previewUrl = URL.createObjectURL(file)
       setUploadingItems((prev) => [...prev, { id, previewUrl }])
 
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const fileName = `${userData.user!.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+      const fileName = `${userData.user!.id}/${crypto.randomUUID()}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from('sighting-photos')
-        .upload(fileName, file, { contentType: file.type, upsert: true })
+        .upload(fileName, file, { contentType: file.type, cacheControl: '60', upsert: false })
 
       if (uploadError) {
         setError('Could not upload photo. Please try again.')
@@ -95,16 +95,11 @@ export default function PhotoUpload({
         continue
       }
 
-      const { data: urlData } = supabase.storage
-        .from('sighting-photos')
-        .getPublicUrl(fileName)
-
-      const publicUrl = urlData.publicUrl
-      storagePathsRef.current.set(publicUrl, fileName)
-
       URL.revokeObjectURL(previewUrl)
       setUploadingItems((prev) => prev.filter((item) => item.id !== id))
-      onChange([...photoUrlsRef.current, publicUrl])
+      const nextPhotoUrls = [...photoUrlsRef.current, fileName]
+      photoUrlsRef.current = nextPhotoUrls
+      onChange(nextPhotoUrls)
     }
 
     setIsUploading(false)
@@ -113,14 +108,12 @@ export default function PhotoUpload({
 
   function removePhoto(index: number) {
     const url = photoUrls[index]
-    onChange(photoUrls.filter((_, i) => i !== index))
+    const nextPhotoUrls = photoUrls.filter((_, i) => i !== index)
+    photoUrlsRef.current = nextPhotoUrls
+    onChange(nextPhotoUrls)
 
-    if (url) {
-      const path = storagePathsRef.current.get(url)
-      if (path) {
-        void supabase.storage.from('sighting-photos').remove([path])
-        storagePathsRef.current.delete(url)
-      }
+    if (url && !/^(https?:|data:|blob:)/i.test(url)) {
+      void supabase.storage.from('sighting-photos').remove([url])
     }
   }
 
@@ -138,8 +131,8 @@ export default function PhotoUpload({
                 key={`photo-${slot}`}
                 className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
               >
-                <img
-                  src={photo}
+                <SightingPhoto
+                  photoPath={photo}
                   alt={`Photo ${slot + 1}`}
                   className="h-full w-full object-cover"
                 />
