@@ -105,10 +105,10 @@ describe('public catalog metadata', () => {
     expect(await getPageMetadata('/admin')).toMatchObject({ robots: 'noindex, nofollow' })
   })
 
-  it('makes lead detail routes indexable in worker metadata', async () => {
+  it('falls back to noindex for lead detail routes without env', async () => {
     expect(await getPageMetadata('/leads/squishmallow-restock')).toMatchObject({
       canonicalUrl: 'https://finditviral.com/leads/squishmallow-restock',
-      robots: 'index, follow',
+      robots: 'noindex, follow',
     })
   })
 
@@ -208,7 +208,7 @@ describe('public catalog metadata', () => {
     )
 
     expect(metadata.title).toBe('Restock Lead - FindItViral')
-    expect(metadata.robots).toBe('index, follow')
+    expect(metadata.robots).toBe('noindex, follow')
   })
 })
 

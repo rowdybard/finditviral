@@ -5,7 +5,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(21);
+select plan(23);
 
 -- Table exists
 select has_table('public', 'leads', 'leads table exists');
@@ -98,6 +98,18 @@ select ok(
       and pg_get_constraintdef(c.oid) ~ '''lead'''
   ),
   'contribution_moderation_events accepts lead type'
+);
+
+-- F3: admin_set_lead_moderation restore respects confirmed state
+-- Verify the function body contains the restore-confirmed logic
+select ok(
+  pg_get_functiondef('public.admin_set_lead_moderation(uuid, text, text)'::regprocedure) ~ 'v_sighting_approved',
+  'admin_set_lead_moderation checks sighting approval on restore'
+);
+
+select ok(
+  pg_get_functiondef('public.admin_set_lead_moderation(uuid, text, text)'::regprocedure) ~ 'v_new_status := ''confirmed''',
+  'admin_set_lead_moderation restores to confirmed when sighting is approved'
 );
 
 select * from finish();
