@@ -5,7 +5,6 @@ import type { Trend, Bounty, Sighting, Product, Lead } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import LeadCard from '../components/LeadCard'
-import PostMenu from '../components/PostMenu'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
 import { listPublicBounties, listPublicSightings, listPublicLeads } from '../lib/launchApi'
@@ -72,7 +71,6 @@ export default function Home() {
           <Link to="/sightings" className="btn-primary">
             Browse sightings
           </Link>
-          <PostMenu />
         </div>
       </section>
 
