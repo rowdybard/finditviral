@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import { createLead } from '../lib/launchApi'
 import { activeMarket } from '../lib/market'
@@ -15,7 +15,6 @@ const sourceTypeOptions = [
 ] as const
 
 export default function NewLead() {
-  const navigate = useNavigate()
   const [product, setProduct] = useState<CatalogSelection | null>(null)
   const [headline, setHeadline] = useState('')
   const [details, setDetails] = useState('')
@@ -56,7 +55,7 @@ export default function NewLead() {
     }
 
     setLoading(true)
-    const { data: leadId, error: createError } = await createLead({
+    const { error: createError } = await createLead({
       productId: product.id,
       headline: headline.trim(),
       details: details.trim() || null,
@@ -77,9 +76,6 @@ export default function NewLead() {
 
     trackEvent('post_lead', { scope, source_type: sourceType })
     setSubmitted(true)
-    if (leadId) {
-      setTimeout(() => navigate('/sightings'), 1500)
-    }
   }
 
   return (
@@ -98,7 +94,10 @@ export default function NewLead() {
           <p className="text-sm text-green-700">
             Your lead has been submitted and will be visible once approved by a moderator.
           </p>
-          <Link to="/sightings" className="btn-secondary">Back to sightings</Link>
+          <div className="flex gap-2">
+            <Link to="/sightings" className="btn-secondary">Back to sightings</Link>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setHeadline(''); setDetails(''); setExpectedDate(''); setStore(null); setError(null) }}>Share another</button>
+          </div>
         </div>
       )}
 

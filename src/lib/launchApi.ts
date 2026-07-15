@@ -133,28 +133,6 @@ export async function suggestStoreForDraft(input: {
   })
 }
 
-export async function createSighting(input: {
-  productId: string
-  storeId: string
-  seenAt: string
-  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
-  quantity: number | null
-  notes: string | null
-  draftId: string | null
-  photoUrls: string[] | null
-}): RpcResult<string> {
-  return callRpc<string>('create_sighting', {
-    p_product_id: input.productId,
-    p_store_id: input.storeId,
-    p_seen_at: input.seenAt,
-    p_availability: input.availability,
-    p_quantity: input.quantity,
-    p_notes: input.notes,
-    p_draft_id: input.draftId,
-    p_photo_urls: input.photoUrls,
-  })
-}
-
 export async function createSightingsBatch(input: {
   productId: string
   storeIds: string[]
@@ -227,6 +205,7 @@ export async function submitBountyClaim(input: {
   availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: number | null
   notes: string | null
+  photoUrls: string[] | null
 }): RpcResult<string> {
   return callRpc<string>('submit_bounty_claim', {
     p_bounty_id: input.bountyId,
@@ -235,6 +214,7 @@ export async function submitBountyClaim(input: {
     p_availability: input.availability,
     p_quantity: input.quantity,
     p_notes: input.notes,
+    p_photo_urls: input.photoUrls,
   })
 }
 

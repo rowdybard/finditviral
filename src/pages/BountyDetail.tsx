@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { CalendarBlank } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
+import PhotoUpload from '../components/PhotoUpload'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
@@ -22,6 +24,9 @@ export default function BountyDetail() {
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [claimStore, setClaimStore] = useState<CatalogSelection | null>(null)
   const [claimSeenAt, setClaimSeenAt] = useState(() => localDateTime(new Date()))
+  const [whenSeen, setWhenSeen] = useState<'today' | 'yesterday' | 'older'>('today')
+  const [olderDate, setOlderDate] = useState('')
+  const [claimPhotoUrls, setClaimPhotoUrls] = useState<string[]>([])
   const [claimAvailability, setClaimAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
   const [claimQuantity, setClaimQuantity] = useState('')
   const [claimNotes, setClaimNotes] = useState('')
@@ -29,6 +34,26 @@ export default function BountyDetail() {
   const [claimLoading, setClaimLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  const whenSeenOptions = [
+    { value: 'today' as const, label: 'Today' },
+    { value: 'yesterday' as const, label: 'Yesterday' },
+    { value: 'older' as const, label: '2+ days ago' },
+  ]
+  const olderDateMin = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const olderDateMax = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  useEffect(() => {
+    if (whenSeen === 'today') {
+      setClaimSeenAt(localDateTime(new Date()))
+    } else if (whenSeen === 'yesterday') {
+      const y = new Date()
+      y.setDate(y.getDate() - 1)
+      setClaimSeenAt(`${localDateTime(y).slice(0, 10)}T12:00`)
+    } else if (whenSeen === 'older' && olderDate) {
+      setClaimSeenAt(`${olderDate}T12:00`)
+    }
+  }, [whenSeen, olderDate])
 
   async function reload() {
     if (!id) return
@@ -78,6 +103,7 @@ export default function BountyDetail() {
       availability: claimAvailability,
       quantity,
       notes: claimNotes.trim() || null,
+      photoUrls: claimPhotoUrls.length > 0 ? claimPhotoUrls : null,
     })
     setClaimLoading(false)
     if (result.error) {
@@ -166,12 +192,48 @@ export default function BountyDetail() {
         <form onSubmit={handleClaimSubmit} className="card space-y-4 border-2 border-brand-300">
           <div><h2 className="font-bold text-gray-900">Submit your exact-store sighting</h2><p className="mt-1 text-xs text-gray-600">The bounty owner can review this claim. It does not become a public sighting.</p></div>
           <CatalogSearchSelect kind="store" label="Store" value={claimStore} onChange={setClaimStore} required disabled={Boolean(bounty.store_id)} />
-          <div><label className="label" htmlFor="claim-seen">When did you see it?</label><input id="claim-seen" className="input" type="datetime-local" min={localDateTime(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))} max={localDateTime(new Date(Date.now() + 5 * 60 * 1000))} value={claimSeenAt} onChange={(event) => setClaimSeenAt(event.target.value)} required /></div>
+          <div className="space-y-2">
+            <label className="label">When did you see it?</label>
+            <fieldset>
+              <legend className="sr-only">When did you see it?</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {whenSeenOptions.map((opt) => (
+                  <label key={opt.value} className={`fiv-availability-btn ${whenSeen === opt.value ? 'border-brand-600 bg-brand-50 text-brand-700' : 'fiv-availability-btn-inactive'}`}>
+                    <input className="sr-only" type="radio" name="claimWhenSeen" value={opt.value} checked={whenSeen === opt.value} onChange={() => setWhenSeen(opt.value)} />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {whenSeen === 'older' && (
+              <div>
+                <label className="label" htmlFor="claim-seen-date">Pick a date</label>
+                <div className="relative">
+                  <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="claim-seen-date"
+                    className="input pr-10"
+                    type="date"
+                    value={olderDate}
+                    min={olderDateMin}
+                    max={olderDateMax}
+                    onChange={(event) => setOlderDate(event.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'in_stock' | 'low_stock' | 'sold_out' | 'unknown')}><option value="in_stock">In Stock</option><option value="low_stock">Low Stock</option><option value="sold_out">Sold Out</option><option value="unknown">Unknown</option></select></div>
             <div><label className="label" htmlFor="claim-quantity">Quantity (optional)</label><input id="claim-quantity" className="input" type="number" min="1" max="99" step="1" value={claimQuantity} onChange={(event) => setClaimQuantity(event.target.value)} /></div>
           </div>
           <div><label className="label" htmlFor="claim-notes">Notes (optional)</label><textarea id="claim-notes" className="input min-h-20" maxLength={2000} value={claimNotes} onChange={(event) => setClaimNotes(event.target.value)} /></div>
+          <div className="space-y-2">
+            <label className="label">Photos (optional)</label>
+            <p className="text-xs text-gray-500">A clear photo helps the bounty owner verify your claim.</p>
+            <PhotoUpload photoUrls={claimPhotoUrls} onChange={setClaimPhotoUrls} maxPhotos={4} disabled={claimLoading} />
+          </div>
           {claimError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{claimError}</div>}
           <div className="flex gap-2"><button type="submit" className="btn-primary" disabled={claimLoading}>{claimLoading ? 'Submitting…' : 'Submit Claim'}</button><button type="button" className="btn-ghost" onClick={() => setShowClaimForm(false)} disabled={claimLoading}>Cancel</button></div>
         </form>
