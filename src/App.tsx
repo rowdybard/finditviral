@@ -8,7 +8,7 @@ import Privacy from './pages/Privacy'
 import ProductPage from './pages/ProductPage'
 import StorePage from './pages/StorePage'
 import Stores from './pages/Stores'
-import PublicCatalogLayout from './components/PublicCatalogLayout'
+import CatalogLayout from './components/CatalogLayout'
 
 const PrivateApp = lazy(() => import('./PrivateApp'))
 
@@ -24,15 +24,15 @@ export default function App() {
     <Routes>
       <Route path="/" element={<EarlyAccess />} />
       <Route path="/privacy" element={<Privacy />} />
-      <Route path="/products/:slug" element={<PublicCatalogLayout><ProductPage /></PublicCatalogLayout>} />
-      <Route path="/stores" element={<PublicCatalogLayout><Stores /></PublicCatalogLayout>} />
-      <Route path="/stores/:slug" element={<PublicCatalogLayout><StorePage /></PublicCatalogLayout>} />
+      <Route path="/products/:slug" element={<CatalogLayout><ProductPage /></CatalogLayout>} />
+      <Route path="/stores" element={<CatalogLayout><Stores /></CatalogLayout>} />
+      <Route path="/stores/:slug" element={<CatalogLayout><StorePage /></CatalogLayout>} />
       <Route path="/leads/new" element={
         <Suspense fallback={<div className="min-h-screen bg-stone-50" aria-label="Loading" />}>
           <PrivateApp />
         </Suspense>
       } />
-      <Route path="/leads/:slug" element={<PublicCatalogLayout><LeadDetail /></PublicCatalogLayout>} />
+      <Route path="/leads/:slug" element={<CatalogLayout><LeadDetail /></CatalogLayout>} />
       <Route
         path="*"
         element={

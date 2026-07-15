@@ -1,7 +1,7 @@
 ﻿import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { useAuth } from './contexts/AuthContext'
 import Auth from './pages/Auth'
 import Admin from './pages/Admin'
 import Bounties from './pages/Bounties'
@@ -30,8 +30,7 @@ function OnboardingRedirect({ children }: { children: React.ReactNode }) {
 
 export default function PrivateApp() {
   return (
-    <AuthProvider>
-      <Routes>
+    <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="*" element={
@@ -57,6 +56,5 @@ export default function PrivateApp() {
           </ProtectedRoute>
         } />
       </Routes>
-    </AuthProvider>
   )
 }
