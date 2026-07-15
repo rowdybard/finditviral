@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarBlank, Clock, MapPin, ShieldCheck, Users, ShoppingCart } from '@phosphor-icons/react'
+import { CalendarBlank, Clock, ShieldCheck, Storefront, Users, ShoppingCart } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -22,13 +22,12 @@ import {
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
-import { geocode, buildOsmEmbedUrl, DEFAULT_GEO_FALLBACK, type GeoResult } from '../lib/geocode'
-import type { ContributionDraft, LeadDetailView } from '../types/database'
+import type { ContributionDraft, LeadDetailView, StoreSearchResult } from '../types/database'
 
 type SightingPayload = {
-  version: 1
+  version: 2
   product: CatalogSelection | null
-  store: CatalogSelection | null
+  selectedStores: CatalogSelection[]
   seenAt: string
   availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: string
@@ -55,7 +54,9 @@ export default function NewSighting() {
   const [searchParams] = useSearchParams()
   const leadSlug = searchParams.get('lead')
   const [product, setProduct] = useState<CatalogSelection | null>(null)
-  const [store, setStore] = useState<CatalogSelection | null>(null)
+  const [selectedStores, setSelectedStores] = useState<CatalogSelection[]>([])
+  const [storeQuery, setStoreQuery] = useState('')
+  const [storeResults, setStoreResults] = useState<StoreSearchResult[]>([])
   const [seenAt, setSeenAt] = useState(() => localDateTime(new Date()))
   const [availability, setAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
   const [quantity, setQuantity] = useState('')
@@ -70,10 +71,9 @@ export default function NewSighting() {
   const [lead, setLead] = useState<LeadDetailView | null>(null)
   const [leadLoading, setLeadLoading] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
-  const [mapGeo, setMapGeo] = useState<GeoResult>(DEFAULT_GEO_FALLBACK)
 
   function currentPayload(): SightingPayload {
-    return { version: 1, product, store, seenAt, availability, quantity, notes, photoUrls }
+    return { version: 2, product, selectedStores, seenAt, availability, quantity, notes, photoUrls }
   }
 
   function handleProductChange(next: CatalogSelection | null) {
@@ -83,18 +83,25 @@ export default function NewSighting() {
     }
   }
 
-  function handleStoreChange(next: CatalogSelection | null) {
-    setStore(next)
-    if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
-      setDraft(null)
+  function addStore(store: CatalogSelection) {
+    if (!selectedStores.some(s => s.id === store.id)) {
+      setSelectedStores([...selectedStores, store])
+      if (draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
+        setDraft(null)
+      }
     }
+  }
+
+  function removeStore(id: string) {
+    setSelectedStores(selectedStores.filter(s => s.id !== id))
   }
 
   async function restoreDraft(nextDraft: ContributionDraft) {
     const payload = nextDraft.payload as Partial<SightingPayload>
     setDraft(nextDraft)
     setProduct(isSelection(payload.product) ? payload.product : null)
-    setStore(isSelection(payload.store) ? payload.store : null)
+    if (Array.isArray(payload.selectedStores)) setSelectedStores(payload.selectedStores.filter(isSelection))
+    else if (isSelection((payload as Record<string, unknown>).store)) setSelectedStores([(payload as Record<string, unknown>).store as CatalogSelection])
     if (typeof payload.seenAt === 'string') setSeenAt(payload.seenAt)
     if (payload.availability === 'in_stock' || payload.availability === 'low_stock' || payload.availability === 'sold_out' || payload.availability === 'unknown') {
       setAvailability(payload.availability)
@@ -107,10 +114,10 @@ export default function NewSighting() {
       const match = (result.data ?? []).find((candidate) => candidate.id === nextDraft.product_id)
       if (match) setProduct({ id: match.id, slug: match.slug, label: match.name, detail: [match.trend_name, match.availability_status].filter(Boolean).join(' · ') })
     }
-    if (!isSelection(payload.store) && nextDraft.store_id && payload.storeSuggestionName) {
+    if (selectedStores.length === 0 && nextDraft.store_id && payload.storeSuggestionName) {
       const result = await searchStores(payload.storeSuggestionName)
       const match = (result.data ?? []).find((candidate) => candidate.id === nextDraft.store_id)
-      if (match) setStore({ id: match.id, slug: match.slug, label: match.store_name || match.retailer_name, detail: `${match.address_line1}, ${match.city}, ${match.state} ${match.zip_code}` })
+      if (match) setSelectedStores([{ id: match.id, slug: match.slug, label: match.store_name || match.retailer_name, detail: `${match.address_line1}, ${match.city}, ${match.state} ${match.zip_code}` }])
     }
   }
 
@@ -138,19 +145,10 @@ export default function NewSighting() {
       setLead(data)
       setProduct({ id: data.product_id, slug: data.product_slug, label: data.product_name, detail: '' })
       if (data.store_id && data.store_name) {
-        setStore({ id: data.store_id, slug: data.store_slug ?? '', label: data.store_name, detail: [data.store_city, data.store_state].filter(Boolean).join(', ') })
+        setSelectedStores([{ id: data.store_id, slug: data.store_slug ?? '', label: data.store_name, detail: [data.store_city, data.store_state].filter(Boolean).join(', ') }])
       }
     })
   }, [leadSlug])
-
-  useEffect(() => {
-    if (!store?.detail) return
-    let cancelled = false
-    geocode(store.detail).then((result) => {
-      if (!cancelled && result) setMapGeo(result)
-    })
-    return () => { cancelled = true }
-  }, [store])
 
   async function saveDraft() {
     setError(null)
@@ -160,7 +158,7 @@ export default function NewSighting() {
       type: 'sighting',
       payload: currentPayload(),
       productId: product?.id ?? null,
-      storeId: store?.id ?? null,
+      storeId: selectedStores[0]?.id ?? null,
     })
     setDraftLoading(false)
     if (saveError) {
@@ -191,7 +189,7 @@ export default function NewSighting() {
           draftId: draft?.id ?? null,
           type: 'sighting',
           payload: { ...currentPayload(), productSuggestionName: (values as ProductSuggestionValues).name },
-          storeId: store?.id ?? null,
+          storeId: selectedStores[0]?.id ?? null,
           ...(values as ProductSuggestionValues),
         })
       : await suggestStoreForDraft({
@@ -217,8 +215,8 @@ export default function NewSighting() {
       setError('Choose a verified product or submit it for approval.')
       return
     }
-    if (!store) {
-      setError('Choose the exact store where you saw it or submit the location for approval.')
+    if (selectedStores.length === 0) {
+      setError('Choose at least one store or submit the location for approval.')
       return
     }
     if (draft?.state === 'waiting_for_approval' || draft?.state === 'needs_attention') {
@@ -241,7 +239,7 @@ export default function NewSighting() {
     if (lead) {
       const { error: confirmError } = await confirmLeadWithSighting({
         leadId: lead.id,
-        storeId: store.id,
+        storeId: selectedStores[0].id,
         seenAt: seenDate.toISOString(),
         availability,
         quantity: parsedQuantity,
@@ -257,22 +255,29 @@ export default function NewSighting() {
       setSubmitted(true)
       return
     }
-    const { error: createError } = await createSighting({
-      productId: product.id,
-      storeId: store.id,
-      seenAt: seenDate.toISOString(),
-      availability,
-      quantity: parsedQuantity,
-      notes: notes.trim() || null,
-      draftId: draft?.id ?? null,
-      photoUrls: photoUrls.length > 0 ? photoUrls : null,
-    })
+    let lastError: string | null = null
+    for (let i = 0; i < selectedStores.length; i++) {
+      const { error: createError } = await createSighting({
+        productId: product.id,
+        storeId: selectedStores[i].id,
+        seenAt: seenDate.toISOString(),
+        availability,
+        quantity: parsedQuantity,
+        notes: notes.trim() || null,
+        draftId: i === 0 ? (draft?.id ?? null) : null,
+        photoUrls: photoUrls.length > 0 ? photoUrls : null,
+      })
+      if (createError) {
+        lastError = mapContributionError(createError)
+        break
+      }
+    }
     setLoading(false)
-    if (createError) {
-      setError(mapContributionError(createError))
+    if (lastError) {
+      setError(lastError)
       return
     }
-    trackEvent('report_sighting', { availability })
+    trackEvent('report_sighting', { availability, store_count: selectedStores.length })
     setSubmitted(true)
   }
 
@@ -328,7 +333,7 @@ export default function NewSighting() {
           <p className="text-sm text-green-700">Your sighting has been submitted and will be visible once approved by a moderator. You can track its status in your sightings list.</p>
           <div className="flex gap-2">
             <Link to="/sightings" className="btn-secondary">View sightings</Link>
-            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setStore(null); setQuantity(''); setNotes(''); setPhotoUrls([]); setDraft(null) }}>Report another</button>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setSelectedStores([]); setQuantity(''); setNotes(''); setPhotoUrls([]); setDraft(null) }}>Report another</button>
           </div>
         </div>
       )}
@@ -359,30 +364,75 @@ export default function NewSighting() {
           {/* Step 2: Store Selection */}
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">2</span> Where did you see it?</h2>
-            <CatalogSearchSelect
-              kind="store"
-              label="Store"
-              value={store}
-              onChange={handleStoreChange}
-              onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })}
-              required
-            />
+            <p className="text-xs text-gray-500">Select one or more stores where you spotted the product.</p>
+            <div>
+              <label className="label" htmlFor="store-search">Search stores *</label>
+              <input
+                id="store-search"
+                className="input"
+                type="text"
+                value={storeQuery}
+                onChange={async (event) => {
+                  setStoreQuery(event.target.value)
+                  if (event.target.value.trim().length >= 2) {
+                    const result = await searchStores(event.target.value)
+                    setStoreResults(result.data ?? [])
+                  } else {
+                    setStoreResults([])
+                  }
+                }}
+                placeholder="Type a store name…"
+              />
+              {storeResults.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                      onClick={() => {
+                        addStore({ id: s.id, slug: s.slug, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` })
+                        setStoreQuery('')
+                        setStoreResults([])
+                      }}
+                    >
+                      {s.store_name || s.retailer_name} — {s.city}, {s.state}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {storeQuery.trim().length >= 2 && storeResults.length === 0 && !suggestion && (
+                <button
+                  type="button"
+                  className="mt-2 text-sm font-semibold text-brand-700 hover:text-brand-900"
+                  onClick={() => setSuggestion({ kind: 'store', initialName: storeQuery.trim() })}
+                >
+                  Can't find it? Suggest a store
+                </button>
+              )}
+            </div>
             {suggestion?.kind === 'store' && (
               <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
             )}
-            {store && (
-              <figure className="fiv-map-card">
-                <iframe
-                  title="Store location map"
-                  className="h-40 w-full border-0"
-                  loading="lazy"
-                  src={buildOsmEmbedUrl(mapGeo)}
-                />
-                <figcaption className="flex items-center gap-2 px-4 py-2 text-xs text-gray-600">
-                  <MapPin size={14} weight="fill" className="text-brand-600" />
-                  {store.label}
-                </figcaption>
-              </figure>
+            {selectedStores.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {selectedStores.map(s => (
+                  <div key={s.id} className="fiv-store-card fiv-store-card-selected">
+                    <Storefront size={20} weight="fill" className="shrink-0 text-brand-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-900">{s.label}</p>
+                      <p className="truncate text-xs text-gray-500">{s.detail}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      onClick={() => removeStore(s.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

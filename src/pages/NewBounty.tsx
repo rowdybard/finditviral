@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarBlank, MapPin, ShieldCheck, Sparkle, Storefront, Binoculars } from '@phosphor-icons/react'
+import { CalendarBlank, ShieldCheck, Sparkle, Storefront, Binoculars } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -19,7 +19,6 @@ import {
   suggestStoreForDraft,
 } from '../lib/launchApi'
 import { activeMarket } from '../lib/market'
-import { geocode, buildOsmEmbedUrl, DEFAULT_GEO_FALLBACK, type GeoResult } from '../lib/geocode'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import type { ContributionDraft, RetailerSearchResult, StoreSearchResult } from '../types/database'
@@ -78,7 +77,6 @@ export default function NewBounty() {
   const [draft, setDraft] = useState<ContributionDraft | null>(null)
   const [suggestion, setSuggestion] = useState<{ kind: 'product' | 'store'; initialName: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [mapGeo, setMapGeo] = useState<GeoResult>(DEFAULT_GEO_FALLBACK)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
@@ -290,26 +288,6 @@ export default function NewBounty() {
 
   const radiusOptions = [10, 25, 50, 100, 250]
 
-  useEffect(() => {
-    if (scope === 'stores') {
-      if (store?.detail) {
-        let cancelled = false
-        geocode(store.detail).then((result) => {
-          if (!cancelled && result) setMapGeo(result)
-        })
-        return () => { cancelled = true }
-      }
-    } else if (/^[0-9]{5}$/.test(zipCode)) {
-      let cancelled = false
-      const timeout = window.setTimeout(() => {
-        geocode(`${zipCode}, USA`).then((result) => {
-          if (!cancelled && result) setMapGeo(result)
-        })
-      }, 500)
-      return () => { cancelled = true; window.clearTimeout(timeout) }
-    }
-  }, [scope, zipCode, store])
-
   return (
     <div className="space-y-6">
       <div>
@@ -463,20 +441,6 @@ export default function NewBounty() {
 
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
-          {/* Map Card */}
-          <figure className="fiv-map-card">
-            <iframe
-              title="Search area map"
-              className="h-48 w-full border-0"
-              loading="lazy"
-              src={buildOsmEmbedUrl(mapGeo)}
-            />
-            <figcaption className="flex items-center gap-2 px-4 py-2 text-xs text-gray-600">
-              <MapPin size={14} weight="fill" className="text-brand-600" />
-              {scope === 'region' || scope === 'retailers' ? `ZIP ${zipCode} · ${radiusMiles} mi radius` : store?.label ?? 'Select a store'}
-            </figcaption>
-          </figure>
-
           {/* Step 4: Preferred Stores */}
           {scope === 'stores' && (
             <div className="space-y-3">
