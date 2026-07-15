@@ -66,4 +66,76 @@
   .fiv-heat-meter::-moz-meter-bar {
     background: linear-gradient(90deg, #f97316, #fb7185);
   }
+
+  .fiv-step-badge {
+    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white;
+  }
+
+  .fiv-section-heading {
+    @apply flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-brand-600;
+  }
+
+  .fiv-notice-card {
+    @apply rounded-xl border border-amber-200 bg-amber-50 px-4 py-3;
+  }
+
+  .fiv-notice-card p {
+    @apply text-sm text-amber-800;
+  }
+
+  .fiv-action-strip {
+    @apply sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur;
+  }
+
+  .fiv-store-card {
+    @apply flex cursor-pointer items-center gap-3 rounded-xl border-2 border-gray-200 bg-white px-4 py-3 transition hover:border-brand-300 hover:bg-brand-50/50;
+  }
+
+  .fiv-store-card-selected {
+    @apply border-brand-500 bg-brand-50;
+  }
+
+  .fiv-product-card {
+    @apply flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3;
+  }
+
+  .fiv-map-card {
+    @apply overflow-hidden rounded-xl border border-gray-200 bg-gray-100;
+  }
+
+  .fiv-money-field {
+    @apply relative;
+  }
+
+  .fiv-money-field span {
+    @apply pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500;
+  }
+
+  .fiv-money-field input {
+    @apply pl-7;
+  }
+
+  .fiv-radius-btn {
+    @apply cursor-pointer rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold transition;
+  }
+
+  .fiv-radius-btn-active {
+    @apply border-brand-500 bg-brand-50 text-brand-700;
+  }
+
+  .fiv-radius-btn-inactive {
+    @apply border-gray-200 bg-white text-gray-600 hover:border-gray-300;
+  }
+
+  .fiv-availability-btn {
+    @apply cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-semibold transition;
+  }
+
+  .fiv-availability-btn-active {
+    @apply border-2;
+  }
+
+  .fiv-availability-btn-inactive {
+    @apply border-gray-200 bg-white text-gray-600 hover:border-gray-300;
+  }
 }

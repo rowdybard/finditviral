@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CalendarBlank, MapPin, ShieldCheck, Sparkle, Storefront } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -271,12 +272,19 @@ export default function NewBounty() {
     setSubmitted(true)
   }
 
+  const radiusOptions = [10, 25, 50, 100, 250]
+
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="space-y-6">
       <div>
         <Link to="/bounties" className="text-sm text-gray-500 hover:text-gray-700">← Bounties</Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">Post a Bounty</h1>
-        <p className="mt-1 text-sm text-gray-500">Ask local shoppers to help find a product. Rewards are promises between members; FindItViral does not process payment or escrow.</p>
+        <div className="mt-3 flex items-center gap-4">
+          <div className="fiv-step-badge text-lg">1</div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">New Bounty</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Post what you're looking for. The community will help you track it down.</p>
+          </div>
+        </div>
       </div>
 
       {submitted && (
@@ -294,169 +302,238 @@ export default function NewBounty() {
         <>
       {draft && <ContributionDraftNotice draft={draft} onDiscard={discardDraft} discarding={draftLoading} />}
 
-      <form onSubmit={handlePreview} className="space-y-5">
-        <CatalogSearchSelect
-          kind="product"
-          label="Product"
-          value={product}
-          onChange={setProduct}
-          onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
-          required
-        />
-        {suggestion?.kind === 'product' && (
-          <CatalogSuggestionForm kind="product" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
-        )}
-
-        <fieldset>
-          <legend className="label">Where should shoppers look? *</legend>
-          <div className="grid grid-cols-3 gap-2">
-            <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-              <input className="sr-only" type="radio" name="scope" checked={scope === 'region'} onChange={() => setScope('region')} />
-              ZIP Radius
-            </label>
-            <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'retailers' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-              <input className="sr-only" type="radio" name="scope" checked={scope === 'retailers'} onChange={() => setScope('retailers')} />
-              Retailers
-            </label>
-            <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-              <input className="sr-only" type="radio" name="scope" checked={scope === 'stores'} onChange={() => setScope('stores')} />
-              Stores
-            </label>
+      <form onSubmit={handlePreview} className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        {/* LEFT COLUMN */}
+        <div className="space-y-6">
+          {/* Step 1: Product */}
+          <div className="space-y-3">
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">1</span> What are you looking for?</h2>
+            <CatalogSearchSelect
+              kind="product"
+              label="Product"
+              value={product}
+              onChange={setProduct}
+              onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
+              required
+            />
+            {suggestion?.kind === 'product' && (
+              <CatalogSuggestionForm kind="product" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
+            )}
           </div>
-        </fieldset>
 
-        {scope === 'region' && (
-          <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+          {/* Step 2: Bounty Amount */}
+          <div className="space-y-3">
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">2</span> Bounty details</h2>
             <div>
-              <label className="label" htmlFor="zip">Origin ZIP *</label>
-              <input id="zip" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ''))} required />
-            </div>
-            <div>
-              <label className="label" htmlFor="radius">Radius</label>
-              <select id="radius" className="input" value={radiusMiles} onChange={(event) => setRadiusMiles(event.target.value)}>
-                {[10, 25, 50, 100, 250].map((miles) => <option key={miles} value={miles}>{miles} mi</option>)}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {scope === 'retailers' && (
-          <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
-            <div>
-              <label className="label" htmlFor="retailer-zip">Origin ZIP *</label>
-              <input id="retailer-zip" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ''))} required />
-            </div>
-            <div>
-              <label className="label" htmlFor="retailer-radius">Radius</label>
-              <select id="retailer-radius" className="input" value={radiusMiles} onChange={(event) => setRadiusMiles(event.target.value)}>
-                {[10, 25, 50, 100, 250].map((miles) => <option key={miles} value={miles}>{miles} mi</option>)}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {scope === 'retailers' && (
-          <div>
-            <label className="label" htmlFor="retailer-search">Search retailers *</label>
-            <input id="retailer-search" className="input" type="text" value={retailerQuery} onChange={async (event) => { setRetailerQuery(event.target.value); if (event.target.value.trim().length >= 2) { const result = await searchRetailers(event.target.value); setRetailerResults(result.data ?? []) } }} placeholder="Type a retailer name…" />
-            {retailerResults.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {retailerResults.filter(r => !selectedRetailers.some(s => s.id === r.id)).map(r => (
-                  <button key={r.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedRetailers([...selectedRetailers, { id: r.id, label: r.name, detail: r.website_url ?? '' }]); setRetailerQuery(''); setRetailerResults([]) }}>
-                    {r.name}
-                  </button>
-                ))}
+              <label className="label" htmlFor="reward">Bounty Amount</label>
+              <div className="fiv-money-field">
+                <span>$</span>
+                <input id="reward" className="input" type="number" min="1" max="10000" step="0.01" value={rewardAmount} onChange={(event) => setRewardAmount(event.target.value)} placeholder="20.00" required />
               </div>
-            )}
-            {selectedRetailers.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedRetailers.map(r => (
-                  <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-sm font-medium text-brand-800">
-                    {r.label}
-                    <button type="button" className="text-brand-600 hover:text-brand-900" onClick={() => setSelectedRetailers(selectedRetailers.filter(s => s.id !== r.id))}>×</button>
-                  </span>
-                ))}
+              <input
+                type="range"
+                min="5"
+                max="250"
+                step="5"
+                value={Math.min(Math.max(Number(rewardAmount) || 5, 5), 250)}
+                onChange={(event) => setRewardAmount(event.target.value)}
+                aria-label="Bounty amount"
+                className="mt-3 w-full accent-brand-500"
+              />
+              <div className="mt-1 flex justify-between text-xs text-gray-400">
+                <span>$5</span><span>$25</span><span>$50</span><span>$100</span><span>$250+</span>
               </div>
-            )}
+            </div>
           </div>
-        )}
 
-        {scope === 'stores' && (
-          <>
-            <CatalogSearchSelect kind="store" label="Exact store (optional if adding multiple below)" value={store} onChange={setStore} onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })} />
-            {suggestion?.kind === 'store' && (
-              <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
-            )}
-            <div>
-              <label className="label" htmlFor="store-search">Or add multiple stores</label>
-              <input id="store-search" className="input" type="text" value={storeQuery} onChange={async (event) => { setStoreQuery(event.target.value); if (event.target.value.trim().length >= 2) { const result = await searchStores(event.target.value); setStoreResults(result.data ?? []) } }} placeholder="Type a store name…" />
-              {storeResults.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
-                    <button key={s.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreQuery(''); setStoreResults([]) }}>
-                      {s.store_name || s.retailer_name} — {s.city}, {s.state}
+          {/* Step 3: Search Area */}
+          <div className="space-y-3">
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">3</span> Search area</h2>
+            <fieldset>
+              <legend className="label">Where should shoppers look? *</legend>
+              <div className="grid grid-cols-3 gap-2">
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <input className="sr-only" type="radio" name="scope" checked={scope === 'region'} onChange={() => setScope('region')} />
+                  ZIP Radius
+                </label>
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'retailers' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <input className="sr-only" type="radio" name="scope" checked={scope === 'retailers'} onChange={() => setScope('retailers')} />
+                  Retailers
+                </label>
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <input className="sr-only" type="radio" name="scope" checked={scope === 'stores'} onChange={() => setScope('stores')} />
+                  Stores
+                </label>
+              </div>
+            </fieldset>
+
+            {(scope === 'region' || scope === 'retailers') && (
+              <div>
+                <label className="label" htmlFor="zip">City, State or ZIP *</label>
+                <input id="zip" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ''))} placeholder="Enter ZIP code" required />
+                <label className="label mt-3 text-xs">Desired Radius</label>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Desired search radius">
+                  {radiusOptions.map((miles) => (
+                    <button
+                      key={miles}
+                      type="button"
+                      className={`fiv-radius-btn ${radiusMiles === String(miles) ? 'fiv-radius-btn-active' : 'fiv-radius-btn-inactive'}`}
+                      onClick={() => setRadiusMiles(String(miles))}
+                    >
+                      {miles} mi
                     </button>
                   ))}
                 </div>
-              )}
-              {selectedStores.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedStores.map(s => (
-                    <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-sm font-medium text-brand-800">
-                      {s.label}
-                      <button type="button" className="text-brand-600 hover:text-brand-900" onClick={() => setSelectedStores(selectedStores.filter(sel => sel.id !== s.id))}>×</button>
-                    </span>
-                  ))}
+                <div className="fiv-notice-card mt-3 flex items-start gap-2">
+                  <ShieldCheck size={18} weight="duotone" className="mt-0.5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="font-semibold">We'll notify you of sightings within {radiusMiles} miles.</p>
+                    <p className="text-xs">You can update this anytime.</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </>
-        )}
+              </div>
+            )}
 
-        <div>
-          <label className="label" htmlFor="reward">Promised reward ($) *</label>
-          <input id="reward" className="input" type="number" min="1" max="10000" step="0.01" value={rewardAmount} onChange={(event) => setRewardAmount(event.target.value)} placeholder="20.00" required />
-        </div>
-
-        <div>
-          <label className="label" htmlFor="deadline">Deadline *</label>
-          <input id="deadline" className="input" type="datetime-local" min={localDateTime(new Date(Date.now() + 60 * 60 * 1000))} max={localDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
-        </div>
-
-        <div>
-          <label className="label" htmlFor="requirements">Requirements (optional)</label>
-          <textarea id="requirements" className="input min-h-24" value={requirements} onChange={(event) => setRequirements(event.target.value)} maxLength={2000} placeholder="Color, size, condition, quantity…" />
-          <p className="mt-1 text-right text-xs text-gray-400">{requirements.length}/2000</p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="quantity-needed">Quantity needed (optional)</label>
-            <input id="quantity-needed" className="input" type="number" min="1" max="999" step="1" value={quantityNeeded} onChange={(event) => setQuantityNeeded(event.target.value)} placeholder="1" />
+            {scope === 'retailers' && (
+              <div>
+                <label className="label" htmlFor="retailer-search">Search retailers *</label>
+                <input id="retailer-search" className="input" type="text" value={retailerQuery} onChange={async (event) => { setRetailerQuery(event.target.value); if (event.target.value.trim().length >= 2) { const result = await searchRetailers(event.target.value); setRetailerResults(result.data ?? []) } }} placeholder="Type a retailer name…" />
+                {retailerResults.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {retailerResults.filter(r => !selectedRetailers.some(s => s.id === r.id)).map(r => (
+                      <button key={r.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedRetailers([...selectedRetailers, { id: r.id, label: r.name, detail: r.website_url ?? '' }]); setRetailerQuery(''); setRetailerResults([]) }}>
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedRetailers.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedRetailers.map(r => (
+                      <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-sm font-medium text-brand-800">
+                        {r.label}
+                        <button type="button" className="text-brand-600 hover:text-brand-900" onClick={() => setSelectedRetailers(selectedRetailers.filter(s => s.id !== r.id))}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-end pb-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input type="checkbox" checked={acceptEquivalent} onChange={(event) => setAcceptEquivalent(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
-              Accept equivalent variants
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div className="space-y-6">
+          {/* Map Card */}
+          <figure className="fiv-map-card">
+            <iframe
+              title="Search area map"
+              className="h-48 w-full border-0"
+              loading="lazy"
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=-84.7,42.5,-84.3,43.0&layer=mapnik&marker=42.73,-84.55`}
+            />
+            <figcaption className="flex items-center gap-2 px-4 py-2 text-xs text-gray-600">
+              <MapPin size={14} weight="fill" className="text-brand-600" />
+              {scope === 'region' || scope === 'retailers' ? `ZIP ${zipCode} · ${radiusMiles} mi radius` : store?.label ?? 'Select a store'}
+            </figcaption>
+          </figure>
+
+          {/* Step 4: Preferred Stores */}
+          {scope === 'stores' && (
+            <div className="space-y-3">
+              <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Preferred stores <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
+              <p className="text-xs text-gray-500">Select one or more stores.</p>
+              <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={setStore} onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })} />
+              {suggestion?.kind === 'store' && (
+                <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
+              )}
+              <div>
+                <label className="label" htmlFor="store-search">Or add multiple stores</label>
+                <input id="store-search" className="input" type="text" value={storeQuery} onChange={async (event) => { setStoreQuery(event.target.value); if (event.target.value.trim().length >= 2) { const result = await searchStores(event.target.value); setStoreResults(result.data ?? []) } }} placeholder="Type a store name…" />
+                {storeResults.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
+                      <button key={s.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreQuery(''); setStoreResults([]) }}>
+                        {s.store_name || s.retailer_name} — {s.city}, {s.state}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedStores.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {selectedStores.map(s => (
+                      <div key={s.id} className="fiv-store-card fiv-store-card-selected">
+                        <Storefront size={20} weight="fill" className="shrink-0 text-brand-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-900">{s.label}</p>
+                          <p className="truncate text-xs text-gray-500">{s.detail}</p>
+                        </div>
+                        <button type="button" className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" onClick={() => setSelectedStores(selectedStores.filter(sel => sel.id !== s.id))}>
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Expiration Date */}
+          <div className="space-y-3">
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">5</span> Expiration date</h2>
+            <label className="relative block">
+              <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input id="deadline" className="input pr-10" type="datetime-local" min={localDateTime(new Date(Date.now() + 60 * 60 * 1000))} max={localDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
             </label>
           </div>
+
+          {/* Step 6: Notes */}
+          <div className="space-y-3">
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">6</span> Notes <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
+            <textarea id="requirements" className="input min-h-24" value={requirements} onChange={(event) => setRequirements(event.target.value)} maxLength={2000} placeholder="Any additional details that may help finders..." />
+            <p className="text-right text-xs text-gray-400">{requirements.length}/2000</p>
+          </div>
+
+          {/* Advanced options */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="quantity-needed">Quantity needed (optional)</label>
+              <input id="quantity-needed" className="input" type="number" min="1" max="999" step="1" value={quantityNeeded} onChange={(event) => setQuantityNeeded(event.target.value)} placeholder="1" />
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={acceptEquivalent} onChange={(event) => setAcceptEquivalent(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                Accept equivalent variants
+              </label>
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="variant-requirements">Variant requirements (optional)</label>
+            <textarea id="variant-requirements" className="input min-h-20" value={variantRequirements} onChange={(event) => setVariantRequirements(event.target.value)} maxLength={1000} placeholder="Specify acceptable variants, colors, sizes, editions…" />
+            <p className="mt-1 text-right text-xs text-gray-400">{variantRequirements.length}/1000</p>
+          </div>
         </div>
 
-        <div>
-          <label className="label" htmlFor="variant-requirements">Variant requirements (optional)</label>
-          <textarea id="variant-requirements" className="input min-h-20" value={variantRequirements} onChange={(event) => setVariantRequirements(event.target.value)} maxLength={1000} placeholder="Specify acceptable variants, colors, sizes, editions…" />
-          <p className="mt-1 text-right text-xs text-gray-400">{variantRequirements.length}/1000</p>
-        </div>
+        {/* ACTION STRIP */}
+        {error && <div className="lg:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-        {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-
-        <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          <button type="button" className="btn-secondary sm:flex-1" onClick={saveDraft} disabled={loading || draftLoading}>
-            {draftLoading ? 'Saving…' : 'Save private draft'}
-          </button>
-          <button type="submit" className="btn-primary sm:flex-[2]" disabled={loading || draftLoading}>
-            Review & Submit
-          </button>
+        <div className="lg:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2 text-sm text-gray-600">
+            <Sparkle size={18} weight="duotone" className="mt-0.5 shrink-0 text-brand-500" />
+            <div>
+              <p className="font-semibold text-gray-900">The FindItViral community will keep an eye out for this item.</p>
+              <p className="text-xs">You'll get notified when someone reports a sighting.</p>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button type="button" className="btn-secondary sm:flex-1" onClick={saveDraft} disabled={loading || draftLoading}>
+              {draftLoading ? 'Saving…' : 'Save private draft'}
+            </button>
+            <button type="submit" className="btn-primary sm:flex-[2]" disabled={loading || draftLoading}>
+              Review & Submit
+            </button>
+          </div>
         </div>
       </form>
 

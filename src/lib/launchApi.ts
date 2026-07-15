@@ -141,6 +141,7 @@ export async function createSighting(input: {
   quantity: number | null
   notes: string | null
   draftId: string | null
+  photoUrls: string[] | null
 }): RpcResult<string> {
   return callRpc<string>('create_sighting', {
     p_product_id: input.productId,
@@ -150,6 +151,7 @@ export async function createSighting(input: {
     p_quantity: input.quantity,
     p_notes: input.notes,
     p_draft_id: input.draftId,
+    p_photo_urls: input.photoUrls,
   })
 }
 
@@ -525,6 +527,7 @@ export async function confirmLeadWithSighting(input: {
   availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
   quantity: number | null
   notes: string | null
+  photoUrls: string[] | null
 }): RpcResult<string> {
   return callRpc<string>('confirm_lead_with_sighting', {
     p_lead_id: input.leadId,
@@ -533,6 +536,7 @@ export async function confirmLeadWithSighting(input: {
     p_availability: input.availability,
     p_quantity: input.quantity,
     p_notes: input.notes,
+    p_photo_urls: input.photoUrls,
   })
 }
 
