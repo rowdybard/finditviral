@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarBlank, MapPin, ShieldCheck, Sparkle, Storefront } from '@phosphor-icons/react'
+import { CalendarBlank, MapPin, ShieldCheck, Sparkle, Storefront, Binoculars } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -19,6 +19,7 @@ import {
   suggestStoreForDraft,
 } from '../lib/launchApi'
 import { activeMarket } from '../lib/market'
+import { geocode, buildOsmEmbedUrl, DEFAULT_GEO_FALLBACK, type GeoResult } from '../lib/geocode'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import type { ContributionDraft, RetailerSearchResult, StoreSearchResult } from '../types/database'
@@ -77,6 +78,7 @@ export default function NewBounty() {
   const [draft, setDraft] = useState<ContributionDraft | null>(null)
   const [suggestion, setSuggestion] = useState<{ kind: 'product' | 'store'; initialName: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mapGeo, setMapGeo] = useState<GeoResult>(DEFAULT_GEO_FALLBACK)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
@@ -84,6 +86,20 @@ export default function NewBounty() {
 
   function currentPayload(): BountyPayload {
     return { version: 1, product, scope, store, zipCode, radiusMiles, rewardAmount, deadline, requirements, quantityNeeded, variantRequirements, acceptEquivalent, selectedRetailers, selectedStores }
+  }
+
+  function handleProductChange(next: CatalogSelection | null) {
+    setProduct(next)
+    if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
+      setDraft(null)
+    }
+  }
+
+  function handleStoreChange(next: CatalogSelection | null) {
+    setStore(next)
+    if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
+      setDraft(null)
+    }
   }
 
   async function restoreDraft(nextDraft: ContributionDraft) {
@@ -274,6 +290,26 @@ export default function NewBounty() {
 
   const radiusOptions = [10, 25, 50, 100, 250]
 
+  useEffect(() => {
+    if (scope === 'stores') {
+      if (store?.detail) {
+        let cancelled = false
+        geocode(store.detail).then((result) => {
+          if (!cancelled && result) setMapGeo(result)
+        })
+        return () => { cancelled = true }
+      }
+    } else if (/^[0-9]{5}$/.test(zipCode)) {
+      let cancelled = false
+      const timeout = window.setTimeout(() => {
+        geocode(`${zipCode}, USA`).then((result) => {
+          if (!cancelled && result) setMapGeo(result)
+        })
+      }, 500)
+      return () => { cancelled = true; window.clearTimeout(timeout) }
+    }
+  }, [scope, zipCode, store])
+
   return (
     <div className="space-y-6">
       <div>
@@ -283,6 +319,9 @@ export default function NewBounty() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">New Bounty</h1>
             <p className="mt-0.5 text-sm text-gray-500">Post what you're looking for. The community will help you track it down.</p>
+          </div>
+          <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
+            <Binoculars size={32} weight="duotone" className="text-brand-600" />
           </div>
         </div>
       </div>
@@ -312,7 +351,7 @@ export default function NewBounty() {
               kind="product"
               label="Product"
               value={product}
-              onChange={setProduct}
+              onChange={handleProductChange}
               onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
               required
             />
@@ -430,7 +469,7 @@ export default function NewBounty() {
               title="Search area map"
               className="h-48 w-full border-0"
               loading="lazy"
-              src={`https://www.openstreetmap.org/export/embed.html?bbox=-84.7,42.5,-84.3,43.0&layer=mapnik&marker=42.73,-84.55`}
+              src={buildOsmEmbedUrl(mapGeo)}
             />
             <figcaption className="flex items-center gap-2 px-4 py-2 text-xs text-gray-600">
               <MapPin size={14} weight="fill" className="text-brand-600" />
@@ -443,7 +482,7 @@ export default function NewBounty() {
             <div className="space-y-3">
               <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Preferred stores <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
               <p className="text-xs text-gray-500">Select one or more stores.</p>
-              <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={setStore} onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })} />
+              <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={handleStoreChange} onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })} />
               {suggestion?.kind === 'store' && (
                 <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
               )}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarBlank, Clock, MapPin, ShieldCheck, Users } from '@phosphor-icons/react'
+import { CalendarBlank, Clock, MapPin, ShieldCheck, Users, ShoppingCart } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
   type ProductSuggestionValues,
@@ -22,6 +22,7 @@ import {
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
+import { geocode, buildOsmEmbedUrl, DEFAULT_GEO_FALLBACK, type GeoResult } from '../lib/geocode'
 import type { ContributionDraft, LeadDetailView } from '../types/database'
 
 type SightingPayload = {
@@ -69,9 +70,24 @@ export default function NewSighting() {
   const [lead, setLead] = useState<LeadDetailView | null>(null)
   const [leadLoading, setLeadLoading] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
+  const [mapGeo, setMapGeo] = useState<GeoResult>(DEFAULT_GEO_FALLBACK)
 
   function currentPayload(): SightingPayload {
     return { version: 1, product, store, seenAt, availability, quantity, notes, photoUrls }
+  }
+
+  function handleProductChange(next: CatalogSelection | null) {
+    setProduct(next)
+    if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
+      setDraft(null)
+    }
+  }
+
+  function handleStoreChange(next: CatalogSelection | null) {
+    setStore(next)
+    if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
+      setDraft(null)
+    }
   }
 
   async function restoreDraft(nextDraft: ContributionDraft) {
@@ -126,6 +142,15 @@ export default function NewSighting() {
       }
     })
   }, [leadSlug])
+
+  useEffect(() => {
+    if (!store?.detail) return
+    let cancelled = false
+    geocode(store.detail).then((result) => {
+      if (!cancelled && result) setMapGeo(result)
+    })
+    return () => { cancelled = true }
+  }, [store])
 
   async function saveDraft() {
     setError(null)
@@ -278,6 +303,9 @@ export default function NewSighting() {
             <h1 className="text-2xl font-bold text-gray-900">{lead ? 'Confirm Lead' : 'New Sighting'}</h1>
             <p className="mt-0.5 text-sm text-gray-500">{lead ? 'Report what you saw to confirm this restock lead.' : 'Found it? Help the community by sharing the details.'}</p>
           </div>
+          <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
+            <ShoppingCart size={32} weight="duotone" className="text-brand-600" />
+          </div>
         </div>
       </div>
 
@@ -319,7 +347,7 @@ export default function NewSighting() {
               kind="product"
               label="Product"
               value={product}
-              onChange={setProduct}
+              onChange={handleProductChange}
               onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
               required
             />
@@ -335,7 +363,7 @@ export default function NewSighting() {
               kind="store"
               label="Store"
               value={store}
-              onChange={setStore}
+              onChange={handleStoreChange}
               onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })}
               required
             />
@@ -348,7 +376,7 @@ export default function NewSighting() {
                   title="Store location map"
                   className="h-40 w-full border-0"
                   loading="lazy"
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=-84.7,42.5,-84.3,43.0&layer=mapnik&marker=42.73,-84.55`}
+                  src={buildOsmEmbedUrl(mapGeo)}
                 />
                 <figcaption className="flex items-center gap-2 px-4 py-2 text-xs text-gray-600">
                   <MapPin size={14} weight="fill" className="text-brand-600" />

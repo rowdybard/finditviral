@@ -85,7 +85,7 @@ export default function TrendPage() {
       <EmptyState
         title="Trend not found"
         message="This trend may have been removed."
-        action={<Link to="/" className="btn-primary">Go home</Link>}
+        action={<Link to="/home" className="btn-primary">Go home</Link>}
       />
     )
   }
@@ -96,7 +96,7 @@ export default function TrendPage() {
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       <div>
-        <Link to="/" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
+        <Link to="/home" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{trend.name}</h1>
         {trend.description && <p className="mt-1 text-gray-600">{trend.description}</p>}
       </div>

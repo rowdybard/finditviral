@@ -151,7 +151,7 @@ export default function ProfilePage() {
       <EmptyState
         title="User not found"
         message="This user may not exist."
-        action={<Link to="/" className="btn-primary">Go home</Link>}
+        action={<Link to="/home" className="btn-primary">Go home</Link>}
       />
     )
   }

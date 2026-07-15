@@ -132,7 +132,7 @@
   }
 
   .fiv-availability-btn-active {
-    @apply border-2;
+    @apply border-transparent;
   }
 
   .fiv-availability-btn-inactive {

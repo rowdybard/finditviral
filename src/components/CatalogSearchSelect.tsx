@@ -8,6 +8,7 @@ export type CatalogSelection = {
   label: string
   detail: string
   slug?: string
+  imageUrl?: string | null
 }
 
 type Props = {
@@ -26,6 +27,7 @@ function toProductSelection(product: ProductSearchResult): CatalogSelection {
     slug: product.slug,
     label: product.name,
     detail: [product.trend_name, product.availability_status].filter(Boolean).join(' · '),
+    imageUrl: product.image_url,
   }
 }
 
@@ -135,9 +137,11 @@ export default function CatalogSearchSelect({
 
       {value ? (
         <div className="flex min-h-11 items-center gap-3 rounded-lg border border-gray-300 bg-white px-3.5 py-2">
-          {kind === 'product'
-            ? <Package aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="bold" />
-            : <MapPin aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="fill" />}
+          {kind === 'product' && value.imageUrl
+            ? <img src={value.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+            : kind === 'product'
+              ? <Package aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="bold" />
+              : <MapPin aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="fill" />}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-gray-900">{value.label}</p>
             <p className="truncate text-xs text-gray-500">{value.detail}</p>
@@ -203,12 +207,19 @@ export default function CatalogSearchSelect({
                   type="button"
                   role="option"
                   aria-selected={index === activeIndex ? 'true' : 'false'}
-                  className={`block w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50 focus:bg-brand-50 focus:outline-none ${index === activeIndex ? 'bg-brand-50' : ''}`}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left hover:bg-brand-50 focus:bg-brand-50 focus:outline-none ${index === activeIndex ? 'bg-brand-50' : ''}`}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => select(result)}
                 >
-                  <span className="block text-sm font-semibold text-gray-900">{result.label}</span>
-                  <span className="block truncate text-xs text-gray-500">{result.detail}</span>
+                  {kind === 'product' && result.imageUrl
+                    ? <img src={result.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+                    : kind === 'product'
+                      ? <Package aria-hidden="true" className="shrink-0 text-brand-400" size={20} weight="bold" />
+                      : <MapPin aria-hidden="true" className="shrink-0 text-brand-400" size={20} weight="fill" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-gray-900">{result.label}</span>
+                    <span className="block truncate text-xs text-gray-500">{result.detail}</span>
+                  </span>
                 </button>
               ))}
               {!loading && !error && results.length === 0 && (
