@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { getPersonalNotifications } from '../../lib/launchApi'
 import type { PersonalNotification } from '../../types/database'
 import type { MascotNotification } from './MascotBubble'
@@ -34,6 +35,7 @@ function mapNotification(n: PersonalNotification): MascotNotification {
 }
 
 export function useMascotFeed({ muted = false }: { muted?: boolean } = {}) {
+  const { user } = useAuth()
   const [queue, setQueue] = useState<MascotNotification[]>([])
   const [history, setHistory] = useState<MascotNotification[]>([])
   const [unread, setUnread] = useState(0)
@@ -42,7 +44,7 @@ export function useMascotFeed({ muted = false }: { muted?: boolean } = {}) {
   mutedRef.current = muted
 
   const poll = useCallback(async () => {
-    if (document.hidden) return
+    if (document.hidden || !user) return
 
     const result = await getPersonalNotifications(20)
     if (result.error || !result.data) return
@@ -85,7 +87,7 @@ export function useMascotFeed({ muted = false }: { muted?: boolean } = {}) {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [poll])
+  }, [poll, user])
 
   const dequeue = useCallback(() => {
     setQueue((prev) => prev.slice(1))
