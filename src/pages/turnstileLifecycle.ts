@@ -96,7 +96,7 @@ export function submitForm(
   }
 }
 
-export function onCallback(state: TurnstileState, token: string): { state: TurnstileState; action: PendingAction | null } {
+export function onCallback(state: TurnstileState): { state: TurnstileState; action: PendingAction | null } {
   const action = state.pendingAction
   return { state: { ...state, pendingAction: null }, action }
 }
