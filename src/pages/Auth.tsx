@@ -32,6 +32,7 @@ export default function Auth() {
     passwordRecovery,
     requestPasswordReset,
     updatePassword,
+    signOut,
     user,
     profile,
     loading: authLoading,
@@ -386,6 +387,18 @@ export default function Auth() {
               <Link to={signedInDestination} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
                 Continue to account
               </Link>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true)
+                  await signOut()
+                  setLoading(false)
+                }}
+                className="mx-auto mt-4 block text-sm font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline disabled:opacity-60"
+              >
+                {loading ? 'Signing out…' : 'Sign out and use another account'}
+              </button>
             </div>
           ) : confirmationPending ? (
             <div role="status" aria-live="polite" className="py-4 text-center">

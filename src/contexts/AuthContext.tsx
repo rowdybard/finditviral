@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import type { Profile } from '../types/database'
 import { buildOnboardingPath } from '../lib/authReturn'
 import { buildPasswordRecoveryRedirectUrl } from '../lib/authEntry'
+import { getValidatedInitialSession } from '../lib/authSession'
 
 type AuthContextType = {
   session: Session | null
@@ -31,17 +32,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      if (data.session) {
-        void fetchProfile(data.session.user.id)
+    let stopped = false
+    let authEventOccurred = false
+
+    void getValidatedInitialSession(supabase.auth).then((validatedSession) => {
+      if (stopped || authEventOccurred) return
+
+      setSession(validatedSession)
+      if (validatedSession) {
+        void fetchProfile(validatedSession.user.id)
       } else {
+        setProfile(null)
         setLoading(false)
       }
+    }).catch((bootstrapError: unknown) => {
+      if (stopped || authEventOccurred) return
+      console.error(JSON.stringify({
+        event: 'auth_bootstrap_failed',
+        message: bootstrapError instanceof Error ? bootstrapError.message : 'unknown',
+      }))
+      setSession(null)
+      setProfile(null)
+      setLoading(false)
     })
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
+        if (event === 'INITIAL_SESSION') return
+        authEventOccurred = true
         if (event === 'PASSWORD_RECOVERY') {
           setPasswordRecovery(true)
         } else if (event === 'SIGNED_OUT') {
@@ -59,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => {
+      stopped = true
       authListener.subscription.unsubscribe()
     }
   }, [])
