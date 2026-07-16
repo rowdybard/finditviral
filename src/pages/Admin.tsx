@@ -654,10 +654,15 @@ export default function Admin() {
 
       {tab === 'contributions' && (
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-2" aria-label="Community response filters">
+          <div className="flex flex-wrap gap-2" aria-label="Contribution filters">
+            <button type="button" className={`btn-secondary min-h-11 ${!queue ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions')}>All</button>
+            <button type="button" className={`btn-secondary min-h-11 ${queue === 'sightings' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'sightings')}>Sightings</button>
+            <button type="button" className={`btn-secondary min-h-11 ${queue === 'bounties' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'bounties')}>Bounties</button>
+            <button type="button" className={`btn-secondary min-h-11 ${queue === 'leads' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'leads')}>Leads</button>
+            <span className="mx-1 self-center text-stone-400" aria-hidden="true">|</span>
             <button type="button" className={`btn-secondary min-h-11 ${queue === 'disputed' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'disputed')}>Disputed</button>
             <button type="button" className={`btn-secondary min-h-11 ${queue === 'possibly_gone' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'possibly_gone')}>Possibly gone</button>
-            {(queue === 'disputed' || queue === 'possibly_gone') && <button type="button" className="btn-ghost min-h-11" onClick={() => selectTab('contributions')}>Clear filter</button>}
+            {queue && <button type="button" className="btn-ghost min-h-11" onClick={() => selectTab('contributions')}>Clear filter</button>}
           </div>
           {contributions
             .filter((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state)

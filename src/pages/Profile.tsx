@@ -294,7 +294,7 @@ export default function ProfilePage() {
           <div className="space-y-3">
             {bounties.map((b) => (
               <BountyCard key={b.id} bounty={b} onDelete={isOwnProfile ? handleDeleteBounty : undefined} />
-            ))}}
+            ))}
           </div>
         ) : (
           <p className="text-sm text-gray-500">No bounties posted.</p>
@@ -307,7 +307,7 @@ export default function ProfilePage() {
           <div className="space-y-3">
             {sightings.map((s) => (
               <SightingCard key={s.id} sighting={s} onDelete={isOwnProfile ? handleDeleteSighting : undefined} />
-            ))}}
+            ))}
           </div>
         ) : (
           <p className="text-sm text-gray-500">No public sightings reported.</p>

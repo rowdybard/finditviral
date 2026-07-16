@@ -413,7 +413,7 @@ export default function BountyDetail() {
             <button type="button" className="btn-ghost" onClick={() => setEditing(false)} disabled={actionLoading === 'edit'}>Cancel</button>
           </div>
         </form>
-      )
+      )}
 
       {canClaim && (
         <FormDraftStatus
