@@ -11,7 +11,7 @@ const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
-const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
 export default function Auth() {
   const { signIn, signUp, passwordRecovery, requestPasswordReset, updatePassword } = useAuth()
@@ -102,7 +102,7 @@ export default function Auth() {
     })
   }
 
-  const showCaptcha = !isForgot && !passwordRecovery && !confirmationPending
+  const showCaptcha = (!isForgot && !passwordRecovery && !confirmationPending) || isForgot
 
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || !showCaptcha) return
@@ -137,12 +137,20 @@ export default function Auth() {
   async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+
+    const freshToken = TURNSTILE_SITE_KEY ? await getFreshToken() : captchaToken
+    if (!freshToken) {
+      setError('Please complete the CAPTCHA verification.')
+      return
+    }
+
     setLoading(true)
     const normalizedEmail = email.trim().toLowerCase()
-    const { error: resetError } = await requestPasswordReset(normalizedEmail)
+    const { error: resetError } = await requestPasswordReset(normalizedEmail, freshToken)
     setLoading(false)
     if (resetError) {
       setError(mapAuthError(resetError, true))
+      resetTurnstile()
       return
     }
     setResetSent(true)
@@ -173,6 +181,8 @@ export default function Auth() {
     event.preventDefault()
     setError(null)
 
+    if (submittingRef.current) return
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
       return
@@ -183,53 +193,58 @@ export default function Auth() {
     }
 
     setLoading(true)
+    submittingRef.current = true
     const normalizedEmail = email.trim().toLowerCase()
 
     if (isSignUp) {
-      const freshToken = TURNSTILE_SITE_KEY ? await getFreshToken() : captchaToken
-      if (!freshToken) {
-        setError('Please complete the CAPTCHA verification.')
-        setLoading(false)
-        return
+      pendingActionRef.current = async (token: string) => {
+        const result = await signUp(normalizedEmail, password, token, returnTo)
+        if (result.error) {
+          console.error('sign_up error:', result.error)
+          setError(mapAuthError(result.error, true))
+          resetTurnstile()
+          setLoading(false)
+          submittingRef.current = false
+          return
+        }
+        trackEvent('sign_up', { method: 'email' })
+        if (result.needsEmailConfirmation) {
+          setConfirmationPending(true)
+          setLoading(false)
+          submittingRef.current = false
+          return
+        }
+        navigate(onboardingPath, { replace: true })
       }
-      const result = await signUp(normalizedEmail, password, freshToken, returnTo)
-      if (result.error) {
-        console.error('sign_up error:', result.error)
-        setError(mapAuthError(result.error, true))
-        resetTurnstile()
-        setLoading(false)
-        return
+    } else {
+      pendingActionRef.current = async (token: string) => {
+        const { error: signInError } = await signIn(normalizedEmail, password, token)
+        if (signInError) {
+          console.error('sign_in error:', signInError)
+          setError(mapAuthError(signInError, false))
+          resetTurnstile()
+          setLoading(false)
+          submittingRef.current = false
+          return
+        }
+        trackEvent('login', { method: 'email' })
+        navigate(returnTo, { replace: true })
       }
-
-      trackEvent('sign_up', { method: 'email' })
-      if (result.needsEmailConfirmation) {
-        setConfirmationPending(true)
-        setLoading(false)
-        return
-      }
-
-      navigate(onboardingPath, { replace: true })
-      return
     }
 
-    const freshToken = TURNSTILE_SITE_KEY ? await getFreshToken() : captchaToken
-    if (!freshToken) {
-      setError('Please complete the CAPTCHA verification.')
+    const ts = window.turnstile
+    if (TURNSTILE_SITE_KEY && ts && turnstileWidgetId.current) {
+      ts.execute(turnstileWidgetId.current)
+    } else if (TURNSTILE_SITE_KEY) {
+      setError('CAPTCHA verification is not ready. Please refresh the page.')
       setLoading(false)
-      return
+      submittingRef.current = false
+      pendingActionRef.current = null
+    } else {
+      const action = pendingActionRef.current
+      pendingActionRef.current = null
+      if (action) await action('')
     }
-
-    const { error: signInError } = await signIn(normalizedEmail, password, freshToken)
-    if (signInError) {
-      console.error('sign_in error:', signInError)
-      setError(mapAuthError(signInError, false))
-      resetTurnstile()
-      setLoading(false)
-      return
-    }
-
-    trackEvent('login', { method: 'email' })
-    navigate(returnTo, { replace: true })
   }
 
   return (
@@ -321,13 +336,32 @@ export default function Auth() {
                       />
                     </div>
 
+                    <div>
+                      {TURNSTILE_SITE_KEY ? (
+                        <div
+                          ref={turnstileContainerRef}
+                          className="cf-turnstile"
+                          data-sitekey={TURNSTILE_SITE_KEY}
+                          data-callback="onTurnstileCallback"
+                          data-expired-callback="onTurnstileExpired"
+                          data-error-callback="onTurnstileError"
+                          data-theme="light"
+                        />
+                      ) : (
+                        <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
+                      )}
+                      {captchaExpired && (
+                        <p className="mt-1 text-xs text-stone-500">CAPTCHA expired. Please verify again.</p>
+                      )}
+                    </div>
+
                     {error && (
                       <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
                     )}
 
                     <button
                       type="submit"
-                      disabled={loading}
+                      disabled={loading || !captchaToken || !TURNSTILE_SITE_KEY}
                       className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {loading ? 'Sending…' : 'Send reset link'}
@@ -522,15 +556,7 @@ export default function Auth() {
 
                 <div>
                   {TURNSTILE_SITE_KEY ? (
-                    <div
-                      ref={turnstileContainerRef}
-                      className="cf-turnstile"
-                      data-sitekey={TURNSTILE_SITE_KEY}
-                      data-callback="onTurnstileCallback"
-                      data-expired-callback="onTurnstileExpired"
-                      data-error-callback="onTurnstileError"
-                      data-theme="light"
-                    />
+                    <div ref={turnstileContainerRef} />
                   ) : (
                     <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
                   )}

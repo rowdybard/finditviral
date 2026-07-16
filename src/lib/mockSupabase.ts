@@ -718,7 +718,7 @@ export const mockSupabase = {
         city: canonicalStore?.city ?? args.p_city,
         state: canonicalStore?.state ?? args.p_state,
         zip_code: canonicalStore?.zip_code ?? args.p_zip_code,
-        stock_level: args.p_availability === 'low_stock' || args.p_availability === 'low' || args.p_stock_level === 'low' ? 'low' : args.p_availability === 'sold_out' || args.p_availability === 'unknown' ? 'none' : 'in_stock',
+        stock_level: args.p_availability === 'low_stock' || args.p_availability === 'low' || args.p_stock_level === 'low' ? 'low' : 'in_stock',
         availability: args.p_availability ?? 'in_stock',
         quantity: args.p_quantity ?? null,
         notes: args.p_notes ?? null,

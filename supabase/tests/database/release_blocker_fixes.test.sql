@@ -5,7 +5,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(22);
+select plan(24);
 
 select ok(
   not has_table_privilege('authenticated', 'public.leads', 'insert')
@@ -82,8 +82,9 @@ select ok(
       and p.proname = 'sync_lead_confirmation_from_sighting'
       and pg_get_functiondef(p.oid) ~ '''confirmed'''
       and pg_get_functiondef(p.oid) ~ 'confirmed_sighting_id = null'
+      and pg_get_functiondef(p.oid) ~ '''active'''
   ),
-  'Lead confirmation trigger confirms approved sightings and clears rejected pending ones'
+  'Lead confirmation trigger confirms, clears rejected, and reverts to active'
 );
 
 select ok(
@@ -151,7 +152,8 @@ begin
   insert into public.leads (id, user_id, product_id, slug, headline, scope_type, store_id, source_type, status, expires_at)
   values
     ('00000000-0000-4000-8000-0000000000f3', v_member_id, v_product_id, 'release-confirm-approve', 'Release confirmation approval test', 'stores', v_store_id, 'other', 'active', now() + interval '7 days'),
-    ('00000000-0000-4000-8000-0000000000f4', v_member_id, v_product_id, 'release-confirm-hide', 'Release confirmation hide test', 'stores', v_store_id, 'other', 'active', now() + interval '7 days')
+    ('00000000-0000-4000-8000-0000000000f4', v_member_id, v_product_id, 'release-confirm-hide', 'Release confirmation hide test', 'stores', v_store_id, 'other', 'active', now() + interval '7 days'),
+    ('00000000-0000-4000-8000-0000000000f5', v_member_id, v_product_id, 'release-confirm-unconfirm', 'Release confirmation unconfirm test', 'stores', v_store_id, 'other', 'active', now() + interval '7 days')
   on conflict (id) do update set status = 'active', confirmed_sighting_id = null, expires_at = excluded.expires_at;
 
   set local session_replication_role = 'origin';
@@ -289,6 +291,67 @@ select is(
   (select confirmed_sighting_id from public.leads where id = '00000000-0000-4000-8000-0000000000f4'),
   null::uuid,
   'hiding a pending confirmation clears the Lead link for a replacement confirmation'
+);
+
+-- Test: approved confirmation sighting is hidden → lead reverts to 'active'
+select pg_temp.set_member_ctx();
+set role authenticated;
+select lives_ok(
+  $$ select public.confirm_lead_with_sighting(
+    '00000000-0000-4000-8000-0000000000f5',
+    (select store_id from public.leads where id = '00000000-0000-4000-8000-0000000000f5'),
+    now(), 'in_stock', null, null, null
+  ) $$,
+  'a third Lead can receive a pending in-stock confirmation'
+);
+reset role;
+
+select pg_temp.set_owner_ctx();
+set role authenticated;
+select lives_ok(
+  $$ select public.admin_set_contribution_moderation(
+    'sighting',
+    (select confirmed_sighting_id from public.leads where id = '00000000-0000-4000-8000-0000000000f5'),
+    'approve'
+  ) $$,
+  'owner can approve the third Lead confirmation sighting'
+);
+reset role;
+
+select ok(
+  exists (
+    select 1
+    from public.leads l
+    join public.sightings s on s.id = l.confirmed_sighting_id
+    where l.id = '00000000-0000-4000-8000-0000000000f5'
+      and l.status = 'confirmed'
+      and s.moderation_status = 'approved'
+  ),
+  'third Lead is confirmed after approval'
+);
+
+select pg_temp.set_owner_ctx();
+set role authenticated;
+select lives_ok(
+  $$ select public.admin_set_contribution_moderation(
+    'sighting',
+    (select confirmed_sighting_id from public.leads where id = '00000000-0000-4000-8000-0000000000f5'),
+    'hide'
+  ) $$,
+  'owner can hide an approved confirmation sighting'
+);
+reset role;
+
+select is(
+  (select status from public.leads where id = '00000000-0000-4000-8000-0000000000f5'),
+  'active',
+  'hiding an approved confirmation sighting reverts the Lead to active'
+);
+
+select is(
+  (select confirmed_sighting_id from public.leads where id = '00000000-0000-4000-8000-0000000000f5'),
+  null::uuid,
+  'hiding an approved confirmation sighting clears confirmed_sighting_id'
 );
 
 select pg_temp.set_member_ctx();

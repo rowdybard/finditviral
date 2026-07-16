@@ -16,6 +16,9 @@ type TurnstileOptions = {
   callback?: (token: string) => void
   'expired-callback'?: () => void
   'error-callback'?: () => void
+  'retry-callback'?: () => void
+  execution?: 'render' | 'execute'
+  appearance?: 'always' | 'execute' | 'interaction-only'
 }
 
 interface Window {
@@ -23,11 +26,9 @@ interface Window {
     render: (container: HTMLElement, options: TurnstileOptions) => string
     remove: (widgetId: string) => void
     reset: (widgetId?: string) => void
+    execute: (widgetId: string) => void
     getResponse: (widgetId?: string) => string | undefined
   }
-  onTurnstileCallback?: (token: string) => void
-  onTurnstileExpired?: () => void
-  onTurnstileError?: () => void
 }
 
 declare module '@fontsource-variable/*'

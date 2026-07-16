@@ -246,6 +246,10 @@ export default function NewSighting() {
       setError('Choose at least one store or submit the location for approval.')
       return
     }
+    if (lead && selectedStores.length > 1) {
+      setError('Lead confirmation requires exactly one store.')
+      return
+    }
     if (draft?.state === 'waiting_for_approval' || draft?.state === 'needs_attention') {
       setError('This draft still needs owner review. Wait for approval or discard it and start again with catalog matches.')
       return
@@ -374,6 +378,7 @@ export default function NewSighting() {
               onChange={handleProductChange}
               onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
               required
+              disabled={Boolean(lead)}
             />
             {suggestion?.kind === 'product' && (
               <CatalogSuggestionForm kind="product" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
@@ -383,25 +388,27 @@ export default function NewSighting() {
           {/* Step 2: Store Selection */}
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">2</span> Where did you see it?</h2>
-            <p className="text-xs text-gray-500">Select one or more stores where you spotted the product.</p>
+            <p className="text-xs text-gray-500">{lead ? 'Select the exact store where you confirmed the product.' : 'Select one or more stores where you spotted the product.'}</p>
             <div>
-              <label className="label" htmlFor="store-search">Search stores *</label>
-              <input
-                id="store-search"
-                className="input"
-                type="text"
-                value={storeQuery}
-                onChange={async (event) => {
-                  setStoreQuery(event.target.value)
-                  if (event.target.value.trim().length >= 2) {
-                    const result = await searchStores(event.target.value)
-                    setStoreResults(result.data ?? [])
-                  } else {
-                    setStoreResults([])
-                  }
-                }}
-                placeholder="Type a store name…"
-              />
+              {(!lead || selectedStores.length === 0) && (
+                <>
+                  <label className="label" htmlFor="store-search">Search stores *</label>
+                  <input
+                    id="store-search"
+                    className="input"
+                    type="text"
+                    value={storeQuery}
+                    onChange={async (event) => {
+                      setStoreQuery(event.target.value)
+                      if (event.target.value.trim().length >= 2) {
+                        const result = await searchStores(event.target.value)
+                        setStoreResults(result.data ?? [])
+                      } else {
+                        setStoreResults([])
+                      }
+                    }}
+                    placeholder="Type a store name…"
+                  />
               {storeResults.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
@@ -419,7 +426,7 @@ export default function NewSighting() {
                   ))}
                 </div>
               )}
-              {storeQuery.trim().length >= 2 && storeResults.length === 0 && !suggestion && (
+              {storeQuery.trim().length >= 2 && storeResults.length === 0 && !suggestion && !lead && (
                 <button
                   type="button"
                   className="mt-2 text-sm font-semibold text-brand-700 hover:text-brand-900"
@@ -427,6 +434,8 @@ export default function NewSighting() {
                 >
                   Can't find it? Suggest a store
                 </button>
+              )}
+                </>
               )}
             </div>
             {suggestion?.kind === 'store' && (
@@ -441,13 +450,15 @@ export default function NewSighting() {
                       <p className="truncate text-sm font-semibold text-gray-900">{s.label}</p>
                       <p className="truncate text-xs text-gray-500">{s.detail}</p>
                     </div>
-                    <button
-                      type="button"
-                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                      onClick={() => removeStore(s.id)}
-                    >
-                      ×
-                    </button>
+                    {(!lead || selectedStores.length > 1) && (
+                      <button
+                        type="button"
+                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        onClick={() => removeStore(s.id)}
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

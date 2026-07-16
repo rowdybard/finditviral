@@ -202,10 +202,9 @@ export async function submitBountyClaim(input: {
   bountyId: string
   storeId: string
   seenAt: string
-  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
+  availability: 'in_stock' | 'low_stock'
   quantity: number | null
   notes: string | null
-  photoUrls: string[] | null
 }): RpcResult<string> {
   return callRpc<string>('submit_bounty_claim', {
     p_bounty_id: input.bountyId,
@@ -214,7 +213,6 @@ export async function submitBountyClaim(input: {
     p_availability: input.availability,
     p_quantity: input.quantity,
     p_notes: input.notes,
-    p_photo_urls: input.photoUrls,
   })
 }
 

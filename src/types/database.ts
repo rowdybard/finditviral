@@ -294,7 +294,7 @@ export type BountyClaimView = {
   store_id: string
   store_name: string
   seen_at: string
-  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
+  availability: 'in_stock' | 'low_stock'
   quantity: number | null
   notes: string | null
   contact_info: string | null

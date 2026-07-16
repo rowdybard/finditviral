@@ -17,7 +17,7 @@ type AuthContextType = {
   }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
-  requestPasswordReset: (email: string) => Promise<{ error: string | null }>
+  requestPasswordReset: (email: string, captchaToken?: string) => Promise<{ error: string | null }>
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>
 }
 
@@ -116,10 +116,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session) await fetchProfile(session.user.id)
   }
 
-  async function requestPasswordReset(email: string) {
+  async function requestPasswordReset(email: string, captchaToken?: string) {
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
-      { redirectTo: `${window.location.origin}/auth` },
+      {
+        redirectTo: `${window.location.origin}/auth`,
+        captchaToken,
+      },
     )
     return { error: resetError ? resetError.message : null }
   }

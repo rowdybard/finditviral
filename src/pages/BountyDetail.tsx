@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom'
 import { CalendarBlank } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
-import PhotoUpload from '../components/PhotoUpload'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
@@ -26,8 +25,7 @@ export default function BountyDetail() {
   const [claimSeenAt, setClaimSeenAt] = useState(() => localDateTime(new Date()))
   const [whenSeen, setWhenSeen] = useState<'today' | 'yesterday' | 'older'>('today')
   const [olderDate, setOlderDate] = useState('')
-  const [claimPhotoUrls, setClaimPhotoUrls] = useState<string[]>([])
-  const [claimAvailability, setClaimAvailability] = useState<'in_stock' | 'low_stock' | 'sold_out' | 'unknown'>('in_stock')
+  const [claimAvailability, setClaimAvailability] = useState<'in_stock' | 'low_stock'>('in_stock')
   const [claimQuantity, setClaimQuantity] = useState('')
   const [claimNotes, setClaimNotes] = useState('')
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -103,7 +101,6 @@ export default function BountyDetail() {
       availability: claimAvailability,
       quantity,
       notes: claimNotes.trim() || null,
-      photoUrls: claimPhotoUrls.length > 0 ? claimPhotoUrls : null,
     })
     setClaimLoading(false)
     if (result.error) {
@@ -225,15 +222,10 @@ export default function BountyDetail() {
             )}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'in_stock' | 'low_stock' | 'sold_out' | 'unknown')}><option value="in_stock">In Stock</option><option value="low_stock">Low Stock</option><option value="sold_out">Sold Out</option><option value="unknown">Unknown</option></select></div>
+            <div><label className="label" htmlFor="claim-availability">Availability</label><select id="claim-availability" className="input" value={claimAvailability} onChange={(event) => setClaimAvailability(event.target.value as 'in_stock' | 'low_stock')}><option value="in_stock">In Stock</option><option value="low_stock">Low Stock</option></select></div>
             <div><label className="label" htmlFor="claim-quantity">Quantity (optional)</label><input id="claim-quantity" className="input" type="number" min="1" max="99" step="1" value={claimQuantity} onChange={(event) => setClaimQuantity(event.target.value)} /></div>
           </div>
           <div><label className="label" htmlFor="claim-notes">Notes (optional)</label><textarea id="claim-notes" className="input min-h-20" maxLength={2000} value={claimNotes} onChange={(event) => setClaimNotes(event.target.value)} /></div>
-          <div className="space-y-2">
-            <label className="label">Photos (optional)</label>
-            <p className="text-xs text-gray-500">A clear photo helps the bounty owner verify your claim.</p>
-            <PhotoUpload photoUrls={claimPhotoUrls} onChange={setClaimPhotoUrls} maxPhotos={4} disabled={claimLoading} />
-          </div>
           {claimError && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{claimError}</div>}
           <div className="flex gap-2"><button type="submit" className="btn-primary" disabled={claimLoading}>{claimLoading ? 'Submitting…' : 'Submit Claim'}</button><button type="button" className="btn-ghost" onClick={() => setShowClaimForm(false)} disabled={claimLoading}>Cancel</button></div>
         </form>
