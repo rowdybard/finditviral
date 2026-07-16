@@ -63,7 +63,7 @@ export default function Auth() {
       turnstileWidgetId.current = ts.render(turnstileContainerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
         execution: 'execute',
-        appearance: 'execute',
+        appearance: 'always',
         callback: (token: string) => {
           const action = pendingActionRef.current
           pendingActionRef.current = null
