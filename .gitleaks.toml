@@ -7,12 +7,10 @@ useDefault = true
 description = "CI placeholder environment values"
 paths = [
   '''\.github/workflows/.*\.yml''',
-  '''\.env\.e2e''',
 ]
 regexes = [
   '''ci-placeholder''',
   '''ci-publishable-key''',
-  '''e2e-publishable-key''',
   '''1x00000000000000000000AA''',
 ]
 
