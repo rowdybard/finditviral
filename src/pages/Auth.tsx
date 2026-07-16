@@ -11,7 +11,7 @@ const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
-const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
 type TurnstileWidget = {
   render: (container: HTMLElement, options: {
@@ -19,6 +19,7 @@ type TurnstileWidget = {
     callback: (token: string) => void
     'expired-callback'?: () => void
     'error-callback'?: () => void
+    'retry-callback'?: () => void
     theme?: 'light' | 'dark' | 'auto'
     size?: 'normal' | 'compact'
   }) => string
@@ -107,6 +108,10 @@ export default function Auth() {
         },
         'error-callback': () => {
           setCaptchaToken(null)
+        },
+        'retry-callback': () => {
+          setCaptchaToken(null)
+          setCaptchaExpired(false)
         },
         theme: 'light',
       })
