@@ -1,3 +1,4 @@
+import { Eye, EyeSlash } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -48,6 +49,7 @@ export default function Auth() {
   const [resendSent, setResendSent] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [passwordUpdated, setPasswordUpdated] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetId = useRef<string | null>(null)
 
@@ -60,8 +62,10 @@ export default function Auth() {
     setCaptchaExpired(false)
   }
 
+  const showCaptcha = !isForgot && !passwordRecovery && !confirmationPending
+
   useEffect(() => {
-    if (!TURNSTILE_SITE_KEY) return
+    if (!TURNSTILE_SITE_KEY || !showCaptcha) return
     let cancelled = false
 
     function loadTurnstile() {
@@ -120,7 +124,7 @@ export default function Auth() {
       setCaptchaToken(null)
       setCaptchaExpired(false)
     }
-  }, [])
+  }, [showCaptcha])
 
   async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -350,32 +354,52 @@ export default function Auth() {
                   <form onSubmit={handleUpdatePassword} className="mt-6 space-y-5">
                     <div>
                       <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-password">New password</label>
-                      <input
-                        id="auth-password"
-                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-                        type="password"
-                        autoComplete="new-password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder="At least 8 characters"
-                        required
-                        minLength={8}
-                      />
+                      <div className="relative">
+                        <input
+                          id="auth-password"
+                          className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 pr-11 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="At least 8 characters"
+                          required
+                          minLength={8}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-stone-500 hover:text-stone-800 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeSlash size={18} weight="bold" aria-hidden="true" /> : <Eye size={18} weight="bold" aria-hidden="true" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
                       <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-confirm-password">Confirm password</label>
-                      <input
-                        id="auth-confirm-password"
-                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-                        type="password"
-                        autoComplete="new-password"
-                        value={confirmPassword}
-                        onChange={(event) => setConfirmPassword(event.target.value)}
-                        placeholder="Repeat your password"
-                        required
-                        minLength={8}
-                      />
+                      <div className="relative">
+                        <input
+                          id="auth-confirm-password"
+                          className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 pr-11 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={(event) => setConfirmPassword(event.target.value)}
+                          placeholder="Repeat your password"
+                          required
+                          minLength={8}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-stone-500 hover:text-stone-800 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeSlash size={18} weight="bold" aria-hidden="true" /> : <Eye size={18} weight="bold" aria-hidden="true" />}
+                        </button>
+                      </div>
                     </div>
 
                     {error && (
@@ -436,39 +460,59 @@ export default function Auth() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-password">Password</label>
-                  <input
-                    id="auth-password"
-                    className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-                    type="password"
-                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={isSignUp ? 'At least 8 characters' : 'Your password'}
-                    required
-                    minLength={8}
-                  />
+                  <div className="relative">
+                    <input
+                      id="auth-password"
+                      className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 pr-11 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={isSignUp ? 'At least 8 characters' : 'Your password'}
+                      required
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-stone-500 hover:text-stone-800 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeSlash size={18} weight="bold" aria-hidden="true" /> : <Eye size={18} weight="bold" aria-hidden="true" />}
+                    </button>
+                  </div>
                 </div>
 
                 {isSignUp && (
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-stone-800" htmlFor="auth-confirm-password">Confirm password</label>
-                    <input
-                      id="auth-confirm-password"
-                      className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
-                      type="password"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      placeholder="Repeat your password"
-                      required
-                      minLength={8}
-                    />
+                    <div className="relative">
+                      <input
+                        id="auth-confirm-password"
+                        className="w-full rounded-lg border-2 border-stone-300 bg-white px-3.5 py-3 pr-11 text-base text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        placeholder="Repeat your password"
+                        required
+                        minLength={8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-stone-500 hover:text-stone-800 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeSlash size={18} weight="bold" aria-hidden="true" /> : <Eye size={18} weight="bold" aria-hidden="true" />}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 <div>
                   {TURNSTILE_SITE_KEY ? (
-                    <div ref={turnstileContainerRef} className="cf-turnstile" />
+                    <div ref={turnstileContainerRef} />
                   ) : (
                     <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
                   )}
