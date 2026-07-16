@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types/database'
 import { buildOnboardingPath } from '../lib/authReturn'
+import { buildPasswordRecoveryRedirectUrl } from '../lib/authEntry'
 
 type AuthContextType = {
   session: Session | null
@@ -43,6 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, newSession) => {
         if (event === 'PASSWORD_RECOVERY') {
           setPasswordRecovery(true)
+        } else if (event === 'SIGNED_OUT') {
+          setPasswordRecovery(false)
         }
         setSession(newSession)
         if (newSession) {
@@ -120,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
       {
-        redirectTo: `${window.location.origin}/auth`,
+        redirectTo: buildPasswordRecoveryRedirectUrl(window.location.origin),
         captchaToken,
       },
     )

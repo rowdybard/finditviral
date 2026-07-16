@@ -7,6 +7,11 @@ import { trackEvent } from '../lib/analytics'
 import { mapAuthError } from '../lib/errorMap'
 import { buildAuthPath, buildOnboardingPath, sanitizeReturnPath } from '../lib/authReturn'
 import {
+  getSignedInAuthDestination,
+  isPasswordRecoveryCallback,
+  shouldShowAuthCaptcha,
+} from '../lib/authEntry'
+import {
   AUTH_TURNSTILE_CONFIG,
   TurnstileActionLifecycle,
   TurnstileRequestCancelledError,
@@ -21,7 +26,16 @@ const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
 const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
 export default function Auth() {
-  const { signIn, signUp, passwordRecovery, requestPasswordReset, updatePassword } = useAuth()
+  const {
+    signIn,
+    signUp,
+    passwordRecovery,
+    requestPasswordReset,
+    updatePassword,
+    user,
+    profile,
+    loading: authLoading,
+  } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get('mode') === 'signup'
@@ -31,6 +45,18 @@ export default function Auth() {
   const signUpPath = buildAuthPath(returnTo, 'signup')
   const forgotPath = `/auth?mode=forgot${returnTo !== '/home' ? `&returnTo=${encodeURIComponent(returnTo)}` : ''}`
   const onboardingPath = buildOnboardingPath(returnTo)
+  const recoveryCallback = isPasswordRecoveryCallback(window.location.search, window.location.hash)
+  const signedInDestination = getSignedInAuthDestination({
+    authLoading,
+    hasUser: Boolean(user),
+    onboardingCompleted: Boolean(profile?.onboarding_completed),
+    passwordRecovery,
+    returnTo,
+    search: window.location.search,
+    hash: window.location.hash,
+  })
+  const passwordUpdatedDestination = signedInDestination
+    ?? (profile?.onboarding_completed ? returnTo : onboardingPath)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -58,7 +84,18 @@ export default function Auth() {
     setCaptchaExpired(false)
   }
 
-  const showCaptcha = !passwordRecovery && !confirmationPending && !resetSent
+  const hasActiveAuthSession = Boolean(user) && !passwordRecovery && !recoveryCallback
+  // Keep the widget lifecycle alive until an in-flight auth request has finished.
+  // AuthContext publishes the new session before signIn/signUp resolves.
+  const showCaptcha = shouldShowAuthCaptcha({
+    authLoading,
+    actionLoading: loading,
+    hasActiveAuthSession,
+    passwordRecovery,
+    confirmationPending,
+    resetSent,
+  })
+  const invalidRecoveryCallback = recoveryCallback && !authLoading && !passwordRecovery
 
   useEffect(() => {
     setCaptchaReady(false)
@@ -317,19 +354,71 @@ export default function Auth() {
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 pb-16">
         <div className={`rounded-2xl border-2 border-stone-900 bg-white p-6 sm:p-8 ${TOY_SHADOW}`}>
-          {confirmationPending ? (
+          {passwordUpdated ? (
+            <div role="status" aria-live="polite" className="py-4 text-center">
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
+              <h1 className="mt-4 text-2xl font-extrabold">Password updated</h1>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Your password has been changed and this recovery session is signed in.
+              </p>
+              <Link to={passwordUpdatedDestination} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                Continue to account
+              </Link>
+            </div>
+          ) : invalidRecoveryCallback ? (
+            <div role="alert" className="py-4 text-center">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-red-700">Reset link unavailable</p>
+              <h1 className="mt-2 text-2xl font-extrabold">Request a new password link</h1>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                This reset link is invalid, expired, or has already been used.
+              </p>
+              <Link to={forgotPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                Send a new reset link
+              </Link>
+            </div>
+          ) : signedInDestination ? (
+            <div role="status" aria-live="polite" className="py-4 text-center">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Account active</p>
+              <h1 className="mt-2 text-2xl font-extrabold">You're already signed in</h1>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Continue to your account instead of creating another signup for the same email.
+              </p>
+              <Link to={signedInDestination} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                Continue to account
+              </Link>
+            </div>
+          ) : confirmationPending ? (
             <div role="status" aria-live="polite" className="py-4 text-center">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
               <p className="mt-5 text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Almost there</p>
               <h1 className="mt-2 text-2xl font-extrabold">Check your email</h1>
               <p className="mt-2 text-sm leading-6 text-stone-600">
-                Open the confirmation link we sent to <strong className="text-stone-800">{email.trim()}</strong>, then finish setting up your Greater Lansing profile.
+                If this is a new account, open the confirmation link sent to <strong className="text-stone-800">{email.trim()}</strong>. If you've used this email before, its existing password was not changed.
               </p>
-              <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+              <Link
+                to={signInPath}
+                onClick={() => {
+                  setConfirmationPending(false)
+                  setResendSent(false)
+                  setError(null)
+                }}
+                className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}
+              >
                 Back to sign in
               </Link>
+              <Link
+                to={forgotPath}
+                onClick={() => {
+                  setConfirmationPending(false)
+                  setResendSent(false)
+                  setError(null)
+                }}
+                className="mx-auto mt-4 block text-sm font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline"
+              >
+                Reset an existing password
+              </Link>
               {resendSent ? (
-                <p className="mt-4 text-sm font-medium text-green-700">Confirmation email resent. Check your inbox.</p>
+                <p className="mt-4 text-sm font-medium text-green-700">If this account is still unconfirmed, another email was requested.</p>
               ) : (
                 <button
                   type="button"
@@ -363,7 +452,14 @@ export default function Auth() {
                   <p className="mt-2 text-sm leading-6 text-stone-600">
                     We sent a password reset link to <strong className="text-stone-800">{email.trim()}</strong>. Click the link in the email to set a new password.
                   </p>
-                  <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                  <Link
+                    to={signInPath}
+                    onClick={() => {
+                      setResetSent(false)
+                      setError(null)
+                    }}
+                    className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}
+                  >
                     Back to sign in
                   </Link>
                 </div>
@@ -423,19 +519,6 @@ export default function Auth() {
             </>
           ) : passwordRecovery ? (
             <>
-              {passwordUpdated ? (
-                <div role="status" aria-live="polite" className="py-4 text-center">
-                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border-2 border-green-700 bg-green-50 text-2xl font-bold text-green-700">✓</div>
-                  <h1 className="mt-4 text-2xl font-extrabold">Password updated</h1>
-                  <p className="mt-2 text-sm leading-6 text-stone-600">
-                    Your password has been changed. You can now sign in with your new password.
-                  </p>
-                  <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
-                    Back to sign in
-                  </Link>
-                </div>
-              ) : (
-                <>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Greater Lansing beta</p>
                   <h1 className="mt-2 text-2xl font-extrabold text-stone-900">Set a new password</h1>
                   <p className="mt-2 text-sm leading-6 text-stone-600">
@@ -505,8 +588,6 @@ export default function Auth() {
                       {loading ? 'Updating…' : 'Update password'}
                     </button>
                   </form>
-                </>
-              )}
             </>
           ) : (
             <>

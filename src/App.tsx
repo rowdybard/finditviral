@@ -1,5 +1,5 @@
 ﻿import { lazy, Suspense, useEffect } from 'react'
-import { Routes, Route, useLocation, useParams } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation, useParams } from 'react-router-dom'
 import { applyPageMetadata, getPageMetadata } from './lib/pageMetadata'
 import { trackPageView } from './lib/analytics'
 import EarlyAccess from './pages/EarlyAccess'
@@ -13,6 +13,8 @@ import CatalogLayout from './components/CatalogLayout'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import { OnboardingRedirect } from './PrivateApp'
+import { useAuth } from './contexts/AuthContext'
+import { getPasswordRecoveryRoute, isPasswordRecoveryCallback } from './lib/authEntry'
 
 const PrivateApp = lazy(() => import('./PrivateApp'))
 
@@ -35,12 +37,21 @@ function LeadSlugRoute() {
 }
 
 export default function App() {
-  const { pathname } = useLocation()
+  const { pathname, search, hash } = useLocation()
+  const { passwordRecovery } = useAuth()
+  const recoveryCallback = isPasswordRecoveryCallback(search, hash)
+  const recoveryRoute = getPasswordRecoveryRoute(
+    passwordRecovery || recoveryCallback,
+    pathname,
+    hash,
+  )
 
   useEffect(() => {
     applyPageMetadata(document, getPageMetadata(pathname))
     trackPageView(pathname)
   }, [pathname])
+
+  if (recoveryRoute) return <Navigate to={recoveryRoute} replace />
 
   return (
     <Routes>

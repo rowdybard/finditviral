@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
@@ -7,13 +7,14 @@ import { supabase } from '../lib/supabase'
 import { USERNAME_MAX, normalizeUsername, validateUsername } from '../lib/username'
 import { errorMap } from '../lib/errorMap'
 import { buildAuthPath, sanitizeReturnPath } from '../lib/authReturn'
+import { getCompletedOnboardingDestination } from '../lib/authEntry'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 const STEPS = ['Username', 'Location', 'Interests'] as const
 
 export default function Onboarding() {
-  const { user, refreshProfile } = useAuth()
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const returnTo = sanitizeReturnPath(searchParams.get('returnTo'))
@@ -25,6 +26,12 @@ export default function Onboarding() {
   const [lookingFor, setLookingFor] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const completedDestination = getCompletedOnboardingDestination({
+    authLoading,
+    hasUser: Boolean(user),
+    onboardingCompleted: Boolean(profile?.onboarding_completed),
+    returnTo,
+  })
 
   const checkUsername = useCallback(async (value: string) => {
     const clean = normalizeUsername(value)
@@ -93,13 +100,13 @@ export default function Onboarding() {
     })
 
     if (rpcError) {
-      console.error('complete_onboarding error:', rpcError)
       const mapped = errorMap(rpcError)
       if (mapped.code === 'ONBOARDING_ALREADY_COMPLETED') {
         await refreshProfile()
         navigate(returnTo, { replace: true })
         return
       }
+      console.error('complete_onboarding error:', rpcError)
       setError(mapped.message)
       if (mapped.step !== undefined) setStep(mapped.step)
       setSubmitting(false)
@@ -144,6 +151,7 @@ export default function Onboarding() {
   }
 
   if (!user) return null
+  if (completedDestination) return <Navigate to={completedDestination} replace />
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900">
