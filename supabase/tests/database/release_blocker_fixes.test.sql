@@ -5,7 +5,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(24);
+select plan(28);
 
 select ok(
   not has_table_privilege('authenticated', 'public.leads', 'insert')

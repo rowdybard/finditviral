@@ -15,7 +15,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
       VITE_SUPABASE_ANON_KEY: ci-publishable-key
-      VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      VITE_TURNSTILE_SITE_KEY: 0x4AAAAAAD2z_wAcZ0_FypRg
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

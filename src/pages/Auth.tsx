@@ -6,6 +6,13 @@ import { supabase } from '../lib/supabase'
 import { trackEvent } from '../lib/analytics'
 import { mapAuthError } from '../lib/errorMap'
 import { buildAuthPath, buildOnboardingPath, sanitizeReturnPath } from '../lib/authReturn'
+import {
+  AUTH_TURNSTILE_CONFIG,
+  TurnstileActionLifecycle,
+  TurnstileRequestCancelledError,
+  TurnstileTokenRequestController,
+  type PendingTurnstileAction,
+} from './turnstileLifecycle'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
@@ -30,7 +37,7 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [confirmationPending, setConfirmationPending] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaReady, setCaptchaReady] = useState(false)
   const [captchaExpired, setCaptchaExpired] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendSent, setResendSent] = useState(false)
@@ -39,6 +46,8 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetId = useRef<string | null>(null)
+  const turnstileTokenRequestRef = useRef(new TurnstileTokenRequestController())
+  const turnstileActionLifecycleRef = useRef(new TurnstileActionLifecycle())
   const submittingRef = useRef(false)
 
   function resetTurnstile() {
@@ -46,41 +55,82 @@ export default function Auth() {
     if (turnstileWidgetId.current && ts) {
       ts.reset(turnstileWidgetId.current)
     }
-    setCaptchaToken(null)
     setCaptchaExpired(false)
   }
 
-  const showCaptcha = !isForgot && !passwordRecovery && !confirmationPending
+  const showCaptcha = !passwordRecovery && !confirmationPending && !resetSent
 
   useEffect(() => {
+    setCaptchaReady(false)
+    setLoading(false)
+    submittingRef.current = false
     if (!TURNSTILE_SITE_KEY || !showCaptcha) return
+
     let cancelled = false
+    let scriptElement: HTMLScriptElement | null = null
+    const tokenRequests = turnstileTokenRequestRef.current
+    const actionLifecycle = turnstileActionLifecycleRef.current
+    const lifecycleGeneration = actionLifecycle.activate()
 
     function renderWidget() {
       const ts = window.turnstile
       if (!turnstileContainerRef.current || !ts || cancelled) return
-      if (turnstileWidgetId.current) {
-        ts.remove(turnstileWidgetId.current)
+
+      try {
+        if (turnstileWidgetId.current) {
+          ts.remove(turnstileWidgetId.current)
+        }
+
+        turnstileWidgetId.current = ts.render(turnstileContainerRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          ...AUTH_TURNSTILE_CONFIG,
+          callback: (token: string) => {
+            if (cancelled) return
+            setCaptchaExpired(false)
+            tokenRequests.resolve(token)
+          },
+          'expired-callback': () => {
+            if (cancelled) return
+            setCaptchaExpired(true)
+            tokenRequests.reject(new Error('CAPTCHA expired. Please verify again.'))
+          },
+          'timeout-callback': () => {
+            if (cancelled) return
+            tokenRequests.reject(new Error('CAPTCHA timed out. Please try again.'))
+          },
+          'error-callback': (errorCode?: string) => {
+            if (cancelled) return
+            console.error(JSON.stringify({ event: 'turnstile_client_error', code: errorCode ?? 'unknown' }))
+            const turnstileError = new Error('CAPTCHA verification failed. Please try again.')
+            if (!tokenRequests.reject(turnstileError)) {
+              setError(turnstileError.message)
+            }
+          },
+        })
+        setCaptchaReady(true)
+      } catch (renderError) {
+        console.error(JSON.stringify({
+          event: 'turnstile_render_failed',
+          message: renderError instanceof Error ? renderError.message : 'unknown',
+        }))
+        setCaptchaReady(false)
+        setError('CAPTCHA verification could not load. Please refresh the page.')
       }
-      turnstileWidgetId.current = ts.render(turnstileContainerRef.current, {
-        sitekey: TURNSTILE_SITE_KEY,
-        callback: (token: string) => {
-          console.log('[turnstile] callback token:', token?.substring(0, 20) + '...', 'len:', token?.length)
-          setCaptchaToken(token)
-          setCaptchaExpired(false)
-        },
-        'expired-callback': () => {
-          console.log('[turnstile] expired')
-          setCaptchaToken(null)
-          setCaptchaExpired(true)
-        },
-        'error-callback': () => {
-          console.log('[turnstile] error')
-          setCaptchaToken(null)
-          setError('CAPTCHA verification failed. Please try again.')
-        },
-        theme: 'light',
-      })
+    }
+
+    function handleScriptError() {
+      if (cancelled) return
+      if (scriptElement) {
+        scriptElement.dataset.turnstileLoadState = 'failed'
+        scriptElement.remove()
+      }
+      setCaptchaReady(false)
+      setError('CAPTCHA verification could not load. Please refresh the page.')
+    }
+
+    function handleScriptLoad() {
+      if (scriptElement) scriptElement.dataset.turnstileLoadState = 'loaded'
+      renderWidget()
     }
 
     function loadScript() {
@@ -89,47 +139,100 @@ export default function Auth() {
         renderWidget()
         return
       }
-      const existing = document.querySelector(`script[src="${TURNSTILE_SCRIPT_URL}"]`)
-      if (existing) {
-        existing.addEventListener('load', renderWidget)
-        return
+      let existingScript = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT_URL}"]`)
+      if (existingScript?.dataset.turnstileLoadState === 'failed'
+        || existingScript?.dataset.turnstileLoadState === 'loaded') {
+        existingScript.remove()
+        existingScript = null
       }
-      const script = document.createElement('script')
-      script.src = TURNSTILE_SCRIPT_URL
-      script.async = true
-      script.defer = true
-      script.onload = () => {
-        if (!cancelled) renderWidget()
+      const script = existingScript ?? document.createElement('script')
+      scriptElement = script
+      if (!existingScript) {
+        script.src = TURNSTILE_SCRIPT_URL
+        script.async = true
+        script.defer = true
+        script.dataset.turnstileLoadState = 'loading'
       }
-      document.head.appendChild(script)
+
+      script.addEventListener('load', handleScriptLoad)
+      script.addEventListener('error', handleScriptError)
+      if (!existingScript) document.head.appendChild(script)
     }
 
     loadScript()
 
     return () => {
       cancelled = true
+      scriptElement?.removeEventListener('load', handleScriptLoad)
+      scriptElement?.removeEventListener('error', handleScriptError)
+      tokenRequests.cancel()
+      actionLifecycle.invalidate(lifecycleGeneration)
+      submittingRef.current = false
       const ts = window.turnstile
       if (turnstileWidgetId.current && ts) {
         ts.remove(turnstileWidgetId.current)
         turnstileWidgetId.current = null
       }
-      setCaptchaToken(null)
+      setCaptchaReady(false)
       setCaptchaExpired(false)
     }
-  }, [showCaptcha, isSignUp])
+  }, [showCaptcha, isForgot, isSignUp])
+
+  function requestTurnstileToken(): Promise<string> {
+    if (!TURNSTILE_SITE_KEY) {
+      return Promise.reject(new Error('CAPTCHA verification is unavailable. Please try again later.'))
+    }
+
+    const ts = window.turnstile
+    const widgetId = turnstileWidgetId.current
+    if (!captchaReady || !ts || !widgetId) {
+      return Promise.reject(new Error('CAPTCHA verification is not ready. Please refresh the page.'))
+    }
+
+    setCaptchaExpired(false)
+    return turnstileTokenRequestRef.current.request(() => ts.execute(widgetId))
+  }
+
+  async function runCaptchaProtectedAction(action: PendingTurnstileAction) {
+    if (submittingRef.current) return
+
+    setError(null)
+    setLoading(true)
+    submittingRef.current = true
+    const actionLifecycle = turnstileActionLifecycleRef.current
+    const actionGeneration = actionLifecycle.snapshot()
+    const isCurrent = () => actionLifecycle.isCurrent(actionGeneration)
+
+    try {
+      const token = await requestTurnstileToken()
+      if (!isCurrent()) throw new TurnstileRequestCancelledError()
+      await action(token, isCurrent)
+    } catch (actionError) {
+      if (isCurrent() && !(actionError instanceof TurnstileRequestCancelledError)) {
+        setError(actionError instanceof Error ? actionError.message : 'Verification failed. Please try again.')
+        resetTurnstile()
+      }
+    } finally {
+      if (isCurrent()) {
+        setLoading(false)
+        submittingRef.current = false
+      }
+    }
+  }
 
   async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError(null)
-    setLoading(true)
     const normalizedEmail = email.trim().toLowerCase()
-    const { error: resetError } = await requestPasswordReset(normalizedEmail)
-    setLoading(false)
-    if (resetError) {
-      setError(mapAuthError(resetError, true))
-      return
-    }
-    setResetSent(true)
+    await runCaptchaProtectedAction(async (token, isCurrent) => {
+      const { error: resetError } = await requestPasswordReset(normalizedEmail, token)
+      if (!isCurrent()) return
+      if (resetError) {
+        setError(mapAuthError(resetError, true))
+        resetTurnstile()
+        return
+      }
+      setResetSent(true)
+    })
   }
 
   async function handleUpdatePassword(event: FormEvent<HTMLFormElement>) {
@@ -155,9 +258,6 @@ export default function Auth() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError(null)
-
-    if (submittingRef.current) return
 
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
@@ -168,50 +268,38 @@ export default function Auth() {
       return
     }
 
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setError('Please complete the CAPTCHA verification.')
-      return
-    }
-
-    setLoading(true)
-    submittingRef.current = true
     const normalizedEmail = email.trim().toLowerCase()
-    const token = captchaToken
-    console.log('[auth] submitting with token:', token?.substring(0, 20) + '...', 'len:', token?.length)
+    await runCaptchaProtectedAction(async (token, isCurrent) => {
+      if (isSignUp) {
+        const result = await signUp(normalizedEmail, password, token, returnTo)
+        if (!isCurrent()) return
+        if (result.error) {
+          console.error('sign_up error:', result.error)
+          setError(mapAuthError(result.error, true))
+          resetTurnstile()
+          return
+        }
+        trackEvent('sign_up', { method: 'email' })
+        if (result.needsEmailConfirmation) {
+          setConfirmationPending(true)
+          return
+        }
+        navigate(onboardingPath, { replace: true })
+        return
+      }
 
-    if (isSignUp) {
-      const result = await signUp(normalizedEmail, password, token ?? undefined, returnTo)
-      if (result.error) {
-        console.error('sign_up error:', result.error)
-        setError(mapAuthError(result.error, true))
+      const { error: signInError } = await signIn(normalizedEmail, password, token)
+      if (!isCurrent()) return
+      if (signInError) {
+        console.error('sign_in error:', signInError)
+        setError(mapAuthError(signInError, false))
         resetTurnstile()
-        setLoading(false)
-        submittingRef.current = false
         return
       }
-      trackEvent('sign_up', { method: 'email' })
-      if (result.needsEmailConfirmation) {
-        setConfirmationPending(true)
-        setLoading(false)
-        submittingRef.current = false
-        return
-      }
-      navigate(onboardingPath, { replace: true })
-      return
-    }
 
-    const { error: signInError } = await signIn(normalizedEmail, password, token ?? undefined)
-    if (signInError) {
-      console.error('sign_in error:', signInError)
-      setError(mapAuthError(signInError, false))
-      resetTurnstile()
-      setLoading(false)
-      submittingRef.current = false
-      return
-    }
-
-    trackEvent('login', { method: 'email' })
-    navigate(returnTo, { replace: true })
+      trackEvent('login', { method: 'email' })
+      navigate(returnTo, { replace: true })
+    })
   }
 
   return (
@@ -237,6 +325,9 @@ export default function Auth() {
               <p className="mt-2 text-sm leading-6 text-stone-600">
                 Open the confirmation link we sent to <strong className="text-stone-800">{email.trim()}</strong>, then finish setting up your Greater Lansing profile.
               </p>
+              <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
+                Back to sign in
+              </Link>
               {resendSent ? (
                 <p className="mt-4 text-sm font-medium text-green-700">Confirmation email resent. Check your inbox.</p>
               ) : (
@@ -257,14 +348,11 @@ export default function Auth() {
                       setResendSent(true)
                     }
                   }}
-                  className="mt-4 text-sm font-medium text-brand-700 underline-offset-4 hover:underline disabled:opacity-60"
+                  className="mx-auto mt-4 block text-sm font-medium text-brand-700 underline-offset-4 hover:underline disabled:opacity-60"
                 >
                   {resending ? 'Resending…' : 'Resend confirmation email'}
                 </button>
               )}
-              <Link to={signInPath} className={`mt-6 inline-block rounded-lg border-2 border-stone-900 bg-brand-500 px-5 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM}`}>
-                Back to sign in
-              </Link>
             </div>
           ) : isForgot ? (
             <>
@@ -303,13 +391,24 @@ export default function Auth() {
                       />
                     </div>
 
+                    <div>
+                      {TURNSTILE_SITE_KEY ? (
+                        <div ref={turnstileContainerRef} />
+                      ) : (
+                        <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
+                      )}
+                      {captchaExpired && (
+                        <p className="mt-1 text-xs text-stone-500">CAPTCHA expired. Please verify again.</p>
+                      )}
+                    </div>
+
                     {error && (
                       <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{error}</p>
                     )}
 
                     <button
                       type="submit"
-                      disabled={loading}
+                      disabled={loading || !TURNSTILE_SITE_KEY || !captchaReady}
                       className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {loading ? 'Sending…' : 'Send reset link'}
@@ -519,7 +618,7 @@ export default function Auth() {
 
                 <button
                   type="submit"
-                  disabled={loading || (TURNSTILE_SITE_KEY ? !captchaToken : false)}
+                  disabled={loading || !TURNSTILE_SITE_KEY || !captchaReady}
                   className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}

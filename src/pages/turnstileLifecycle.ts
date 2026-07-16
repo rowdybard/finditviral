@@ -1,120 +1,98 @@
-export type AuthMode = 'signin' | 'signup'
+export const AUTH_TURNSTILE_CONFIG = {
+  execution: 'execute',
+  appearance: 'always',
+  action: 'turnstile-spin-v1',
+  theme: 'light',
+} as const
 
-export type PendingAction = (token: string) => Promise<void>
+export type PendingTurnstileAction = (token: string, isCurrent: () => boolean) => Promise<void>
 
-export type AuthResult = { error: string | null; needsEmailConfirmation: boolean }
-
-export type AuthCallbacks = {
-  signUp: (email: string, password: string, token: string, returnTo: string) => Promise<AuthResult>
-  signIn: (email: string, password: string, token: string) => Promise<{ error: string | null }>
-  onSuccess: () => void
-  onError: (error: string) => void
-  onConfirmationPending: () => void
-  onResetWidget: () => void
+type PendingTokenRequest = {
+  resolve: (token: string) => void
+  reject: (error: Error) => void
 }
 
-export type TurnstileState = {
-  widgetId: string | null
-  pendingAction: PendingAction | null
-  submitting: boolean
-  executeCalled: boolean
-  resetCalled: boolean
-  removeCalled: boolean
-}
-
-export function initState(): TurnstileState {
-  return {
-    widgetId: null,
-    pendingAction: null,
-    submitting: false,
-    executeCalled: false,
-    resetCalled: false,
-    removeCalled: false,
+export class TurnstileRequestCancelledError extends Error {
+  constructor() {
+    super('Turnstile request cancelled')
+    this.name = 'TurnstileRequestCancelledError'
   }
 }
 
-export function renderWidget(state: TurnstileState): TurnstileState {
-  return { ...state, widgetId: 'widget-1' }
+export class TurnstileActionLifecycle {
+  private generation = 0
+
+  activate(): number {
+    this.generation += 1
+    return this.generation
+  }
+
+  snapshot(): number {
+    return this.generation
+  }
+
+  isCurrent(generation: number): boolean {
+    return this.generation === generation
+  }
+
+  invalidate(generation: number): boolean {
+    if (!this.isCurrent(generation)) return false
+    this.generation += 1
+    return true
+  }
 }
 
-export function validateForm(isSignUp: boolean, password: string, confirmPassword: string): string | null {
-  if (password.length < 8) return 'Password must be at least 8 characters.'
-  if (isSignUp && password !== confirmPassword) return 'Passwords do not match.'
-  return null
-}
+export class TurnstileTokenRequestController {
+  private pending: PendingTokenRequest | null = null
 
-export function createPendingAction(
-  mode: AuthMode,
-  email: string,
-  password: string,
-  returnTo: string,
-  callbacks: AuthCallbacks,
-): PendingAction {
-  if (mode === 'signup') {
-    return async (token: string) => {
-      const result = await callbacks.signUp(email, password, token, returnTo)
-      if (result.error) {
-        callbacks.onError(result.error)
-        callbacks.onResetWidget()
-        return
-      }
-      if (result.needsEmailConfirmation) {
-        callbacks.onConfirmationPending()
-        return
-      }
-      callbacks.onSuccess()
+  get hasPendingRequest() {
+    return this.pending !== null
+  }
+
+  request(execute: () => void): Promise<string> {
+    if (this.pending) {
+      return Promise.reject(new Error('CAPTCHA verification is already in progress.'))
     }
+
+    return new Promise<string>((resolve, reject) => {
+      this.pending = { resolve, reject }
+
+      try {
+        execute()
+      } catch (error) {
+        const pending = this.takePending()
+        pending?.reject(error instanceof Error ? error : new Error('CAPTCHA verification could not start.'))
+      }
+    })
   }
-  return async (token: string) => {
-    const result = await callbacks.signIn(email, password, token)
-    if (result.error) {
-      callbacks.onError(result.error)
-      callbacks.onResetWidget()
-      return
+
+  resolve(token: string): boolean {
+    const pending = this.takePending()
+    if (!pending) return false
+
+    if (!token) {
+      pending.reject(new Error('CAPTCHA verification returned an empty token. Please try again.'))
+      return true
     }
-    callbacks.onSuccess()
+
+    pending.resolve(token)
+    return true
   }
-}
 
-export function submitForm(
-  state: TurnstileState,
-  mode: AuthMode,
-  email: string,
-  password: string,
-  confirmPassword: string,
-  returnTo: string,
-  callbacks: AuthCallbacks,
-): { state: TurnstileState; error: string | null } {
-  const error = validateForm(mode === 'signup', password, confirmPassword)
-  if (error) return { state, error }
-  if (state.submitting) return { state, error: null }
-
-  const pendingAction = createPendingAction(mode, email, password, returnTo, callbacks)
-  return {
-    state: { ...state, submitting: true, pendingAction, executeCalled: true },
-    error: null,
+  reject(error: Error): boolean {
+    const pending = this.takePending()
+    if (!pending) return false
+    pending.reject(error)
+    return true
   }
-}
 
-export function onCallback(state: TurnstileState): { state: TurnstileState; action: PendingAction | null } {
-  const action = state.pendingAction
-  return { state: { ...state, pendingAction: null }, action }
-}
-
-export function switchMode(state: TurnstileState): TurnstileState {
-  return {
-    ...initState(),
-    removeCalled: state.widgetId !== null,
+  cancel(): boolean {
+    return this.reject(new TurnstileRequestCancelledError())
   }
-}
 
-export function cleanup(state: TurnstileState): TurnstileState {
-  return {
-    ...initState(),
-    removeCalled: state.widgetId !== null,
+  private takePending(): PendingTokenRequest | null {
+    const pending = this.pending
+    this.pending = null
+    return pending
   }
-}
-
-export function resetWidget(state: TurnstileState): TurnstileState {
-  return { ...state, resetCalled: true }
 }

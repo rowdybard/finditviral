@@ -1,78 +1,88 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  initState,
-  renderWidget,
-  submitForm,
-  onCallback,
-  switchMode,
-  type AuthCallbacks,
+  AUTH_TURNSTILE_CONFIG,
+  TurnstileActionLifecycle,
+  TurnstileRequestCancelledError,
+  TurnstileTokenRequestController,
 } from './turnstileLifecycle'
 
-function makeCallbacks(overrides: Partial<AuthCallbacks> = {}): AuthCallbacks {
-  return {
-    signUp: vi.fn().mockResolvedValue({ error: null, needsEmailConfirmation: false }),
-    signIn: vi.fn().mockResolvedValue({ error: null }),
-    onSuccess: vi.fn(),
-    onError: vi.fn(),
-    onConfirmationPending: vi.fn(),
-    onResetWidget: vi.fn(),
-    ...overrides,
-  }
-}
-
-describe('Turnstile lifecycle', () => {
-  it('loading the page does not call signIn or signUp', () => {
-    const state = initState()
-    const callbacks = makeCallbacks()
-    expect(state.executeCalled).toBe(false)
-    expect(state.pendingAction).toBeNull()
-    expect(callbacks.signUp).not.toHaveBeenCalled()
-    expect(callbacks.signIn).not.toHaveBeenCalled()
-  })
-
-  it('clicking Create account executes Turnstile before signUp', () => {
-    const state = renderWidget(initState())
-    const callbacks = makeCallbacks()
-    const result = submitForm(state, 'signup', 'a@b.com', 'password123', 'password123', '/home', callbacks)
-    expect(result.state.executeCalled).toBe(true)
-    expect(result.state.pendingAction).not.toBeNull()
-    expect(callbacks.signUp).not.toHaveBeenCalled()
-  })
-
-  it('signUp receives the callback token exactly once', async () => {
-    const state = renderWidget(initState())
-    const callbacks = makeCallbacks()
-    const { state: afterSubmit } = submitForm(state, 'signup', 'a@b.com', 'password123', 'password123', '/home', callbacks)
-    const { action } = onCallback(afterSubmit)
-    expect(action).not.toBeNull()
-    await action!('test-token-123')
-    expect(callbacks.signUp).toHaveBeenCalledTimes(1)
-    expect(callbacks.signUp).toHaveBeenCalledWith('a@b.com', 'password123', 'test-token-123', '/home')
-    expect(callbacks.onSuccess).toHaveBeenCalledTimes(1)
-  })
-
-  it('switching sign-in/signup invalidates the previous token', () => {
-    const state = renderWidget(initState())
-    const callbacks = makeCallbacks()
-    const { state: afterSubmit } = submitForm(state, 'signup', 'a@b.com', 'password123', 'password123', '/home', callbacks)
-    expect(afterSubmit.pendingAction).not.toBeNull()
-    const switched = switchMode(afterSubmit)
-    expect(switched.pendingAction).toBeNull()
-    expect(switched.widgetId).toBeNull()
-    expect(switched.removeCalled).toBe(true)
-    expect(switched.submitting).toBe(false)
-  })
-
-  it('failed signup resets the widget', async () => {
-    const state = renderWidget(initState())
-    const callbacks = makeCallbacks({
-      signUp: vi.fn().mockResolvedValue({ error: 'captcha_failed', needsEmailConfirmation: false }),
+describe('Turnstile auth lifecycle', () => {
+  it('configures Auth to generate a token only when execute is called', () => {
+    expect(AUTH_TURNSTILE_CONFIG).toMatchObject({
+      execution: 'execute',
+      appearance: 'always',
+      action: 'turnstile-spin-v1',
     })
-    const { state: afterSubmit } = submitForm(state, 'signup', 'a@b.com', 'password123', 'password123', '/home', callbacks)
-    const { action } = onCallback(afterSubmit)
-    await action!('test-token-456')
-    expect(callbacks.onError).toHaveBeenCalledWith('captcha_failed')
-    expect(callbacks.onResetWidget).toHaveBeenCalledTimes(1)
-    expect(callbacks.onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does nothing on construction and executes only after a token request', () => {
+    const execute = vi.fn()
+    const controller = new TurnstileTokenRequestController()
+
+    expect(execute).not.toHaveBeenCalled()
+    void controller.request(execute)
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
+
+  it('delivers the first callback token to auth exactly once', async () => {
+    const execute = vi.fn()
+    const auth = vi.fn()
+    const controller = new TurnstileTokenRequestController()
+    const authRequest = controller.request(execute).then(auth)
+
+    expect(controller.resolve('fresh-token')).toBe(true)
+    expect(controller.resolve('duplicate-token')).toBe(false)
+    await authRequest
+
+    expect(auth).toHaveBeenCalledTimes(1)
+    expect(auth).toHaveBeenCalledWith('fresh-token')
+  })
+
+  it('rejects a second submit while verification is pending', async () => {
+    const execute = vi.fn()
+    const controller = new TurnstileTokenRequestController()
+    const firstRequest = controller.request(execute)
+    const secondRequest = controller.request(execute)
+
+    await expect(secondRequest).rejects.toThrow('already in progress')
+    expect(execute).toHaveBeenCalledTimes(1)
+
+    const cancelled = expect(firstRequest).rejects.toBeInstanceOf(TurnstileRequestCancelledError)
+    controller.cancel()
+    await cancelled
+  })
+
+  it('cancels a stale callback when the widget is removed or the mode changes', async () => {
+    const controller = new TurnstileTokenRequestController()
+    const request = controller.request(() => undefined)
+    const cancelled = expect(request).rejects.toBeInstanceOf(TurnstileRequestCancelledError)
+
+    expect(controller.cancel()).toBe(true)
+    expect(controller.resolve('stale-token')).toBe(false)
+    await cancelled
+  })
+
+  it('invalidates an auth result after the widget lifecycle changes', () => {
+    const lifecycle = new TurnstileActionLifecycle()
+    const signInGeneration = lifecycle.activate()
+
+    expect(lifecycle.isCurrent(signInGeneration)).toBe(true)
+    expect(lifecycle.invalidate(signInGeneration)).toBe(true)
+    expect(lifecycle.isCurrent(signInGeneration)).toBe(false)
+
+    const signUpGeneration = lifecycle.activate()
+    expect(lifecycle.isCurrent(signUpGeneration)).toBe(true)
+    expect(lifecycle.invalidate(signInGeneration)).toBe(false)
+  })
+
+  it('clears pending state when Turnstile execute throws so a retry can start', async () => {
+    const controller = new TurnstileTokenRequestController()
+
+    await expect(controller.request(() => { throw new Error('execute failed') })).rejects.toThrow('execute failed')
+    expect(controller.hasPendingRequest).toBe(false)
+
+    const retry = controller.request(() => undefined)
+    controller.resolve('retry-token')
+    await expect(retry).resolves.toBe('retry-token')
   })
 })

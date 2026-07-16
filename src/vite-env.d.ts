@@ -15,10 +15,12 @@ type TurnstileOptions = {
   theme?: 'light' | 'dark' | 'auto'
   callback?: (token: string) => void
   'expired-callback'?: () => void
-  'error-callback'?: () => void
+  'error-callback'?: (errorCode?: string) => void
   'retry-callback'?: () => void
+  'timeout-callback'?: () => void
   execution?: 'render' | 'execute'
   appearance?: 'always' | 'execute' | 'interaction-only'
+  action?: string
 }
 
 interface Window {
