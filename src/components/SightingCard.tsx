@@ -90,10 +90,10 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-600"
           aria-label={`View ${productName}`}
         >
-          <div className={`grid min-w-0 gap-4 p-3 sm:p-4 ${photoUrl ? 'sm:grid-cols-[7.25rem_minmax(0,1fr)_8rem]' : 'sm:grid-cols-[7.25rem_minmax(0,1fr)]'}`}>
+          <div className={`grid min-w-0 gap-4 p-3 sm:p-4 ${photoUrl ? 'sm:grid-cols-[8.5rem_minmax(0,1fr)_8rem]' : 'sm:grid-cols-[8.5rem_minmax(0,1fr)]'}`}>
             <div className="rounded-lg border border-stone-300 bg-white px-3 py-3 text-center shadow-[2px_2px_0_0_#d6d3d1]">
               <p className="text-[11px] font-black uppercase tracking-[0.1em] text-stone-700">Stock</p>
-              <p className={`mt-2 font-black leading-none tracking-tight ${availability === 'low_stock' ? 'text-2xl sm:text-2xl' : 'text-3xl sm:text-4xl'} ${theme.text}`}>
+              <p className={`mt-2 font-black leading-none tracking-tight text-xl sm:text-2xl ${theme.text}`}>
                 {availabilityLabel}
               </p>
               <div className="mt-4 flex justify-center gap-1.5" aria-hidden="true">
