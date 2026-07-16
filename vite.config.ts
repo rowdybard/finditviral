@@ -2,6 +2,7 @@ import { loadEnv } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 
 const TURNSTILE_TEST_SITE_KEYS = new Set([
   '1x00000000000000000000AA',
@@ -37,6 +38,8 @@ export default defineConfig(({ mode }) => {
       port: 5173,
     },
     test: {
+      environment: 'jsdom',
+      setupFiles: [fileURLToPath(new URL('./src/test/setup.ts', import.meta.url))],
       exclude: [...configDefaults.exclude, 'workers/**', 'dist/**', 'e2e/**'],
     },
   }

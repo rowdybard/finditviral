@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local development only. Never commit real values.
+SUPABASE_SECRET_KEY=sb_secret_REPLACE_WITH_CONTENT_MODERATOR_KEY
+OPENAI_API_KEY=sk-REPLACE_WITH_OPENAI_KEY

@@ -4,6 +4,7 @@ import {
   MapPin,
   NavigationArrow,
   Storefront,
+  Trash,
   UserCircle,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
@@ -14,6 +15,7 @@ import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
 import SightingPhoto from './SightingPhoto'
 import SightingVerificationControls from './SightingVerificationControls'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 const stockThemes = {
   in_stock: {
@@ -50,8 +52,10 @@ const stockThemes = {
   },
 }
 
-export default function SightingCard({ sighting }: { sighting: Sighting }) {
+export default function SightingCard({ sighting, onDelete }: { sighting: Sighting; onDelete?: (id: string) => void }) {
+  const viewerLocation = useViewerLocation()
   const [photoFailed, setPhotoFailed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const productName = sighting.product?.name ?? sighting.product_name ?? 'Unknown product'
   const productPath = `/products/${sighting.product?.slug ?? sighting.product_slug ?? ''}`
   const availability = sighting.availability
@@ -147,7 +151,9 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
                 <NavigationArrow className="shrink-0" aria-hidden="true" size={20} weight="fill" />
                 {sighting.distance_miles !== undefined ? formatDistance(sighting.distance_miles) : 'Local'}
               </dt>
-              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">Distance</dd>
+              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">
+                {viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'}
+              </dd>
             </div>
             <div className="border-t border-stone-300 px-3 py-2.5 sm:border-t-0">
               <dt className={`flex items-center gap-2 font-black ${theme.text}`}>
@@ -175,12 +181,30 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
               </>
             )}
           </div>
-          <ShareButton
-            title={`Sighting: ${productName}`}
-            text={shareText}
-            path={productPath}
-            accent={theme.accent}
-          />
+          <div className="flex items-center gap-2">
+            {onDelete && sighting.is_owner && (
+              <button
+                type="button"
+                className="btn-ghost text-red-700"
+                title="Delete sighting"
+                disabled={deleting}
+                onClick={() => {
+                  if (window.confirm('Delete this sighting? This cannot be undone.')) {
+                    setDeleting(true)
+                    onDelete(sighting.id)
+                  }
+                }}
+              >
+                <Trash size={17} aria-hidden="true" />
+              </button>
+            )}
+            <ShareButton
+              title={`Sighting: ${productName}`}
+              text={shareText}
+              path={productPath}
+              accent={theme.accent}
+            />
+          </div>
         </footer>
       </div>
     </article>

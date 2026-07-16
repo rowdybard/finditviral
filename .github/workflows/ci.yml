@@ -66,10 +66,14 @@ jobs:
       - run: npm ci
       - run: npm run check:worker
       - run: npm run test:worker
+      - run: npm run types:content-moderator -- --check
+      - run: npm run check:content-moderator
+      - run: npm run test:content-moderator
       - run: npm run types:trend-engine -- --check
       - run: npm run check:trend-engine
       - run: npm run test:trend-engine
       - run: npx wrangler deploy --dry-run --config workers/interest-digest/wrangler.jsonc
+      - run: npx wrangler deploy --dry-run --config workers/content-moderator/wrangler.jsonc
       - run: npx wrangler deploy --dry-run --config workers/trend-engine/wrangler.jsonc
 
   browser:

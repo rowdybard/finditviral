@@ -6,17 +6,20 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import { MascotToastProvider } from './contexts/MascotToastContext'
 import { AdminReviewProvider } from './contexts/AdminReviewContext'
+import { ViewerLocationProvider } from './contexts/ViewerLocationContext'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter future={{ v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <AdminReviewProvider>
-          <MascotToastProvider>
-            <App />
-          </MascotToastProvider>
-        </AdminReviewProvider>
+        <ViewerLocationProvider>
+          <AdminReviewProvider>
+            <MascotToastProvider>
+              <App />
+            </MascotToastProvider>
+          </AdminReviewProvider>
+        </ViewerLocationProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

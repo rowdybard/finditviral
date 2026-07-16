@@ -130,6 +130,7 @@ export default function NewSighting() {
   const [searchParams] = useSearchParams()
   const leadSlug = searchParams.get('lead')
   const requestedDraftId = searchParams.get('draft')
+  const suggestedProductName = searchParams.get('suggestProduct')?.trim() ?? ''
   const { user } = useAuth()
   const [submissionId, setSubmissionId] = useState(createDraftSubmissionId)
   const [product, setProduct] = useState<CatalogSelection | null>(null)
@@ -156,6 +157,7 @@ export default function NewSighting() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [mediaRestored, setMediaRestored] = useState(false)
   const restoredLocalDraftRef = useRef(false)
+  const openedSuggestionFromQueryRef = useRef(false)
   const toast = useMascotToast()
 
   const localDraftValue: SightingLocalDraft = {
@@ -226,6 +228,18 @@ export default function NewSighting() {
     setSuggestion(null)
     setSuggestionValues(null)
   }
+
+  useEffect(() => {
+    if (
+      openedSuggestionFromQueryRef.current
+      || !suggestedProductName
+      || leadSlug
+      || requestedDraftId
+      || restoredLocalDraftRef.current
+    ) return
+    openedSuggestionFromQueryRef.current = true
+    openSuggestion('product', suggestedProductName)
+  }, [leadSlug, requestedDraftId, suggestedProductName])
 
   function addStore(store: CatalogSelection) {
     if (!selectedStores.some(s => s.id === store.id)) {
@@ -528,8 +542,12 @@ export default function NewSighting() {
 
       {submitted && (
         <div className="card space-y-3 border-2 border-green-500 bg-green-50">
-          <h2 className="text-lg font-bold text-green-800">Submitted for review</h2>
-          <p className="text-sm text-green-700">Your sighting has been submitted and will be visible once approved by a moderator. You can track its status in your sightings list.</p>
+          <h2 className="text-lg font-bold text-green-800">{lead ? 'Confirmation submitted' : 'Sighting published'}</h2>
+          <p className="text-sm text-green-700">
+            {lead
+              ? 'An automated safety check is running. Clean confirmations publish and confirm the lead within a few minutes; flagged reports stay private for owner review.'
+              : 'Your sighting is now visible to local shoppers.'}
+          </p>
           <div className="flex gap-2">
             <Link to="/sightings" className="btn-secondary">View sightings</Link>
             <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setSelectedStores([]); setQuantity(''); setNotes(''); setPhotoUrls([]); setDraft(null) }}>Report another</button>

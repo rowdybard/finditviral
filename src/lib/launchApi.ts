@@ -1,5 +1,6 @@
 import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { activeMarket } from './market'
 import type {
   AdminContribution,
   AdminReviewCounts,
@@ -251,6 +252,34 @@ export async function submitBountyClaim(input: {
   })
 }
 
+export async function updateBounty(input: {
+  bountyId: string
+  requirements: string | null
+  rewardCents: number | null
+  deadline: string | null
+  quantityNeeded: number | null
+  variantRequirements: string | null
+  acceptEquivalent: boolean | null
+}): RpcResult<null> {
+  return callRpc<null>('update_bounty', {
+    p_bounty_id: input.bountyId,
+    p_requirements: input.requirements,
+    p_reward_cents: input.rewardCents,
+    p_deadline: input.deadline,
+    p_quantity_needed: input.quantityNeeded,
+    p_variant_requirements: input.variantRequirements,
+    p_accept_equivalent: input.acceptEquivalent,
+  })
+}
+
+export async function deleteBounty(bountyId: string): RpcResult<null> {
+  return callRpc<null>('delete_bounty', { p_bounty_id: bountyId })
+}
+
+export async function deleteSighting(sightingId: string): RpcResult<null> {
+  return callRpc<null>('delete_sighting', { p_sighting_id: sightingId })
+}
+
 export async function getPublicProduct(slug: string): RpcResult<PublicProduct | null> {
   const result = await callRpc<PublicProduct | PublicProduct[]>('get_public_product', { p_slug: slug })
   return { data: firstRow(result.data), error: result.error }
@@ -280,7 +309,7 @@ export async function listPublicSightings(filters: {
     p_product_id: filters.productId ?? null,
     p_store_id: filters.storeId ?? null,
     p_limit: filters.limit ?? 50,
-    p_zip_code: filters.zipCode === undefined ? '48910' : filters.zipCode,
+    p_zip_code: filters.zipCode === undefined ? activeMarket.defaultZip : filters.zipCode,
     p_radius_miles: filters.radiusMiles === undefined ? 50 : filters.radiusMiles,
   })
 }
@@ -294,7 +323,7 @@ export async function listPublicBounties(filters: {
   return callRpc<Bounty[]>('list_public_bounties', {
     p_product_id: filters.productId ?? null,
     p_limit: filters.limit ?? 50,
-    p_zip_code: filters.zipCode === undefined ? '48910' : filters.zipCode,
+    p_zip_code: filters.zipCode === undefined ? activeMarket.defaultZip : filters.zipCode,
     p_radius_miles: filters.radiusMiles === undefined ? 50 : filters.radiusMiles,
   })
 }
@@ -542,7 +571,7 @@ export async function listPublicLeads(filters: {
   return callRpc<Lead[]>('list_public_leads', {
     p_product_id: filters.productId ?? null,
     p_limit: filters.limit ?? 50,
-    p_zip_code: filters.zipCode === undefined ? '48910' : filters.zipCode,
+    p_zip_code: filters.zipCode === undefined ? activeMarket.defaultZip : filters.zipCode,
     p_radius_miles: filters.radiusMiles === undefined ? 50 : filters.radiusMiles,
   })
 }

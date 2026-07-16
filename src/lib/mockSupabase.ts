@@ -137,6 +137,12 @@ const initialData = {
     { user_id: 'u1', contact_info: 'demo@finditviral.com', created_at: days(90), updated_at: days(90) },
     { user_id: 'u2', contact_info: 'poster@finditviral.com', created_at: days(60), updated_at: days(60) },
   ],
+  profile_locations: [
+    { user_id: 'u1', zip_code: '48910', created_at: days(90), updated_at: days(90) },
+    { user_id: 'u2', zip_code: '48911', created_at: days(60), updated_at: days(60) },
+    { user_id: 'u3', zip_code: '48912', created_at: days(45), updated_at: days(45) },
+    { user_id: 'u4', zip_code: '48823', created_at: days(80), updated_at: days(80) },
+  ],
   early_access_requests: [],
   bounties: [
     { id: 'b1', user_id: 'u2', product_id: 'p2', reward_amount: 25, zip_code: '10001', radius_miles: 50, notes: 'Looking for the blue Nice Cube', status: 'open', created_at: hours(5) },

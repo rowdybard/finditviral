@@ -6,6 +6,7 @@ import SightingCard from '../components/SightingCard'
 import { getPublicStore, listPublicSightings } from '../lib/launchApi'
 import { applyPageMetadata, getPageMetadataForStore } from '../lib/pageMetadata'
 import type { Sighting, Store } from '../types/database'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 function freshnessBadge(status: Sighting['freshness_status']) {
   if (!status) return null
@@ -16,13 +17,14 @@ function freshnessBadge(status: Sighting['freshness_status']) {
 
 export default function StorePage() {
   const { slug } = useParams<{ slug: string }>()
+  const viewerLocation = useViewerLocation()
   const [store, setStore] = useState<Store | null>(null)
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!slug) return
+    if (!slug || viewerLocation.loading) return
     let active = true
     async function load() {
       const storeResult = await getPublicStore(slug!)
@@ -32,7 +34,7 @@ export default function StorePage() {
         return
       }
       setStore(storeResult.data)
-      const sightingResult = await listPublicSightings({ storeId: storeResult.data.id, limit: 50 })
+      const sightingResult = await listPublicSightings({ storeId: storeResult.data.id, limit: 50, zipCode: viewerLocation.zipCode })
       if (!active) return
       setSightings(sightingResult.data ?? [])
       setError(sightingResult.error ? 'Recent sightings could not be loaded.' : null)
@@ -40,7 +42,7 @@ export default function StorePage() {
     }
     void load()
     return () => { active = false }
-  }, [slug])
+  }, [slug, viewerLocation.loading, viewerLocation.zipCode])
 
   useEffect(() => {
     if (store) {

@@ -258,6 +258,8 @@ export type AdminContribution = {
   verified_count?: number
   not_found_count?: number
   community_state?: SightingCommunityState | null
+  moderation_flagged?: boolean
+  moderation_categories?: string[]
 }
 
 export type AdminReviewCounts = {

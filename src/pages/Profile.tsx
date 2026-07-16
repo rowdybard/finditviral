@@ -6,7 +6,8 @@ import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
-import { getMyContributionDrafts } from '../lib/launchApi'
+import { getMyContributionDrafts, deleteBounty, deleteSighting } from '../lib/launchApi'
+import { mapContributionError } from '../lib/errorMap'
 import { listUserFormDrafts } from '../lib/formDraftStore'
 import { trackEvent } from '../lib/analytics'
 
@@ -25,6 +26,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draftCount, setDraftCount] = useState(0)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const isOwnProfile = user?.id === profile?.id
 
@@ -78,6 +80,7 @@ export default function ProfilePage() {
       }))
       const sightingRows = (sightingsRes.data ?? []).map((row) => ({
         ...row,
+        is_owner: true,
         product: Array.isArray(row.product) ? row.product[0] : row.product,
       }))
       const claimRows = (claimsRes.data ?? []).map((row) => {
@@ -148,6 +151,28 @@ export default function ProfilePage() {
     setSaving(false)
   }
 
+  async function handleDeleteBounty(bountyId: string) {
+    setDeleteError(null)
+    const { error } = await deleteBounty(bountyId)
+    if (error) {
+      setDeleteError(mapContributionError(error))
+      return
+    }
+    trackEvent('delete_bounty')
+    setBounties((prev) => prev.filter((b) => b.id !== bountyId))
+  }
+
+  async function handleDeleteSighting(sightingId: string) {
+    setDeleteError(null)
+    const { error } = await deleteSighting(sightingId)
+    if (error) {
+      setDeleteError(mapContributionError(error))
+      return
+    }
+    trackEvent('delete_sighting')
+    setSightings((prev) => prev.filter((s) => s.id !== sightingId))
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -170,6 +195,9 @@ export default function ProfilePage() {
     <div className="space-y-6">
       {error && (
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {deleteError && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div>
       )}
       <div className="flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-bold text-brand-700">
@@ -265,8 +293,8 @@ export default function ProfilePage() {
         {bounties.length > 0 ? (
           <div className="space-y-3">
             {bounties.map((b) => (
-              <BountyCard key={b.id} bounty={b} />
-            ))}
+              <BountyCard key={b.id} bounty={b} onDelete={isOwnProfile ? handleDeleteBounty : undefined} />
+            ))}}
           </div>
         ) : (
           <p className="text-sm text-gray-500">No bounties posted.</p>
@@ -278,8 +306,8 @@ export default function ProfilePage() {
         {sightings.length > 0 ? (
           <div className="space-y-3">
             {sightings.map((s) => (
-              <SightingCard key={s.id} sighting={s} />
-            ))}
+              <SightingCard key={s.id} sighting={s} onDelete={isOwnProfile ? handleDeleteSighting : undefined} />
+            ))}}
           </div>
         ) : (
           <p className="text-sm text-gray-500">No public sightings reported.</p>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Sighting, Product, Trend, Lead } from '../types/database'
@@ -7,6 +7,7 @@ import LeadCard from '../components/LeadCard'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
 import { listPublicSightings, listPublicLeads } from '../lib/launchApi'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 type Tab = 'all' | 'sightings' | 'leads'
 
@@ -15,6 +16,7 @@ type FeedItem =
   | { kind: 'lead'; data: Lead; sortKey: string }
 
 export default function Sightings() {
+  const viewerLocation = useViewerLocation()
   const [searchParams] = useSearchParams()
   const [sightings, setSightings] = useState<Sighting[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
@@ -24,6 +26,7 @@ export default function Sightings() {
   const [trendFilter, setTrendFilter] = useState('')
   const [productFilter, setProductFilter] = useState(searchParams.get('product') ?? '')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
+  const zipEditedRef = useRef(false)
   const [radiusFilter, setRadiusFilter] = useState('50')
   const [tab, setTab] = useState<Tab>('all')
   const [error, setError] = useState<string | null>(null)
@@ -40,22 +43,30 @@ export default function Sightings() {
   const filteredProducts = trendFilter
     ? products.filter((p) => p.trend_id === trendFilter)
     : products
+  const effectiveZip = zipEditedRef.current ? zipFilter : viewerLocation.zipCode
 
   useEffect(() => {
+    if (!viewerLocation.loading && !zipEditedRef.current) {
+      setZipFilter(viewerLocation.zipCode)
+    }
+  }, [viewerLocation.loading, viewerLocation.zipCode])
+
+  useEffect(() => {
+    if (viewerLocation.loading && !zipEditedRef.current) return
     async function load() {
       setLoading(true)
       const [sightingsRes, leadsRes] = await Promise.all([
         listPublicSightings({
           productId: productFilter || null,
           limit: 50,
-          zipCode: zipFilter.trim() || null,
-          radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+          zipCode: effectiveZip.trim() || null,
+          radiusMiles: effectiveZip.trim() ? Number(radiusFilter) : null,
         }),
         listPublicLeads({
           productId: productFilter || null,
           limit: 50,
-          zipCode: zipFilter.trim() || null,
-          radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+          zipCode: effectiveZip.trim() || null,
+          radiusMiles: effectiveZip.trim() ? Number(radiusFilter) : null,
         }),
       ])
 
@@ -88,7 +99,7 @@ export default function Sightings() {
       setLoading(false)
     }
     load()
-  }, [productFilter, trendFilter, zipFilter, radiusFilter, products])
+  }, [productFilter, trendFilter, effectiveZip, radiusFilter, products, viewerLocation.loading])
 
   const feedItems: FeedItem[] = []
   if (tab === 'all' || tab === 'sightings') {
@@ -156,7 +167,7 @@ export default function Sightings() {
           maxLength={5}
           placeholder="ZIP code"
           value={zipFilter}
-          onChange={(e) => setZipFilter(e.target.value.replace(/\D/g, ''))}
+          onChange={(e) => { zipEditedRef.current = true; setZipFilter(e.target.value.replace(/\D/g, '')) }}
         />
         <select
           className="input sm:w-32"

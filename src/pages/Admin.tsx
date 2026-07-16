@@ -664,6 +664,11 @@ export default function Admin() {
             .map((item) => (
             <article key={`${item.contribution_type}-${item.contribution_id}`} className="card flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs font-bold uppercase text-gray-500">{item.contribution_type} · {item.moderation_status}</p><h3 className="font-bold text-gray-900">{item.product_name}</h3><p className="text-sm text-gray-600">{item.username ? `@${item.username}` : 'Member'} · {new Date(item.occurred_at).toLocaleString()}</p></div>
+              {item.moderation_flagged && (
+                <p className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-red-800">
+                  OpenAI flagged{item.moderation_categories?.length ? `: ${item.moderation_categories.join(', ')}` : ''}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {item.moderation_status === 'pending' && (
                   <button type="button" className="btn-primary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'approve')}><Check size={17} aria-hidden="true" /> Approve</button>

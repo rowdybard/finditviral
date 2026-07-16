@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CalendarBlank } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
@@ -9,7 +9,7 @@ import { useFormDraft } from '../hooks/useFormDraft'
 import { createDraftSubmissionId } from '../lib/formDraftStore'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
-import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
+import { deleteBounty, getBountyDetail, listMyBountyClaims, submitBountyClaim, updateBounty } from '../lib/launchApi'
 import { supabase } from '../lib/supabase'
 import type { BountyClaimView, BountyDetailView } from '../types/database'
 import { formatReward, statusColor, statusLabel, timeAgo } from '../lib/utils'
@@ -88,6 +88,14 @@ export default function BountyDetail() {
   const [claimLoading, setClaimLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editRequirements, setEditRequirements] = useState('')
+  const [editRewardAmount, setEditRewardAmount] = useState('')
+  const [editDeadline, setEditDeadline] = useState('')
+  const [editQuantityNeeded, setEditQuantityNeeded] = useState('')
+  const [editVariantRequirements, setEditVariantRequirements] = useState('')
+  const [editAcceptEquivalent, setEditAcceptEquivalent] = useState(false)
+  const navigate = useNavigate()
 
   const localDraft = useFormDraft({
     scope: user && id ? { userId: user.id, formType: 'bounty-claim', entityId: id } : null,
@@ -248,6 +256,76 @@ export default function BountyDetail() {
     else await reload()
   }
 
+  function startEditing() {
+    if (!bounty) return
+    setEditRequirements(bounty.requirements ?? '')
+    setEditRewardAmount(String(bounty.reward_cents / 100))
+    setEditDeadline(localDateTime(new Date(bounty.deadline)))
+    setEditQuantityNeeded(bounty.quantity_needed != null ? String(bounty.quantity_needed) : '')
+    setEditVariantRequirements(bounty.variant_requirements ?? '')
+    setEditAcceptEquivalent(bounty.accept_equivalent)
+    setEditing(true)
+    setActionError(null)
+  }
+
+  async function handleSaveEdit() {
+    if (!bounty || !id) return
+    setActionError(null)
+    if (!/^\d+(?:\.\d{1,2})?$/.test(editRewardAmount)) {
+      setActionError('Enter a reward with no more than two decimal places.')
+      return
+    }
+    const rewardCents = Math.round(Number(editRewardAmount) * 100)
+    if (!Number.isSafeInteger(rewardCents) || rewardCents < 100 || rewardCents > 1_000_000) {
+      setActionError('Reward must be between $1 and $10,000.')
+      return
+    }
+    const deadlineDate = new Date(editDeadline)
+    const now = Date.now()
+    if (Number.isNaN(deadlineDate.getTime()) || deadlineDate.getTime() < now + 60 * 60 * 1000 || deadlineDate.getTime() > now + 30 * 24 * 60 * 60 * 1000) {
+      setActionError('Deadline must be between 1 hour and 30 days from now.')
+      return
+    }
+    const parsedQty = editQuantityNeeded === '' ? null : Number(editQuantityNeeded)
+    if (parsedQty !== null && (!Number.isInteger(parsedQty) || parsedQty < 1 || parsedQty > 999)) {
+      setActionError('Quantity needed must be a whole number from 1 to 999.')
+      return
+    }
+    setActionLoading('edit')
+    const { error: updateError } = await updateBounty({
+      bountyId: id,
+      requirements: editRequirements.trim() || null,
+      rewardCents,
+      deadline: deadlineDate.toISOString(),
+      quantityNeeded: parsedQty,
+      variantRequirements: editVariantRequirements.trim() || null,
+      acceptEquivalent: editAcceptEquivalent,
+    })
+    setActionLoading(null)
+    if (updateError) {
+      setActionError(mapContributionError(updateError))
+      return
+    }
+    setEditing(false)
+    trackEvent('edit_bounty')
+    await reload()
+  }
+
+  async function handleDelete() {
+    if (!id) return
+    if (!window.confirm('Delete this bounty? This cannot be undone.')) return
+    setActionError(null)
+    setActionLoading('delete')
+    const { error: deleteError } = await deleteBounty(id)
+    setActionLoading(null)
+    if (deleteError) {
+      setActionError(mapContributionError(deleteError))
+      return
+    }
+    trackEvent('delete_bounty')
+    navigate('/bounties')
+  }
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
   if (!bounty) return <EmptyState title="Bounty not found" message="It may be expired, hidden, or unavailable to this account." action={<Link to="/bounties" className="btn-primary">View bounties</Link>} />
 
@@ -292,8 +370,50 @@ export default function BountyDetail() {
       </section>
 
       {bounty.is_owner && (bounty.status === 'open' || bounty.status === 'claimed') && (
-        <button type="button" className="btn-secondary" onClick={() => void handleClose()} disabled={actionLoading === 'close'}>{actionLoading === 'close' ? 'Closing…' : 'Close Bounty'}</button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-secondary" onClick={() => void handleClose()} disabled={actionLoading === 'close'}>{actionLoading === 'close' ? 'Closing…' : 'Close Bounty'}</button>
+          {bounty.status === 'open' && !editing && (
+            <button type="button" className="btn-secondary" onClick={startEditing} disabled={actionLoading !== null}>Edit Bounty</button>
+          )}
+          <button type="button" className="btn bg-red-600 text-white hover:bg-red-700" onClick={() => void handleDelete()} disabled={actionLoading === 'delete'}>{actionLoading === 'delete' ? 'Deleting…' : 'Delete Bounty'}</button>
+        </div>
       )}
+
+      {editing && bounty.is_owner && bounty.status === 'open' && (
+        <form className="card space-y-4 border-2 border-brand-300" onSubmit={(e) => { e.preventDefault(); void handleSaveEdit() }}>
+          <h2 className="font-bold text-gray-900">Edit bounty</h2>
+          <div>
+            <label className="label" htmlFor="edit-reward">Reward ($)</label>
+            <input id="edit-reward" className="input" type="text" inputMode="decimal" value={editRewardAmount} onChange={(e) => setEditRewardAmount(e.target.value)} required />
+          </div>
+          <div>
+            <label className="label" htmlFor="edit-deadline">Deadline</label>
+            <input id="edit-deadline" className="input" type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} required />
+          </div>
+          <div>
+            <label className="label" htmlFor="edit-requirements">Requirements</label>
+            <textarea id="edit-requirements" className="input min-h-20" maxLength={2000} value={editRequirements} onChange={(e) => setEditRequirements(e.target.value)} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="edit-quantity">Quantity needed (optional)</label>
+              <input id="edit-quantity" className="input" type="number" min="1" max="999" step="1" value={editQuantityNeeded} onChange={(e) => setEditQuantityNeeded(e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="edit-variant">Variant requirements (optional)</label>
+              <input id="edit-variant" className="input" maxLength={1000} value={editVariantRequirements} onChange={(e) => setEditVariantRequirements(e.target.value)} />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <input type="checkbox" checked={editAcceptEquivalent} onChange={(e) => setEditAcceptEquivalent(e.target.checked)} />
+            Accept equivalent variants
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary" disabled={actionLoading === 'edit'}>{actionLoading === 'edit' ? 'Saving…' : 'Save changes'}</button>
+            <button type="button" className="btn-ghost" onClick={() => setEditing(false)} disabled={actionLoading === 'edit'}>Cancel</button>
+          </div>
+        </form>
+      )
 
       {canClaim && (
         <FormDraftStatus

@@ -477,8 +477,8 @@ export default function NewBounty() {
 
       {submitted && (
         <div className="card space-y-3 border-2 border-green-500 bg-green-50">
-          <h2 className="text-lg font-bold text-green-800">Submitted for review</h2>
-          <p className="text-sm text-green-700">Your bounty has been submitted and will be visible once approved by a moderator. You can track its status in your bounties list.</p>
+          <h2 className="text-lg font-bold text-green-800">Bounty submitted</h2>
+          <p className="text-sm text-green-700">An automated safety check is running. Clean bounties publish within a few minutes; flagged submissions stay private for owner review.</p>
           <div className="flex gap-2">
             <Link to="/bounties" className="btn-secondary">View bounties</Link>
             <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setStore(null); setSelectedRetailers([]); setSelectedStores([]); setRewardAmount(''); setRequirements(''); setDraft(null) }}>Post another</button>
@@ -733,11 +733,11 @@ export default function NewBounty() {
             <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Accept equivalents</dt><dd className="text-right text-gray-900">{acceptEquivalent ? 'Yes' : 'No'}</dd></div>
             {requirements.trim() && <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Requirements</dt><dd className="text-right text-gray-900">{requirements.trim()}</dd></div>}
           </dl>
-          <p className="text-xs text-gray-500">This bounty will be submitted for moderator review before becoming visible.</p>
+          <p className="text-xs text-gray-500">A clean bounty is published after an automated safety check. Flagged submissions stay private for owner review.</p>
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" onClick={() => setShowPreview(false)} disabled={loading}>Back to edit</button>
-            <button type="button" className="btn-primary" onClick={() => void handleSubmit()} disabled={loading}>{loading ? 'Submitting…' : 'Submit for review'}</button>
+            <button type="button" className="btn-primary" onClick={() => void handleSubmit()} disabled={loading}>{loading ? 'Submitting…' : 'Submit bounty'}</button>
           </div>
         </div>
       )}

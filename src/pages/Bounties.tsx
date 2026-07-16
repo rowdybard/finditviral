@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Bounty, Product, Trend } from '../types/database'
@@ -6,8 +6,10 @@ import BountyCard from '../components/BountyCard'
 import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
 import { listPublicBounties } from '../lib/launchApi'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 export default function Bounties() {
+  const viewerLocation = useViewerLocation()
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [trends, setTrends] = useState<Trend[]>([])
@@ -15,6 +17,7 @@ export default function Bounties() {
   const [trendFilter, setTrendFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
+  const zipEditedRef = useRef(false)
   const [radiusFilter, setRadiusFilter] = useState('50')
   const [sortBy, setSortBy] = useState<'newest' | 'reward'>('newest')
   const [error, setError] = useState<string | null>(null)
@@ -31,15 +34,23 @@ export default function Bounties() {
   const filteredProducts = trendFilter
     ? products.filter((p) => p.trend_id === trendFilter)
     : products
+  const effectiveZip = zipEditedRef.current ? zipFilter : viewerLocation.zipCode
 
   useEffect(() => {
+    if (!viewerLocation.loading && !zipEditedRef.current) {
+      setZipFilter(viewerLocation.zipCode)
+    }
+  }, [viewerLocation.loading, viewerLocation.zipCode])
+
+  useEffect(() => {
+    if (viewerLocation.loading && !zipEditedRef.current) return
     async function load() {
       setLoading(true)
       const { data, error: queryError } = await listPublicBounties({
         productId: productFilter || null,
         limit: 50,
-        zipCode: zipFilter.trim() || null,
-        radiusMiles: zipFilter.trim() ? Number(radiusFilter) : null,
+        zipCode: effectiveZip.trim() || null,
+        radiusMiles: effectiveZip.trim() ? Number(radiusFilter) : null,
       })
       if (queryError) {
         setError('Failed to load bounties. Please try again.')
@@ -61,7 +72,7 @@ export default function Bounties() {
       setLoading(false)
     }
     load()
-  }, [productFilter, trendFilter, zipFilter, radiusFilter, sortBy, products])
+  }, [productFilter, trendFilter, effectiveZip, radiusFilter, sortBy, products, viewerLocation.loading])
 
   return (
     <div className="space-y-4">
@@ -112,7 +123,7 @@ export default function Bounties() {
           maxLength={5}
           placeholder="ZIP code"
           value={zipFilter}
-          onChange={(e) => setZipFilter(e.target.value.replace(/\D/g, ''))}
+          onChange={(e) => { zipEditedRef.current = true; setZipFilter(e.target.value.replace(/\D/g, '')) }}
         />
         <select
           className="input sm:w-32"

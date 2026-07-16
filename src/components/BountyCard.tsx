@@ -4,13 +4,17 @@ import {
   MapPin,
   NavigationArrow,
   Target,
+  Trash,
   UserCircle,
 } from '@phosphor-icons/react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Bounty } from '../types/database'
 import { timeAgo, statusLabel } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
+import { activeMarket } from '../lib/market'
 import ShareButton from './ShareButton'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 function cardReward(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -21,7 +25,9 @@ function cardReward(amount: number): string {
   }).format(amount)
 }
 
-export default function BountyCard({ bounty }: { bounty: Bounty }) {
+export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDelete?: (id: string) => void }) {
+  const viewerLocation = useViewerLocation()
+  const [deleting, setDeleting] = useState(false)
   const productName = bounty.product?.name ?? bounty.product_name ?? 'Unknown product'
   const rewardAmount = bounty.reward_cents !== undefined
     ? bounty.reward_cents / 100
@@ -34,9 +40,9 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
     ? (bounty.store_names?.length ? bounty.store_names.join(', ') : 'Selected stores')
     : exactStore
     ? `${exactStore}${bounty.store?.city ? ` in ${bounty.store.city}` : ''}`
-    : `ZIP ${bounty.zip_code ?? '48910'}`
+    : `ZIP ${bounty.zip_code ?? activeMarket.defaultZip}`
   const scopeDetail = scopeType === 'retailers'
-    ? `Within ${bounty.radius_miles ?? 50} mi of ${bounty.zip_code ?? '48910'}`
+    ? `Within ${bounty.radius_miles ?? 50} mi of ${bounty.zip_code ?? activeMarket.defaultZip}`
     : scopeType === 'stores' && !exactStore
     ? 'Multi-store'
     : exactStore
@@ -116,7 +122,9 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
                       <strong className="block text-sm font-black text-red-600">
                         {formatDistance(bounty.distance_miles)}
                       </strong>
-                      <span className="block text-[10px] font-bold uppercase text-stone-600">Away</span>
+                      <span className="block text-[10px] font-bold uppercase text-stone-600">
+                        {viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'}
+                      </span>
                     </span>
                   </dd>
                 </div>
@@ -149,12 +157,30 @@ export default function BountyCard({ bounty }: { bounty: Bounty }) {
               </>
             )}
           </div>
-          <ShareButton
-            title={`Bounty: ${productName}`}
-            text={shareText}
-            path={`/bounties/${bounty.id}`}
-            accent="red"
-          />
+          <div className="flex items-center gap-2">
+            {onDelete && (
+              <button
+                type="button"
+                className="btn-ghost text-red-700"
+                title="Delete bounty"
+                disabled={deleting}
+                onClick={() => {
+                  if (window.confirm('Delete this bounty? This cannot be undone.')) {
+                    setDeleting(true)
+                    onDelete(bounty.id)
+                  }
+                }}
+              >
+                <Trash size={17} aria-hidden="true" />
+              </button>
+            )}
+            <ShareButton
+              title={`Bounty: ${productName}`}
+              text={shareText}
+              path={`/bounties/${bounty.id}`}
+              accent="red"
+            />
+          </div>
         </footer>
       </div>
     </article>

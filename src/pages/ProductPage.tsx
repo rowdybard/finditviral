@@ -8,6 +8,7 @@ import { getPublicProduct, listPublicBounties, listPublicSightings, listPublicLe
 import { applyPageMetadata, getPageMetadataForProduct } from '../lib/pageMetadata'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 import type { Bounty, Lead, PublicProduct, Sighting } from '../types/database'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 function freshnessBadge(status: Sighting['freshness_status']) {
   if (!status) return null
@@ -18,6 +19,7 @@ function freshnessBadge(status: Sighting['freshness_status']) {
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>()
+  const viewerLocation = useViewerLocation()
   const [product, setProduct] = useState<PublicProduct | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
@@ -26,7 +28,7 @@ export default function ProductPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!slug) return
+    if (!slug || viewerLocation.loading) return
     let active = true
     async function load() {
       setLoading(true)
@@ -40,9 +42,9 @@ export default function ProductPage() {
 
       setProduct(productResult.data)
       const [bountyResult, sightingResult, leadsResult] = await Promise.all([
-        listPublicBounties({ productId: productResult.data.id, limit: 50 }),
-        listPublicSightings({ productId: productResult.data.id, limit: 50 }),
-        listPublicLeads({ productId: productResult.data.id, limit: 50 }),
+        listPublicBounties({ productId: productResult.data.id, limit: 50, zipCode: viewerLocation.zipCode }),
+        listPublicSightings({ productId: productResult.data.id, limit: 50, zipCode: viewerLocation.zipCode }),
+        listPublicLeads({ productId: productResult.data.id, limit: 50, zipCode: viewerLocation.zipCode }),
       ])
       if (!active) return
       setBounties(bountyResult.data ?? [])
@@ -53,7 +55,7 @@ export default function ProductPage() {
     }
     void load()
     return () => { active = false }
-  }, [slug])
+  }, [slug, viewerLocation.loading, viewerLocation.zipCode])
 
   useEffect(() => {
     if (product) {

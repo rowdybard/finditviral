@@ -8,9 +8,11 @@ import EmptyState from '../components/EmptyState'
 import { availabilityLabel, releaseLabel } from '../lib/productAvailability'
 import { mapProductHeat, trackProductOpen, type ProductHeat } from '../lib/productHeat'
 import { listPublicBounties, listPublicSightings } from '../lib/launchApi'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 export default function TrendPage() {
   const { slug } = useParams<{ slug: string }>()
+  const viewerLocation = useViewerLocation()
   const [trend, setTrend] = useState<Trend | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [bounties, setBounties] = useState<Bounty[]>([])
@@ -20,7 +22,7 @@ export default function TrendPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!slug) return
+    if (!slug || viewerLocation.loading) return
     async function load() {
       setLoading(true)
       setError(null)
@@ -52,8 +54,8 @@ export default function TrendPage() {
       const productIds = productList.map((p) => p.id)
 
       const [bountiesRes, sightingsRes, heatRes] = await Promise.all([
-        listPublicBounties({ limit: 50 }),
-        listPublicSightings({ limit: 50 }),
+        listPublicBounties({ limit: 50, zipCode: viewerLocation.zipCode }),
+        listPublicSightings({ limit: 50, zipCode: viewerLocation.zipCode }),
         supabase.rpc('get_trend_click_heat', { p_trend_id: trendData.id }),
       ])
 
@@ -70,7 +72,7 @@ export default function TrendPage() {
       setLoading(false)
     }
     load()
-  }, [slug])
+  }, [slug, viewerLocation.loading, viewerLocation.zipCode])
 
   if (loading) {
     return (
