@@ -13,12 +13,35 @@ const stateBadge: Record<ContributionDraftState, { label: string; class: string 
   needs_attention: { label: 'Needs attention', class: 'bg-red-100 text-red-800' },
 }
 
+const suggestionBadge: Record<'waiting_for_approval' | 'ready' | 'needs_attention', { label: string; class: string }> = {
+  waiting_for_approval: { label: 'Suggestion pending', class: 'bg-amber-100 text-amber-800' },
+  ready: { label: 'Suggestion approved', class: 'bg-green-100 text-green-800' },
+  needs_attention: { label: 'Suggestion rejected', class: 'bg-red-100 text-red-800' },
+}
+
+const suggestionDescription: Record<'waiting_for_approval' | 'ready' | 'needs_attention', string> = {
+  waiting_for_approval: 'is waiting for review.',
+  ready: 'was approved. Open the draft to finish publishing.',
+  needs_attention: 'could not be approved. Try searching the catalog again.',
+}
+
 function draftProductName(draft: ContributionDraft): string {
   const product = draft.payload.product
   if (product && typeof product === 'object' && 'label' in product && typeof product.label === 'string') {
     return product.label
   }
   return draft.draft_type === 'sighting' ? 'Sighting draft' : 'Bounty draft'
+}
+
+function draftSuggestionName(draft: ContributionDraft): string | null {
+  const name = draft.payload.productSuggestionName ?? draft.payload.storeSuggestionName
+  if (typeof name === 'string' && name.trim()) return name.trim()
+  return null
+}
+
+function hasSuggestion(draft: ContributionDraft): boolean {
+  return (draft.product_suggestion_id !== null || draft.store_suggestion_id !== null)
+    && draft.state in suggestionBadge
 }
 
 export default function Drafts() {
@@ -72,6 +95,10 @@ export default function Drafts() {
         <div className="space-y-4">
           {drafts.map((draft) => {
             const badge = stateBadge[draft.state]
+            const showSuggestion = hasSuggestion(draft)
+            const sBadge = showSuggestion ? suggestionBadge[draft.state as 'waiting_for_approval' | 'ready' | 'needs_attention'] : null
+            const sName = showSuggestion ? draftSuggestionName(draft) : null
+            const sDesc = showSuggestion ? suggestionDescription[draft.state as 'waiting_for_approval' | 'ready' | 'needs_attention'] : null
             return (
               <article key={draft.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#0c251d]">
                 <div className="flex min-w-0 items-start gap-4">
@@ -80,8 +107,16 @@ export default function Drafts() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-black uppercase tracking-wide text-brand-700">{draft.draft_type}</span>
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${badge.class}`}>{badge.label}</span>
+                      {sBadge && (
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${sBadge.class}`}>{sBadge.label}</span>
+                      )}
                     </div>
                     <h2 className="mt-1 truncate text-lg font-black text-stone-950">{draftProductName(draft)}</h2>
+                    {showSuggestion && sName && sDesc && (
+                      <p className="mt-0.5 text-xs text-gray-600">
+                        Your suggestion <strong className="text-gray-800">{sName}</strong> {sDesc}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-xs text-gray-500">Updated {new Date(draft.updated_at).toLocaleString()}</p>
                   </div>
                 </div>
