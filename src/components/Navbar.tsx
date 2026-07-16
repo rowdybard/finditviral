@@ -1,9 +1,34 @@
 import { NavLink, Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useAdminReview } from '../contexts/AdminReviewContext'
+import { trackEvent } from '../lib/analytics'
 import PostMenu from './PostMenu'
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
+  const { owner, counts } = useAdminReview()
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
+  const accountButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!accountOpen) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setAccountOpen(false)
+      accountButtonRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [accountOpen])
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur">
@@ -38,36 +63,37 @@ export default function Navbar() {
           >
             Sightings
           </NavLink>
-          {user && (
-            <NavLink
-              to="/drafts"
-              className={({ isActive }) =>
-                `rounded-lg px-2 py-1.5 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-100'
-                }`
-              }
-            >
-              Drafts
-            </NavLink>
-          )}
           {user && <PostMenu />}
           {user ? (
-            <div className="flex items-center gap-1 sm:gap-2">
-              {profile?.username ? (
-                <Link
-                  to={`/profile/${profile.username}`}
-                  className="max-w-[80px] truncate rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 sm:max-w-none sm:px-3"
-                >
-                  {profile.username}
-                </Link>
-              ) : (
-                <span className="rounded-lg px-2 py-1.5 text-sm font-medium text-gray-400 sm:px-3">
-                  Profile
-                </span>
-              )}
-              <button onClick={signOut} className="btn-ghost px-2 py-1.5 text-sm sm:px-3">
-                Logout
+            <div ref={accountRef} className="absolute right-0 -top-[3.25rem] sm:relative sm:right-auto sm:top-auto">
+              <button
+                ref={accountButtonRef}
+                type="button"
+                className="flex min-h-11 max-w-[92px] items-center gap-1 rounded-lg px-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:max-w-36 sm:px-3"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen((open) => !open)}
+              >
+                <span className="truncate">{profile?.username || 'Account'}</span>
+                <span aria-hidden="true">▾</span>
               </button>
+              {accountOpen && (
+                <div role="menu" aria-label="Account" className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-1.5rem)] rounded-xl border-2 border-stone-900 bg-white p-1.5 shadow-[4px_4px_0_0_#0c251d]">
+                  {profile?.username && (
+                    <Link role="menuitem" to={`/profile/${profile.username}`} onClick={() => setAccountOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">Profile</Link>
+                  )}
+                  <Link role="menuitem" to="/drafts" onClick={() => { setAccountOpen(false); trackEvent('open_drafts', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                    <span>My Drafts</span>
+                  </Link>
+                  {owner === true && (
+                    <Link role="menuitem" to="/admin?tab=review" onClick={() => { setAccountOpen(false); trackEvent('open_admin_review_queue', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                      <span>Admin</span>
+                      {counts.total > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white" aria-label={`${counts.total} pending reviews`}>{counts.total}</span>}
+                    </Link>
+                  )}
+                  <button role="menuitem" type="button" onClick={() => { setAccountOpen(false); void signOut() }} className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Sign Out</button>
+                </div>
+              )}
             </div>
           ) : (
             <Link to="/auth" className="btn-primary px-2 py-1.5 text-sm sm:px-3">

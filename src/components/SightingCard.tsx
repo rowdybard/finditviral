@@ -13,6 +13,7 @@ import { timeAgo } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
 import SightingPhoto from './SightingPhoto'
+import SightingVerificationControls from './SightingVerificationControls'
 
 const stockThemes = {
   in_stock: {
@@ -63,6 +64,7 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
 
   return (
     <article
+      id={`sighting-${sighting.id}`}
       className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#0c251d] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#0c251d]"
       data-testid="sighting-card"
     >
@@ -131,33 +133,33 @@ export default function SightingCard({ sighting }: { sighting: Sighting }) {
           </div>
 
           <dl className="grid border-t border-stone-300 text-sm font-bold text-stone-800 sm:grid-cols-3">
-            <div className="flex min-w-0 items-center gap-2 px-3 py-2.5 sm:border-r sm:border-stone-300">
-              <MapPin className={`shrink-0 ${theme.text}`} aria-hidden="true" size={20} weight="fill" />
-              <span className="min-w-0">
-                <dt className={`truncate font-black ${theme.text}`}>{sighting.store_name}</dt>
-                <dd className="truncate text-[11px] text-stone-600">
-                  {location || (sighting.zip_code ? `ZIP ${sighting.zip_code}` : 'Greater Lansing')}
-                </dd>
-              </span>
+            <div className="min-w-0 px-3 py-2.5 sm:border-r sm:border-stone-300">
+              <dt className={`flex min-w-0 items-center gap-2 font-black ${theme.text}`}>
+                <MapPin className="shrink-0" aria-hidden="true" size={20} weight="fill" />
+                <span className="truncate">{sighting.store_name}</span>
+              </dt>
+              <dd className="truncate pl-7 text-[11px] text-stone-600">
+                {location || (sighting.zip_code ? `ZIP ${sighting.zip_code}` : 'Greater Lansing')}
+              </dd>
             </div>
-            <div className="flex items-center gap-2 border-t border-stone-300 px-3 py-2.5 sm:border-r sm:border-t-0">
-              <NavigationArrow className={`shrink-0 ${theme.text}`} aria-hidden="true" size={20} weight="fill" />
-              <span>
-                <dt className={`font-black ${theme.text}`}>
-                  {sighting.distance_miles !== undefined ? formatDistance(sighting.distance_miles) : 'Local'}
-                </dt>
-                <dd className="text-[10px] font-bold uppercase text-stone-600">Distance</dd>
-              </span>
+            <div className="border-t border-stone-300 px-3 py-2.5 sm:border-r sm:border-t-0">
+              <dt className={`flex items-center gap-2 font-black ${theme.text}`}>
+                <NavigationArrow className="shrink-0" aria-hidden="true" size={20} weight="fill" />
+                {sighting.distance_miles !== undefined ? formatDistance(sighting.distance_miles) : 'Local'}
+              </dt>
+              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">Distance</dd>
             </div>
-            <div className="flex items-center gap-2 border-t border-stone-300 px-3 py-2.5 sm:border-t-0">
-              <Clock className={`shrink-0 ${theme.text}`} aria-hidden="true" size={20} weight="bold" />
-              <span>
-                <dt className={`font-black ${theme.text}`}>{timeAgo(sighting.seen_at ?? sighting.created_at)}</dt>
-                <dd className="text-[10px] font-bold uppercase text-stone-600">Spotted</dd>
-              </span>
+            <div className="border-t border-stone-300 px-3 py-2.5 sm:border-t-0">
+              <dt className={`flex items-center gap-2 font-black ${theme.text}`}>
+                <Clock className="shrink-0" aria-hidden="true" size={20} weight="bold" />
+                {timeAgo(sighting.seen_at ?? sighting.created_at)}
+              </dt>
+              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">Spotted</dd>
             </div>
           </dl>
         </Link>
+
+        <SightingVerificationControls sighting={sighting} />
 
         <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-stone-300 px-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-stone-900">

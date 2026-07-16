@@ -128,10 +128,10 @@ const initialData = {
     { id: 'st3', slug: 'five-below-eastwood', retailer_name: 'Five Below', store_name: 'Five Below Eastwood', address_line1: '2925 Preyde Blvd', city: 'Lansing', state: 'MI', zip_code: '48912', is_active: true },
   ],
   profiles: [
-    { id: 'u1', username: 'DemoHunter', karma: 12, is_pro: true, created_at: days(90) },
-    { id: 'u2', username: 'SquishFan22', karma: 5, is_pro: false, created_at: days(60) },
-    { id: 'u3', username: 'TargetScout', karma: 8, is_pro: false, created_at: days(45) },
-    { id: 'u4', username: 'DumplingDiva', karma: 15, is_pro: false, created_at: days(80) },
+    { id: 'u1', username: 'DemoHunter', karma: 12, is_pro: true, onboarding_completed: true, created_at: days(90) },
+    { id: 'u2', username: 'SquishFan22', karma: 5, is_pro: false, onboarding_completed: true, created_at: days(60) },
+    { id: 'u3', username: 'TargetScout', karma: 8, is_pro: false, onboarding_completed: true, created_at: days(45) },
+    { id: 'u4', username: 'DumplingDiva', karma: 15, is_pro: false, onboarding_completed: true, created_at: days(80) },
   ],
   profile_contacts: [
     { user_id: 'u1', contact_info: 'demo@finditviral.com', created_at: days(90), updated_at: days(90) },
@@ -169,6 +169,8 @@ const initialData = {
   interest_events: [] as any[],
   member_restrictions: [] as any[],
   moderation_events: [] as any[],
+  sighting_verifications: [] as any[],
+  leads: [] as any[],
   zip_codes: [
     { zip_code: '10001', latitude: 40.7484, longitude: -73.9967, city: 'New York', state: 'NY' },
     { zip_code: '90210', latitude: 34.0901, longitude: -118.4065, city: 'Beverly Hills', state: 'CA' },
@@ -208,7 +210,29 @@ store.sightings.forEach((sighting, index) => Object.assign(sighting, {
   seen_at: sighting.created_at,
   moderation_status: 'approved',
 }))
-let mockSession: any = null
+const MOCK_SESSION_KEY = 'finditviral:e2e:session'
+
+function readPersistedMockSession(): any {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(MOCK_SESSION_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function persistMockSession(session: any) {
+  if (typeof window === 'undefined') return
+  try {
+    if (session) window.localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(session))
+    else window.localStorage.removeItem(MOCK_SESSION_KEY)
+  } catch {
+    // The mock intentionally mirrors browser persistence being unavailable.
+  }
+}
+
+let mockSession: any = readPersistedMockSession()
 const listeners: ((event: string, session: any) => void)[] = []
 
 function attachRels(table: string, row: any) {
@@ -223,6 +247,33 @@ function attachRels(table: string, row: any) {
     row.sighting = store.sightings.find(s => s.id === row.sighting_id) ?? null
   }
   return row
+}
+
+function mockVerificationSummary(sightingId: string, currentUserId?: string | null) {
+  const sighting = store.sightings.find(item => item.id === sightingId)
+  const responses = store.sighting_verifications
+    .filter(item => item.sighting_id === sightingId)
+    .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+  const verified = responses.filter(item => item.response === 'verified')
+  const notFound = responses.filter(item => item.response === 'not_found')
+  const latest = responses[0]?.response ?? null
+  const secondLatest = responses[1]?.response ?? null
+  let communityState = 'unverified'
+  if (notFound.length >= 2 && latest === 'not_found' && secondLatest === 'not_found') communityState = 'possibly_gone'
+  else if (verified.length >= 1 && latest === 'verified') communityState = 'community_verified'
+  else if (verified.length >= 1 && notFound.length >= 1) communityState = 'disputed'
+  else if (notFound.length >= 1) communityState = 'not_found_reported'
+  else if (verified.length >= 1) communityState = 'community_verified'
+  return {
+    sighting_id: sightingId,
+    verified_count: verified.length,
+    not_found_count: notFound.length,
+    last_verified_at: verified[0]?.updated_at ?? null,
+    last_not_found_at: notFound[0]?.updated_at ?? null,
+    viewer_response: responses.find(item => item.user_id === currentUserId)?.response ?? null,
+    community_state: communityState,
+    is_owner: Boolean(currentUserId && sighting?.user_id === currentUserId),
+  }
 }
 
 class Builder {
@@ -393,7 +444,7 @@ export const mockSupabase = {
         .map(item => {
           const product = store.products.find(candidate => candidate.id === item.product_id)
           const location = store.stores.find(candidate => candidate.id === item.store_id)
-          return { ...item, product_name: product?.name, product_slug: product?.slug, store_slug: location?.slug, retailer_name: location?.retailer_name, distance_miles: 3.2 }
+          return { ...item, product_name: product?.name, product_slug: product?.slug, store_slug: location?.slug, retailer_name: location?.retailer_name, distance_miles: 3.2, ...mockVerificationSummary(item.id, mockSession?.user?.id) }
         })
       return Promise.resolve({ data: rows, error: null })
     }
@@ -410,6 +461,30 @@ export const mockSupabase = {
       return Promise.resolve({ data: rows, error: null })
     }
 
+    if (name === 'list_public_leads') {
+      const rows = store.leads
+        .filter(item => ['active', 'confirmed'].includes(item.status)
+          && (!args?.p_product_id || item.product_id === args.p_product_id))
+        .slice(0, Number(args?.p_limit) || 50)
+        .map(item => {
+          const product = store.products.find(candidate => candidate.id === item.product_id)
+          const location = store.stores.find(candidate => candidate.id === item.store_id)
+          const profile = store.profiles.find(candidate => candidate.id === item.user_id)
+          return {
+            ...item,
+            product_name: product?.name,
+            product_slug: product?.slug,
+            store_name: location?.store_name ?? null,
+            store_slug: location?.slug ?? null,
+            username: profile?.username ?? null,
+            credible_count: 0,
+            doubtful_count: 0,
+            net_score: 0,
+          }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
+
     const currentUserId = mockSession?.user?.id
     if (!currentUserId) {
       return Promise.resolve({ data: null, error: { message: 'Authentication required' } })
@@ -417,6 +492,46 @@ export const mockSupabase = {
 
     if (name === 'is_app_owner') {
       return Promise.resolve({ data: currentUserId === 'u1', error: null })
+    }
+
+    if (name === 'get_admin_review_counts') {
+      if (currentUserId !== 'u1') return Promise.resolve({ data: null, error: { code: '42501', message: 'Owner access required' } })
+      const data = {
+        pending_product_suggestions: store.product_suggestions.filter(item => item.status === 'pending').length,
+        pending_store_suggestions: store.store_suggestions.filter(item => item.status === 'pending').length,
+        pending_sightings: store.sightings.filter(item => item.moderation_status === 'pending' && !item.lead_id).length,
+        pending_bounties: store.bounties.filter(item => item.moderation_status === 'pending').length,
+        pending_leads: store.leads?.filter(item => item.status === 'pending').length ?? 0,
+      }
+      return Promise.resolve({ data: [{ ...data, total: Object.values(data).reduce((sum, value) => sum + value, 0) }], error: null })
+    }
+
+    if (name === 'get_sighting_verification_summaries') {
+      const ids = Array.isArray(args?.p_sighting_ids) ? args.p_sighting_ids : []
+      return Promise.resolve({ data: ids.map((id: string) => mockVerificationSummary(id, currentUserId)), error: null })
+    }
+
+    if (name === 'set_sighting_verification' || name === 'remove_sighting_verification') {
+      const sighting = store.sightings.find(item => item.id === args.p_sighting_id)
+      if (!sighting || !sighting.is_public || sighting.moderation_status !== 'approved' || sighting.bounty_id) {
+        return Promise.resolve({ data: null, error: { code: 'FIV04', message: 'Sighting is not available for responses' } })
+      }
+      if (sighting.user_id === currentUserId) {
+        return Promise.resolve({ data: null, error: { code: 'FIV03', message: 'Authors cannot independently verify their own sighting' } })
+      }
+      store.sighting_verifications = store.sighting_verifications.filter(item => !(item.sighting_id === sighting.id && item.user_id === currentUserId))
+      if (name === 'set_sighting_verification') {
+        if (!['verified', 'not_found'].includes(args.p_response)) return Promise.resolve({ data: null, error: { code: '22023', message: 'Invalid response' } })
+        store.sighting_verifications.push({
+          id: uid(),
+          sighting_id: sighting.id,
+          user_id: currentUserId,
+          response: args.p_response,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      }
+      return Promise.resolve({ data: [mockVerificationSummary(sighting.id, currentUserId)], error: null })
     }
 
     if (name === 'admin_list_products') {
@@ -564,30 +679,41 @@ export const mockSupabase = {
       return Promise.resolve({ data: [{ draft_id: draftId, suggestion_id: suggestionId }], error: null })
     }
 
-    if (name === 'create_sighting') {
-      const location = store.stores.find(item => item.id === args.p_store_id)
-      const id = uid()
-      store.sightings.push({
-        id,
-        user_id: currentUserId,
-        product_id: args.p_product_id,
-        store_id: args.p_store_id,
-        store_name: location?.store_name ?? 'Unknown store',
-        city: location?.city ?? null,
-        state: location?.state ?? null,
-        zip_code: location?.zip_code ?? null,
-        availability: args.p_availability,
-        stock_level: args.p_availability === 'low_stock' ? 'low' : args.p_availability === 'sold_out' || args.p_availability === 'unknown' ? 'none' : 'in_stock',
-        quantity: args.p_quantity,
-        notes: args.p_notes,
-        seen_at: args.p_seen_at,
-        is_public: false,
-        bounty_id: null,
-        moderation_status: 'pending',
-        created_at: new Date().toISOString(),
+    if (name === 'create_sighting' || name === 'create_sightings_batch' || name === 'submit_sightings_v2') {
+      const storeIds = name === 'create_sighting' ? [args.p_store_id] : args.p_store_ids
+      const existing = store.sightings.filter(item => item.user_id === currentUserId && item.client_submission_id === args.p_submission_id)
+      if (existing.length > 0) {
+        return Promise.resolve({ data: { sighting_ids: existing.map(item => item.id), moderation_status: 'approved', is_public: true, replayed: true }, error: null })
+      }
+      const ids = storeIds.map((storeId: string) => {
+        const location = store.stores.find(item => item.id === storeId)
+        const id = uid()
+        store.sightings.push({
+          id,
+          user_id: currentUserId,
+          product_id: args.p_product_id,
+          store_id: storeId,
+          store_name: location?.store_name ?? 'Unknown store',
+          city: location?.city ?? null,
+          state: location?.state ?? null,
+          zip_code: location?.zip_code ?? null,
+          availability: args.p_availability,
+          stock_level: args.p_availability === 'low_stock' ? 'low' : args.p_availability === 'sold_out' || args.p_availability === 'unknown' ? 'none' : 'in_stock',
+          quantity: args.p_quantity,
+          notes: args.p_notes,
+          seen_at: args.p_seen_at,
+          is_public: true,
+          bounty_id: null,
+          moderation_status: 'approved',
+          client_submission_id: args.p_submission_id,
+          photo_urls: args.p_photo_urls ?? null,
+          created_at: new Date().toISOString(),
+        })
+        return id
       })
       if (args.p_draft_id) store.contribution_drafts = store.contribution_drafts.filter(draft => draft.id !== args.p_draft_id)
-      return Promise.resolve({ data: id, error: null })
+      const result = { sighting_ids: ids, moderation_status: 'approved', is_public: true, replayed: false }
+      return Promise.resolve({ data: name === 'submit_sightings_v2' ? result : (name === 'create_sighting' ? ids[0] : ids), error: null })
     }
 
     if (name === 'create_bounty') {
@@ -781,7 +907,17 @@ export const mockSupabase = {
     return Promise.resolve({ data: null, error: { message: `Unknown RPC: ${name}` } })
   },
   auth: {
-    getSession: () => Promise.resolve({ data: { session: mockSession }, error: null }),
+    getSession: () => {
+      const forcedRetryable = typeof window !== 'undefined'
+        && window.localStorage.getItem('finditviral:e2e:auth-retryable') === '1'
+      if (forcedRetryable || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        return Promise.resolve({
+          data: { session: mockSession },
+          error: { name: 'AuthRetryableFetchError', code: 'request_timeout', status: 0 },
+        })
+      }
+      return Promise.resolve({ data: { session: mockSession }, error: null })
+    },
     signUp: ({ email, options }: any) => {
       const id = uid()
       const username = options?.data?.username || `user_${id.replace(/-/g, '').slice(0, 15)}`
@@ -796,22 +932,26 @@ export const mockSupabase = {
         created_at: new Date().toISOString(),
       })
       mockSession = { user: { id, email }, access_token: 'mock' }
+      persistMockSession(mockSession)
       listeners.forEach(l => l('SIGNED_IN', mockSession))
       return Promise.resolve({ data: { user: { id, email }, session: mockSession }, error: null })
     },
     signInWithPassword: ({ email, options: _options }: any) => {
       const id = email.includes('poster') ? 'u2' : 'u1'
       mockSession = { user: { id, email }, access_token: 'mock' }
+      persistMockSession(mockSession)
       listeners.forEach(l => l('SIGNED_IN', mockSession))
       return Promise.resolve({ data: { user: mockSession.user, session: mockSession }, error: null })
     },
     signOut: () => {
       mockSession = null
+      persistMockSession(null)
       listeners.forEach(l => l('SIGNED_OUT', null))
       return Promise.resolve({ error: null })
     },
     onAuthStateChange: (cb: (e: string, s: any) => void) => {
       listeners.push(cb)
+      queueMicrotask(() => cb('INITIAL_SESSION', mockSession))
       return { data: { subscription: { unsubscribe: () => {} } } }
     },
     refreshSession: () => Promise.resolve({ data: { session: mockSession }, error: null }),

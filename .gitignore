@@ -3,9 +3,14 @@ dist
 dist-node-types
 .env
 .env.local
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 *.local
 .DS_Store
 supabase/.temp/
 .wrangler/
+playwright-report/
+test-results/
 temp_keys.json
 *.secret.json

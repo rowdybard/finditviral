@@ -6,6 +6,9 @@ import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
+import { getMyContributionDrafts } from '../lib/launchApi'
+import { listUserFormDrafts } from '../lib/formDraftStore'
+import { trackEvent } from '../lib/analytics'
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
@@ -21,6 +24,7 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftCount, setDraftCount] = useState(0)
 
   const isOwnProfile = user?.id === profile?.id
 
@@ -45,7 +49,7 @@ export default function ProfilePage() {
       const profileData = currentProfile
       setProfile(profileData)
 
-      const [bountiesRes, sightingsRes, claimsRes] = await Promise.all([
+      const [bountiesRes, sightingsRes, claimsRes, contributionDraftsRes] = await Promise.all([
         supabase
           .from('bounties')
           .select('id,user_id,product_id,reward_amount,reward_cents,store_id,zip_code,radius_miles,notes,requirements,deadline,status,moderation_status,created_at,product:products(*)')
@@ -65,6 +69,7 @@ export default function ProfilePage() {
           .eq('finder_id', profileData.id)
           .order('created_at', { ascending: false })
           .limit(20),
+        getMyContributionDrafts(),
       ])
 
       const bountyRows = (bountiesRes.data ?? []).map((row) => ({
@@ -90,6 +95,11 @@ export default function ProfilePage() {
       setBounties(bountyRows as unknown as Bounty[])
       setSightings(sightingRows as unknown as Sighting[])
       setClaims(claimRows as unknown as BountyClaim[])
+      const serverDraftIds = new Set((contributionDraftsRes.data ?? []).map((draft) => draft.id))
+      const unlinkedLocalCount = listUserFormDrafts(profileData.id)
+        .filter((draft) => draft.formType !== 'onboarding' && (!draft.metadata.serverDraftId || !serverDraftIds.has(draft.metadata.serverDraftId)))
+        .length
+      setDraftCount((contributionDraftsRes.data ?? []).length + unlinkedLocalCount)
       if (bountiesRes.error || sightingsRes.error || claimsRes.error) {
         setError('Some content failed to load.')
       }
@@ -175,6 +185,20 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {isOwnProfile && (
+        <Link
+          to="/drafts"
+          onClick={() => trackEvent('open_drafts', { source: 'profile' })}
+          className="card flex min-h-16 items-center justify-between gap-4 border-2 border-brand-200 transition hover:border-brand-400 hover:bg-brand-50"
+        >
+          <div>
+            <h2 className="font-bold text-gray-900">My Drafts</h2>
+            <p className="mt-1 text-sm text-gray-600">Resume unfinished sightings, bounties, leads, and claims.</p>
+          </div>
+          <span className="inline-flex min-w-8 justify-center rounded-full bg-brand-600 px-2.5 py-1 text-sm font-black text-white" aria-label={`${draftCount} drafts`}>{draftCount}</span>
+        </Link>
+      )}
 
       {isOwnProfile && profile.looking_for && (
         <div className="card">

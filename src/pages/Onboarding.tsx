@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { trackEvent } from '../lib/analytics'
 import { activeMarket } from '../lib/market'
@@ -8,10 +9,45 @@ import { USERNAME_MAX, normalizeUsername, validateUsername } from '../lib/userna
 import { errorMap } from '../lib/errorMap'
 import { buildAuthPath, sanitizeReturnPath } from '../lib/authReturn'
 import { getCompletedOnboardingDestination } from '../lib/authEntry'
+import FormDraftStatus from '../components/FormDraftStatus'
+import { useFormDraft } from '../hooks/useFormDraft'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 const STEPS = ['Username', 'Location', 'Interests'] as const
+
+type OnboardingLocalDraft = {
+  version: 1
+  step: number
+  username: string
+  zipCode: string
+  preferredCities: string[]
+  lookingFor: string
+}
+
+function parseOnboardingLocalDraft(value: unknown): OnboardingLocalDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (candidate.version !== 1 || !Number.isInteger(candidate.step) || (candidate.step as number) < 0 || (candidate.step as number) >= STEPS.length) return null
+  if (typeof candidate.username !== 'string' || typeof candidate.zipCode !== 'string' || typeof candidate.lookingFor !== 'string') return null
+  if (!Array.isArray(candidate.preferredCities) || candidate.preferredCities.some((city) => typeof city !== 'string')) return null
+  return {
+    version: 1,
+    step: candidate.step as number,
+    username: candidate.username,
+    zipCode: candidate.zipCode,
+    preferredCities: candidate.preferredCities as string[],
+    lookingFor: candidate.lookingFor,
+  }
+}
+
+function isEmptyOnboardingDraft(value: OnboardingLocalDraft): boolean {
+  return value.step === 0
+    && value.username === ''
+    && value.zipCode === ''
+    && value.preferredCities.length === 0
+    && value.lookingFor === ''
+}
 
 export default function Onboarding() {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth()
@@ -26,12 +62,34 @@ export default function Onboarding() {
   const [lookingFor, setLookingFor] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const previousStepRef = useRef(step)
+  const localDraft = useFormDraft({
+    scope: user ? { userId: user.id, formType: 'onboarding', entityId: 'profile-setup' } : null,
+    value: { version: 1, step, username, zipCode, preferredCities, lookingFor } satisfies OnboardingLocalDraft,
+    parse: parseOnboardingLocalDraft,
+    isEmpty: isEmptyOnboardingDraft,
+    metadata: { title: 'Account setup', destination: '/onboarding' },
+    onRestore: (restored) => {
+      setStep(restored.step)
+      setUsername(restored.username)
+      setZipCode(restored.zipCode)
+      setPreferredCities(restored.preferredCities.filter((city) => activeMarket.cities.includes(city)))
+      setLookingFor(restored.lookingFor)
+      trackEvent('draft_restored', { form: 'onboarding' })
+    },
+  })
   const completedDestination = getCompletedOnboardingDestination({
     authLoading,
     hasUser: Boolean(user),
     onboardingCompleted: Boolean(profile?.onboarding_completed),
     returnTo,
   })
+
+  useEffect(() => {
+    if (previousStepRef.current === step) return
+    previousStepRef.current = step
+    localDraft.flush()
+  }, [step])
 
   const checkUsername = useCallback(async (value: string) => {
     const clean = normalizeUsername(value)
@@ -102,6 +160,7 @@ export default function Onboarding() {
     if (rpcError) {
       const mapped = errorMap(rpcError)
       if (mapped.code === 'ONBOARDING_ALREADY_COMPLETED') {
+        localDraft.discard()
         await refreshProfile()
         navigate(returnTo, { replace: true })
         return
@@ -114,6 +173,7 @@ export default function Onboarding() {
     }
 
     await refreshProfile()
+    localDraft.discard()
     trackEvent('complete_onboarding', {
       has_zip: true,
       city_count: preferredCities.length,
@@ -150,6 +210,18 @@ export default function Onboarding() {
     else void handleFinish()
   }
 
+  function discardLocalDraft() {
+    localDraft.discard()
+    setStep(0)
+    setUsername('')
+    setUsernameStatus('idle')
+    setZipCode('')
+    setPreferredCities([])
+    setLookingFor('')
+    setError(null)
+    trackEvent('draft_discarded', { form: 'onboarding' })
+  }
+
   if (!user) return null
   if (completedDestination) return <Navigate to={completedDestination} replace />
 
@@ -177,6 +249,17 @@ export default function Onboarding() {
         </div>
 
         <div className={`rounded-2xl border-2 border-stone-900 bg-white p-6 sm:p-8 ${TOY_SHADOW}`}>
+          <div className="mb-4">
+            <FormDraftStatus
+              status={localDraft.status}
+              error={localDraft.error}
+              hasDraft={localDraft.hasDraft}
+              hasConflict={Boolean(localDraft.conflict)}
+              onDiscard={discardLocalDraft}
+              onRestoreConflict={localDraft.restoreConflict}
+              onKeepCurrent={localDraft.keepCurrent}
+            />
+          </div>
           {step === 0 && (
             <form onSubmit={handleNext} className="space-y-5">
               <div>

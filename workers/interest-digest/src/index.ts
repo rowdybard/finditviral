@@ -9,6 +9,7 @@ import {
   sanitizeErrorMessage,
 } from './errors'
 import { getDetroitSchedule } from './schedule'
+import { processOrphanPhotoCleanup } from './mediaCleanup'
 import {
   claimDigestAttempt,
   completeDigestAttempt,
@@ -45,7 +46,7 @@ function logEvent(
   else console.log(entry)
 }
 
-function requireSupabaseConfig(env: Env): SupabaseRpcConfig {
+export function requireSupabaseConfig(env: Env): SupabaseRpcConfig {
   let supabaseUrl: URL
   try {
     supabaseUrl = new URL(env.SUPABASE_URL)
@@ -218,9 +219,28 @@ export async function processScheduledDigest(scheduledTime: number, env: Env): P
 
 export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    try {
-      await processScheduledDigest(controller.scheduledTime, env)
-    } catch (error) {
+    const cleanupInvocationId = crypto.randomUUID()
+    const cleanup = processOrphanPhotoCleanup(requireSupabaseConfig(env), controller.scheduledTime)
+    const [digestResult, cleanupResult] = await Promise.allSettled([
+      processScheduledDigest(controller.scheduledTime, env),
+      cleanup,
+    ])
+
+    if (cleanupResult.status === 'fulfilled') {
+      logEvent('info', 'orphan_photo_cleanup_completed', {
+        invocation_id: cleanupInvocationId,
+        deleted_count: cleanupResult.value,
+      })
+    } else {
+      logEvent('error', 'orphan_photo_cleanup_failed', {
+        invocation_id: cleanupInvocationId,
+        error_code: getErrorCode(cleanupResult.reason),
+        error: sanitizeErrorMessage(getErrorMessage(cleanupResult.reason)),
+      })
+    }
+
+    if (digestResult.status === 'rejected') {
+      const error = digestResult.reason
       logEvent('error', 'scheduled_run_failed', {
         scheduled_at: new Date(controller.scheduledTime).toISOString(),
         error_code: getErrorCode(error),

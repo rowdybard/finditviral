@@ -162,6 +162,39 @@ export type Sighting = {
   profile?: Profile
   distance_miles?: number
   freshness_status?: 'fresh' | 'possibly_outdated' | 'expired'
+  verified_count?: number
+  not_found_count?: number
+  last_verified_at?: string | null
+  last_not_found_at?: string | null
+  viewer_response?: SightingVerificationResponse | null
+  community_state?: SightingCommunityState
+  is_owner?: boolean
+}
+
+export type SightingVerificationResponse = 'verified' | 'not_found'
+export type SightingCommunityState =
+  | 'unverified'
+  | 'community_verified'
+  | 'disputed'
+  | 'not_found_reported'
+  | 'possibly_gone'
+
+export type SightingVerificationSummary = {
+  sighting_id: string
+  verified_count: number
+  not_found_count: number
+  last_verified_at: string | null
+  last_not_found_at: string | null
+  viewer_response: SightingVerificationResponse | null
+  community_state: SightingCommunityState
+  is_owner: boolean
+}
+
+export type SightingSubmissionResult = {
+  sighting_ids: string[]
+  moderation_status: 'approved' | 'pending'
+  is_public: boolean
+  replayed: boolean
 }
 
 export type ContributionDraftType = 'sighting' | 'bounty'
@@ -222,6 +255,18 @@ export type AdminContribution = {
   moderation_status: 'pending' | 'approved' | 'rejected' | 'hidden'
   lifecycle_status: string | null
   occurred_at: string
+  verified_count?: number
+  not_found_count?: number
+  community_state?: SightingCommunityState | null
+}
+
+export type AdminReviewCounts = {
+  pending_product_suggestions: number
+  pending_store_suggestions: number
+  pending_sightings: number
+  pending_bounties: number
+  pending_leads: number
+  total: number
 }
 
 export type ModerationEvent = {

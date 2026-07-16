@@ -1,6 +1,6 @@
 import { ArrowsCounterClockwise, Check, ClockCounterClockwise, EyeSlash, LinkSimple, PencilSimple, ShieldCheck, X } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import { mapContributionError } from '../lib/errorMap'
 import {
@@ -24,8 +24,9 @@ import {
   adminSetMemberRestriction,
   adminUpdateProduct,
   adminUpdateStore,
-  isAppOwner,
 } from '../lib/launchApi'
+import { trackEvent } from '../lib/analytics'
+import { useAdminReview } from '../contexts/AdminReviewContext'
 import type {
   AdminContribution,
   AdminMemberSearchResult,
@@ -37,8 +38,10 @@ import type {
   ModerationEvent,
 } from '../types/database'
 
-type Tab = 'suggestions' | 'contributions' | 'interests' | 'members' | 'history' | 'stores' | 'products'
+type Tab = 'review' | 'suggestions' | 'contributions' | 'interests' | 'members' | 'history' | 'stores' | 'products'
 type NewProductAvailability = 'available' | 'backorder' | 'preorder' | 'announced' | 'limited'
+
+const ADMIN_TABS = new Set<Tab>(['review', 'suggestions', 'contributions', 'interests', 'members', 'history', 'stores', 'products'])
 
 function suggestionTitle(suggestion: CatalogSuggestion): string {
   return suggestion.product_name
@@ -299,8 +302,11 @@ function StoreCatalogRow({
 }
 
 export default function Admin() {
-  const [owner, setOwner] = useState<boolean | null>(null)
-  const [tab, setTab] = useState<Tab>('suggestions')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { owner, counts: reviewCounts, refresh: refreshReviewCounts } = useAdminReview()
+  const requestedTab = searchParams.get('tab') as Tab | null
+  const tab = requestedTab && ADMIN_TABS.has(requestedTab) ? requestedTab : 'review'
+  const queue = searchParams.get('queue')
   const [products, setProducts] = useState<CatalogSuggestion[]>([])
   const [stores, setStores] = useState<CatalogSuggestion[]>([])
   const [contributions, setContributions] = useState<AdminContribution[]>([])
@@ -336,6 +342,14 @@ export default function Admin() {
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
   const [catalogActionId, setCatalogActionId] = useState<string | null>(null)
 
+  function selectTab(nextTab: Tab, nextQueue?: string) {
+    const params = new URLSearchParams(searchParams)
+    params.set('tab', nextTab)
+    if (nextQueue) params.set('queue', nextQueue)
+    else params.delete('queue')
+    setSearchParams(params)
+  }
+
   async function loadAdminData() {
     setLoading(true)
     const results = await Promise.all([
@@ -358,20 +372,20 @@ export default function Admin() {
     setCatalogStores(results[7].data ?? [])
     setError(results.some((result) => result.error) ? 'Some owner data could not be loaded.' : null)
     setLoading(false)
+    await refreshReviewCounts()
   }
 
   useEffect(() => {
-    async function initialize() {
-      const result = await isAppOwner()
-      const isOwner = result.error ? false : result.data === true
-      setOwner(isOwner)
-      if (isOwner) await loadAdminData()
-      else setLoading(false)
-    }
-    void initialize()
-  }, [])
+    if (owner === true) void loadAdminData()
+    else if (owner === false) setLoading(false)
+  }, [owner])
+
+  useEffect(() => {
+    if (owner && tab === 'review') trackEvent('open_admin_review_queue', { queue: queue ?? 'all' })
+  }, [owner, queue, tab])
 
   async function moderate(contribution: AdminContribution, action: 'approve' | 'hide' | 'restore' | 'reject') {
+    if ((action === 'hide' || action === 'reject') && !window.confirm(`Are you sure you want to ${action} this ${contribution.contribution_type}?`)) return
     setActionId(contribution.contribution_id)
     if (contribution.contribution_type === 'lead') {
       if (action === 'reject') {
@@ -496,6 +510,7 @@ export default function Admin() {
   }
 
   async function handleDisableProduct(productId: string) {
+    if (!window.confirm('Disable this product? It will no longer appear in the public catalog.')) return
     setCatalogActionId(productId)
     setCatalogError(null)
     const result = await adminDisableProduct(productId)
@@ -541,6 +556,7 @@ export default function Admin() {
   }
 
   async function handleDisableStore(storeId: string) {
+    if (!window.confirm('Disable this store? It will no longer appear in public search.')) return
     setCatalogActionId(storeId)
     setCatalogError(null)
     const result = await adminDisableStore(storeId)
@@ -568,8 +584,9 @@ export default function Admin() {
   if (owner === null || loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'suggestions', label: `Suggestions (${products.filter((item) => item.status === 'pending').length + stores.filter((item) => item.status === 'pending').length})` },
-    { id: 'contributions', label: 'Contributions' },
+    { id: 'review', label: `Review (${reviewCounts.total})` },
+    { id: 'suggestions', label: `Suggestions (${reviewCounts.pending_product_suggestions + reviewCounts.pending_store_suggestions})` },
+    { id: 'contributions', label: `Contributions (${reviewCounts.pending_sightings + reviewCounts.pending_bounties + reviewCounts.pending_leads})` },
     { id: 'interests', label: 'Interest inbox' },
     { id: 'members', label: 'Members' },
     { id: 'stores', label: 'Stores' },
@@ -587,16 +604,49 @@ export default function Admin() {
         <Link to="/drafts" className="btn-secondary">My drafts</Link>
       </header>
 
-      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
 
       <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2" role="tablist">
-        {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold ${tab === item.id ? 'bg-brand-100 text-brand-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => setTab(item.id)}>{item.label}</button>)}
+        {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${tab === item.id ? 'bg-brand-100 text-brand-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => selectTab(item.id)}>{item.label}</button>)}
       </div>
+
+      {tab === 'review' && (
+        <section className="space-y-4" aria-labelledby="review-heading">
+          <div>
+            <h2 id="review-heading" className="text-xl font-black text-stone-950">Review queues</h2>
+            <p className="mt-1 text-sm text-stone-600">Only unresolved work requiring an owner decision is counted.</p>
+          </div>
+          {reviewCounts.total === 0 ? (
+            <p className="card text-sm font-semibold text-gray-600">Nothing needs review right now.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['product_suggestions', 'Product suggestions', reviewCounts.pending_product_suggestions, 'suggestions'],
+                ['store_suggestions', 'Store suggestions', reviewCounts.pending_store_suggestions, 'suggestions'],
+                ['sightings', 'Pending sightings', reviewCounts.pending_sightings, 'contributions'],
+                ['bounties', 'Pending bounties', reviewCounts.pending_bounties, 'contributions'],
+                ['leads', 'Pending leads', reviewCounts.pending_leads, 'contributions'],
+              ].map(([id, label, count, destination]) => (
+                <button
+                  key={String(id)}
+                  type="button"
+                  className="card flex min-h-16 items-center justify-between gap-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+                  onClick={() => selectTab(destination as Tab, String(id))}
+                >
+                  <span className="font-bold text-stone-900">{label}</span>
+                  <span className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full bg-amber-100 px-2 font-black text-amber-900">{count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {tab === 'suggestions' && (
         <div className="space-y-4">
           {[...products.map((item) => ({ item, kind: 'product' as const })), ...stores.map((item) => ({ item, kind: 'store' as const }))]
             .filter(({ item }) => item.status === 'pending')
+            .filter(({ kind }) => !queue || queue === `${kind}_suggestions`)
             .map(({ item, kind }) => <SuggestionReviewCard key={`${kind}-${item.id}`} kind={kind} suggestion={item} onResolved={loadAdminData} />)}
           {products.every((item) => item.status !== 'pending') && stores.every((item) => item.status !== 'pending') && <p className="card text-sm text-gray-600">No suggestions are waiting for review.</p>}
         </div>
@@ -604,10 +654,17 @@ export default function Admin() {
 
       {tab === 'contributions' && (
         <div className="space-y-3">
-          {contributions.map((item) => (
+          <div className="flex flex-wrap gap-2" aria-label="Community response filters">
+            <button type="button" className={`btn-secondary min-h-11 ${queue === 'disputed' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'disputed')}>Disputed</button>
+            <button type="button" className={`btn-secondary min-h-11 ${queue === 'possibly_gone' ? 'ring-2 ring-brand-600' : ''}`} onClick={() => selectTab('contributions', 'possibly_gone')}>Possibly gone</button>
+            {(queue === 'disputed' || queue === 'possibly_gone') && <button type="button" className="btn-ghost min-h-11" onClick={() => selectTab('contributions')}>Clear filter</button>}
+          </div>
+          {contributions
+            .filter((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state)
+            .map((item) => (
             <article key={`${item.contribution_type}-${item.contribution_id}`} className="card flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs font-bold uppercase text-gray-500">{item.contribution_type} · {item.moderation_status}</p><h3 className="font-bold text-gray-900">{item.product_name}</h3><p className="text-sm text-gray-600">{item.username ? `@${item.username}` : 'Member'} · {new Date(item.occurred_at).toLocaleString()}</p></div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {item.moderation_status === 'pending' && (
                   <button type="button" className="btn-primary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'approve')}><Check size={17} aria-hidden="true" /> Approve</button>
                 )}
@@ -615,9 +672,15 @@ export default function Admin() {
                   ? <button type="button" className="btn-secondary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'restore')}><ClockCounterClockwise size={17} aria-hidden="true" /> Restore</button>
                   : <button type="button" className="btn-secondary" disabled={actionId === item.contribution_id} onClick={() => void moderate(item, 'hide')}><EyeSlash size={17} aria-hidden="true" /> Hide</button>}
               </div>
+              {item.contribution_type === 'sighting' && (
+                <p className="w-full text-xs font-semibold text-stone-600">
+                  {item.verified_count ?? 0} verified · {item.not_found_count ?? 0} not found
+                  {item.community_state ? ` · ${item.community_state.replace(/_/g, ' ')}` : ''}
+                </p>
+              )}
             </article>
           ))}
-          {contributions.length === 0 && <p className="card text-sm text-gray-600">No contributions yet.</p>}
+          {!contributions.some((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state) && <p className="card text-sm text-gray-600">No contributions match this review filter.</p>}
         </div>
       )}
 

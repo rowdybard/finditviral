@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { CalendarBlank } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
+import FormDraftStatus from '../components/FormDraftStatus'
+import { useAuth } from '../contexts/AuthContext'
+import { useFormDraft } from '../hooks/useFormDraft'
+import { createDraftSubmissionId } from '../lib/formDraftStore'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import { getBountyDetail, listMyBountyClaims, submitBountyClaim } from '../lib/launchApi'
@@ -15,8 +19,60 @@ function localDateTime(date: Date): string {
   return local.toISOString().slice(0, 16)
 }
 
+type ClaimLocalDraft = {
+  version: 1
+  submissionId: string
+  showClaimForm: boolean
+  store: CatalogSelection | null
+  seenAt: string
+  whenSeen: 'today' | 'yesterday' | 'older'
+  olderDate: string
+  availability: 'in_stock' | 'low_stock'
+  quantity: string
+  notes: string
+}
+
+function isSelection(value: unknown): value is CatalogSelection {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.id === 'string' && typeof candidate.label === 'string' && typeof candidate.detail === 'string'
+}
+
+function parseClaimLocalDraft(value: unknown): ClaimLocalDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (candidate.version !== 1 || typeof candidate.submissionId !== 'string' || typeof candidate.showClaimForm !== 'boolean') return null
+  const store = candidate.store === null ? null : isSelection(candidate.store) ? candidate.store : undefined
+  if (store === undefined || typeof candidate.seenAt !== 'string' || typeof candidate.olderDate !== 'string') return null
+  if (candidate.whenSeen !== 'today' && candidate.whenSeen !== 'yesterday' && candidate.whenSeen !== 'older') return null
+  if (candidate.availability !== 'in_stock' && candidate.availability !== 'low_stock') return null
+  if (typeof candidate.quantity !== 'string' || typeof candidate.notes !== 'string') return null
+  return {
+    version: 1,
+    submissionId: candidate.submissionId,
+    showClaimForm: candidate.showClaimForm,
+    store,
+    seenAt: candidate.seenAt,
+    whenSeen: candidate.whenSeen,
+    olderDate: candidate.olderDate,
+    availability: candidate.availability,
+    quantity: candidate.quantity,
+    notes: candidate.notes,
+  }
+}
+
+function isEmptyClaimDraft(value: ClaimLocalDraft): boolean {
+  return !value.showClaimForm
+    && value.quantity === ''
+    && value.notes === ''
+    && value.availability === 'in_stock'
+    && value.whenSeen === 'today'
+}
+
 export default function BountyDetail() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
+  const [submissionId, setSubmissionId] = useState(createDraftSubmissionId)
   const [bounty, setBounty] = useState<BountyDetailView | null>(null)
   const [claims, setClaims] = useState<BountyClaimView[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +88,56 @@ export default function BountyDetail() {
   const [claimLoading, setClaimLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  const localDraft = useFormDraft({
+    scope: user && id ? { userId: user.id, formType: 'bounty-claim', entityId: id } : null,
+    value: {
+      version: 1,
+      submissionId,
+      showClaimForm,
+      store: claimStore,
+      seenAt: claimSeenAt,
+      whenSeen,
+      olderDate,
+      availability: claimAvailability,
+      quantity: claimQuantity,
+      notes: claimNotes,
+    } satisfies ClaimLocalDraft,
+    parse: parseClaimLocalDraft,
+    isEmpty: isEmptyClaimDraft,
+    metadata: {
+      title: bounty ? `Claim: ${bounty.product_name}` : 'Bounty claim draft',
+      destination: id ? `/bounties/${id}` : '/bounties',
+      submissionId,
+    },
+    onRestore: (restored) => {
+      setSubmissionId(restored.submissionId)
+      setShowClaimForm(restored.showClaimForm)
+      setClaimStore(restored.store)
+      setClaimSeenAt(restored.seenAt)
+      setWhenSeen(restored.whenSeen)
+      setOlderDate(restored.olderDate)
+      setClaimAvailability(restored.availability)
+      setClaimQuantity(restored.quantity)
+      setClaimNotes(restored.notes)
+      trackEvent('draft_restored', { form: 'bounty_claim' })
+    },
+  })
+
+  function discardLocalClaim() {
+    localDraft.discard()
+    setSubmissionId(createDraftSubmissionId())
+    setShowClaimForm(false)
+    setClaimStore(bounty?.store_id && bounty.store_name ? { id: bounty.store_id, label: bounty.store_name, detail: 'Required store for this bounty' } : null)
+    setClaimSeenAt(localDateTime(new Date()))
+    setWhenSeen('today')
+    setOlderDate('')
+    setClaimAvailability('in_stock')
+    setClaimQuantity('')
+    setClaimNotes('')
+    setClaimError(null)
+    trackEvent('draft_discarded', { form: 'bounty_claim' })
+  }
 
   const whenSeenOptions = [
     { value: 'today' as const, label: 'Today' },
@@ -107,7 +213,14 @@ export default function BountyDetail() {
       setClaimError(mapContributionError(result.error))
       return
     }
+    localDraft.discard()
+    setSubmissionId(createDraftSubmissionId())
     setShowClaimForm(false)
+    setClaimQuantity('')
+    setClaimNotes('')
+    setClaimAvailability('in_stock')
+    setWhenSeen('today')
+    setOlderDate('')
     trackEvent('submit_bounty_claim', { availability: claimAvailability })
     await reload()
   }
@@ -182,10 +295,22 @@ export default function BountyDetail() {
         <button type="button" className="btn-secondary" onClick={() => void handleClose()} disabled={actionLoading === 'close'}>{actionLoading === 'close' ? 'Closing…' : 'Close Bounty'}</button>
       )}
 
+      {canClaim && (
+        <FormDraftStatus
+          status={localDraft.status}
+          error={localDraft.error}
+          hasDraft={localDraft.hasDraft}
+          hasConflict={Boolean(localDraft.conflict)}
+          onDiscard={discardLocalClaim}
+          onRestoreConflict={localDraft.restoreConflict}
+          onKeepCurrent={localDraft.keepCurrent}
+        />
+      )}
+
       {canClaim && !showClaimForm && <button type="button" className="btn-primary w-full" onClick={() => setShowClaimForm(true)}>I Found It</button>}
       {!bounty.is_owner && bounty.caller_claim_status && <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">Your claim is {bounty.caller_claim_status}.</div>}
 
-      {showClaimForm && (
+      {canClaim && showClaimForm && (
         <form onSubmit={handleClaimSubmit} className="card space-y-4 border-2 border-brand-300">
           <div><h2 className="font-bold text-gray-900">Submit your exact-store sighting</h2><p className="mt-1 text-xs text-gray-600">The bounty owner can review this claim. It does not become a public sighting.</p></div>
           <CatalogSearchSelect kind="store" label="Store" value={claimStore} onChange={setClaimStore} required disabled={Boolean(bounty.store_id)} />

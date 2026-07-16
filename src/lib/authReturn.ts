@@ -47,6 +47,13 @@ export function buildAuthPath(returnTo: string, mode?: 'signup') {
   return query ? `/auth?${query}` : '/auth'
 }
 
+export function buildReauthenticationPath(returnTo: string) {
+  const safeReturnTo = sanitizeReturnPath(returnTo)
+  const params = new URLSearchParams({ reason: 'session_expired' })
+  if (safeReturnTo !== DEFAULT_RETURN_PATH) params.set('returnTo', safeReturnTo)
+  return `/auth?${params.toString()}`
+}
+
 export function buildOnboardingPath(returnTo: string) {
   const safeReturnTo = sanitizeReturnPath(returnTo)
   if (safeReturnTo === DEFAULT_RETURN_PATH) return '/onboarding'

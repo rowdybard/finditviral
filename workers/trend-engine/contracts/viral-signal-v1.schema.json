@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://finditviral.com/contracts/trend-engine/viral-signal-v1.schema.json",
+  "title": "FindItViral Viral Signal Batch V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "records"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/viralSignal" }
+    }
+  },
+  "$defs": {
+    "httpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "viralSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "source",
+        "external_observation_id",
+        "source_run_id",
+        "observed_at",
+        "expires_at",
+        "candidate",
+        "signal",
+        "confidence",
+        "evidence_url"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "kind": { "const": "viral_signal" },
+        "source": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$"
+        },
+        "external_observation_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "source_run_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "candidate": { "$ref": "#/$defs/candidate" },
+        "signal": { "$ref": "#/$defs/signal" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_url": { "$ref": "#/$defs/httpsUrl" },
+        "evidence_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "name", "topic"],
+      "properties": {
+        "external_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "gtin": { "type": "string", "pattern": "^(\\d{8}|\\d{12}|\\d{13}|\\d{14})$" },
+        "category": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "topic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "slug": { "type": "string", "minLength": 1, "maxLength": 90 },
+            "description": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        },
+        "product_url": { "$ref": "#/$defs/httpsUrl" },
+        "image_url": { "$ref": "#/$defs/httpsUrl" },
+        "search_terms": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 60 }
+        },
+        "availability_status": {
+          "enum": ["available", "backorder", "preorder", "announced", "limited", "retired"]
+        },
+        "release_date": { "type": "string", "format": "date" }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "enum": [
+            "search_interest",
+            "social_velocity",
+            "marketplace_rank",
+            "editorial_mentions",
+            "fiv_demand",
+            "manual"
+          ]
+        },
+        "value": { "type": "number", "minimum": 0, "maximum": 100 },
+        "velocity": { "type": "number", "minimum": -1, "maximum": 1 },
+        "rank": { "type": "integer", "minimum": 1 },
+        "previous_rank": { "type": "integer", "minimum": 1 },
+        "sample_size": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

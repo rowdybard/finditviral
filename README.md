@@ -6,7 +6,7 @@ FindItViral is an open beta for Greater Lansing shoppers to find and report vira
 
 - React 18, Vite, TypeScript, and Tailwind CSS
 - Supabase Postgres and Auth
-- Cloudflare Pages (frontend) + Cloudflare Worker (interest digest)
+- Cloudflare Pages (frontend) + Cloudflare Workers (interest digest and standalone trend engine)
 
 ## Local setup
 
@@ -84,13 +84,17 @@ cd workers/interest-digest
 npx wrangler deploy
 ```
 
+## Trend Engine
+
+`workers/trend-engine/` is an independently deployable Worker/D1/Queue service for finding rising products, decaying and combining independent evidence, and preparing guarded catalog patches. It cannot write to FindItViral or access the Supabase service role. Real discovery connectors and the FindItViral-owned publisher are later integration phases; see [the engine operating guide](workers/trend-engine/README.md) and [autonomy plan](docs/trend-engine-plan.md).
+
 ## CI
 
 The GitHub Actions workflow (`.github/workflows/ci.yml`) runs three jobs:
 
 1. **verify** — `npm run lint`, `npm test`, `npm run build`
 2. **database** — `supabase start`, `supabase db reset`, `supabase db lint`, `supabase test db`
-3. **worker** — `npm run check:worker`, `npm run test:worker`
+3. **workers** — type-checks/tests both Workers and performs both deployment dry runs
 
 Run all checks locally:
 
@@ -106,6 +110,9 @@ npm test
 npm run build
 npm run check:worker
 npm run test:worker
+npm run types:trend-engine -- --check
+npm run check:trend-engine
+npm run test:trend-engine
 npm run smoke:web
 ```
 

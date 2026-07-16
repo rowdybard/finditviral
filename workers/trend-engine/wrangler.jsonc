@@ -1,0 +1,53 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "finditviral-trend-engine",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "AUTOPILOT_MODE": "shadow",
+    "SOURCE_HOST_ALLOWLIST": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "finditviral-trend-engine",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "SOURCE_QUEUE",
+        "queue": "finditviral-trend-source-polls"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "finditviral-trend-source-polls",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "dead_letter_queue": "finditviral-trend-source-polls-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *", "3,13,23,33,43,53 * * * *", "8 * * * *", "37 3 * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
+  }
+}

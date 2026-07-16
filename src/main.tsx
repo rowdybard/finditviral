@@ -5,15 +5,18 @@ import '@fontsource-variable/space-grotesk'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import { MascotToastProvider } from './contexts/MascotToastContext'
+import { AdminReviewProvider } from './contexts/AdminReviewContext'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter future={{ v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <MascotToastProvider>
-          <App />
-        </MascotToastProvider>
+        <AdminReviewProvider>
+          <MascotToastProvider>
+            <App />
+          </MascotToastProvider>
+        </AdminReviewProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

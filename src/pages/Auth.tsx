@@ -18,12 +18,14 @@ import {
   TurnstileTokenRequestController,
   type PendingTurnstileAction,
 } from './turnstileLifecycle'
+import AuthRecoveryNotice from '../components/AuthRecoveryNotice'
 
 const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
 const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+const E2E_AUTH_BYPASS = import.meta.env.MODE === 'e2e' && import.meta.env.DEV
 
 export default function Auth() {
   const {
@@ -35,12 +37,16 @@ export default function Auth() {
     signOut,
     user,
     profile,
+    authStatus,
+    profileStatus,
+    retryAuth,
     loading: authLoading,
   } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get('mode') === 'signup'
   const isForgot = searchParams.get('mode') === 'forgot'
+  const sessionExpired = searchParams.get('reason') === 'session_expired'
   const returnTo = sanitizeReturnPath(searchParams.get('returnTo'))
   const signInPath = buildAuthPath(returnTo)
   const signUpPath = buildAuthPath(returnTo, 'signup')
@@ -98,11 +104,21 @@ export default function Auth() {
     resetSent,
   })
   const invalidRecoveryCallback = recoveryCallback && !authLoading && !passwordRecovery
+  const authRecoveryBlocked = !passwordRecovery
+    && !recoveryCallback
+    && (
+      authStatus === 'recovering'
+      || (Boolean(user) && !profile && profileStatus === 'recoverable-error')
+    )
 
   useEffect(() => {
     setCaptchaReady(false)
     setLoading(false)
     submittingRef.current = false
+    if (E2E_AUTH_BYPASS) {
+      setCaptchaReady(true)
+      return
+    }
     if (!TURNSTILE_SITE_KEY || !showCaptcha) return
 
     let cancelled = false
@@ -218,6 +234,7 @@ export default function Auth() {
   }, [showCaptcha, isForgot, isSignUp])
 
   function requestTurnstileToken(): Promise<string> {
+    if (E2E_AUTH_BYPASS) return Promise.resolve('e2e-local-token')
     if (!TURNSTILE_SITE_KEY) {
       return Promise.reject(new Error('CAPTCHA verification is unavailable. Please try again later.'))
     }
@@ -378,6 +395,8 @@ export default function Auth() {
                 Send a new reset link
               </Link>
             </div>
+          ) : authRecoveryBlocked ? (
+            <AuthRecoveryNotice onRetry={retryAuth} />
           ) : signedInDestination ? (
             <div role="status" aria-live="polite" className="py-4 text-center">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">Account active</p>
@@ -505,7 +524,7 @@ export default function Auth() {
                     </div>
 
                     <div>
-                      {TURNSTILE_SITE_KEY ? (
+                      {E2E_AUTH_BYPASS ? null : TURNSTILE_SITE_KEY ? (
                         <div ref={turnstileContainerRef} />
                       ) : (
                         <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
@@ -521,7 +540,7 @@ export default function Auth() {
 
                     <button
                       type="submit"
-                      disabled={loading || !TURNSTILE_SITE_KEY || !captchaReady}
+                      disabled={loading || (!E2E_AUTH_BYPASS && (!TURNSTILE_SITE_KEY || !captchaReady))}
                       className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {loading ? 'Sending…' : 'Send reset link'}
@@ -616,6 +635,12 @@ export default function Auth() {
                   : 'Sign in to check nearby sightings, post a bounty, or report what you found.'}
               </p>
 
+              {sessionExpired && !isSignUp && (
+                <p role="alert" className="mt-5 rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                  Your session expired. Sign in again to continue where you left off.
+                </p>
+              )}
+
               <div className="mt-6 grid grid-cols-2 rounded-xl border-2 border-stone-900 bg-stone-100 p-1" aria-label="Account action">
                 <Link
                   to={signInPath}
@@ -700,7 +725,7 @@ export default function Auth() {
                 )}
 
                 <div>
-                  {TURNSTILE_SITE_KEY ? (
+                  {E2E_AUTH_BYPASS ? null : TURNSTILE_SITE_KEY ? (
                     <div ref={turnstileContainerRef} />
                   ) : (
                     <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
@@ -716,7 +741,7 @@ export default function Auth() {
 
                 <button
                   type="submit"
-                  disabled={loading || !TURNSTILE_SITE_KEY || !captchaReady}
+                  disabled={loading || (!E2E_AUTH_BYPASS && (!TURNSTILE_SITE_KEY || !captchaReady))}
                   className={`w-full rounded-lg border-2 border-stone-900 bg-brand-500 px-4 py-3 text-sm font-bold text-stone-950 ${TOY_SHADOW_SM} transition hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}

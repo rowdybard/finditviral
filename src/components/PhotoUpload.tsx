@@ -6,6 +6,8 @@ import SightingPhoto from './SightingPhoto'
 type Props = {
   photoUrls: string[]
   onChange: (urls: string[]) => void
+  submissionId: string
+  onUploadingChange?: (uploading: boolean) => void
   maxPhotos?: number
   disabled?: boolean
 }
@@ -18,9 +20,18 @@ type UploadingItem = {
   previewUrl: string
 }
 
+export async function deleteSightingPhotoPaths(paths: string[]): Promise<boolean> {
+  const ownedPaths = paths.filter((path) => path && !/^(https?:|data:|blob:)/i.test(path))
+  if (ownedPaths.length === 0) return true
+  const { error } = await supabase.storage.from('sighting-photos').remove(ownedPaths)
+  return !error
+}
+
 export default function PhotoUpload({
   photoUrls,
   onChange,
+  submissionId,
+  onUploadingChange,
   maxPhotos = 4,
   disabled = false,
 }: Props) {
@@ -32,6 +43,11 @@ export default function PhotoUpload({
   photoUrlsRef.current = photoUrls
   const uploadingItemsRef = useRef(uploadingItems)
   uploadingItemsRef.current = uploadingItems
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading)
+    return () => onUploadingChange?.(false)
+  }, [isUploading, onUploadingChange])
 
   useEffect(() => {
     return () => {
@@ -82,7 +98,8 @@ export default function PhotoUpload({
       setUploadingItems((prev) => [...prev, { id, previewUrl }])
 
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-      const fileName = `${userData.user!.id}/${crypto.randomUUID()}.${ext}`
+      const safeSubmissionId = submissionId.replace(/[^a-z0-9_-]/gi, '') || crypto.randomUUID()
+      const fileName = `${userData.user!.id}/drafts/${safeSubmissionId}/${crypto.randomUUID()}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from('sighting-photos')
@@ -113,7 +130,7 @@ export default function PhotoUpload({
     onChange(nextPhotoUrls)
 
     if (url && !/^(https?:|data:|blob:)/i.test(url)) {
-      void supabase.storage.from('sighting-photos').remove([url])
+      void deleteSightingPhotoPaths([url])
     }
   }
 
@@ -140,8 +157,8 @@ export default function PhotoUpload({
                   <button
                     type="button"
                     onClick={() => removePhoto(slot)}
-                    className="absolute right-1 top-1 rounded-lg bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                    aria-label="Remove photo"
+                    className="absolute right-1 top-1 grid h-11 w-11 place-items-center rounded-lg bg-black/70 text-white opacity-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:h-9 sm:w-9 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                    aria-label={`Remove photo ${slot + 1}`}
                   >
                     <TrashSimple size={16} weight="bold" />
                   </button>
@@ -206,11 +223,14 @@ export default function PhotoUpload({
       />
 
       {error && (
-        <p className="mt-2 text-xs text-red-600">{error}</p>
+        <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>
       )}
 
       <p className="mt-2 text-xs text-gray-400">
         Up to {maxPhotos} photos. JPG, PNG, or WebP. Max 8 MB each.
+      </p>
+      <p className="mt-1 text-xs text-gray-400">
+        Completed uploads stay with this draft. Files that did not finish uploading must be selected again.
       </p>
     </div>
   )
