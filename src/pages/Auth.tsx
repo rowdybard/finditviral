@@ -46,6 +46,62 @@ export default function Auth() {
     setCaptchaExpired(false)
   }
 
+  function getFreshToken(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const ts = window.turnstile
+      if (!ts) {
+        resolve(null)
+        return
+      }
+
+      let resolved = false
+      const prevCallback = window.onTurnstileCallback
+      const prevExpired = window.onTurnstileExpired
+      const prevError = window.onTurnstileError
+
+      window.onTurnstileCallback = (token: string) => {
+        if (resolved) return
+        resolved = true
+        setCaptchaToken(token)
+        setCaptchaExpired(false)
+        window.onTurnstileCallback = prevCallback
+        window.onTurnstileExpired = prevExpired
+        window.onTurnstileError = prevError
+        resolve(token)
+      }
+      window.onTurnstileExpired = () => {
+        if (resolved) return
+        resolved = true
+        setCaptchaToken(null)
+        setCaptchaExpired(true)
+        window.onTurnstileCallback = prevCallback
+        window.onTurnstileExpired = prevExpired
+        window.onTurnstileError = prevError
+        resolve(null)
+      }
+      window.onTurnstileError = () => {
+        if (resolved) return
+        resolved = true
+        setCaptchaToken(null)
+        window.onTurnstileCallback = prevCallback
+        window.onTurnstileExpired = prevExpired
+        window.onTurnstileError = prevError
+        resolve(null)
+      }
+
+      ts.reset()
+
+      setTimeout(() => {
+        if (resolved) return
+        resolved = true
+        window.onTurnstileCallback = prevCallback
+        window.onTurnstileExpired = prevExpired
+        window.onTurnstileError = prevError
+        resolve(null)
+      }, 10_000)
+    })
+  }
+
   const showCaptcha = !isForgot && !passwordRecovery && !confirmationPending
 
   useEffect(() => {
@@ -130,12 +186,13 @@ export default function Auth() {
     const normalizedEmail = email.trim().toLowerCase()
 
     if (isSignUp) {
-      if (!captchaToken) {
+      const freshToken = TURNSTILE_SITE_KEY ? await getFreshToken() : captchaToken
+      if (!freshToken) {
         setError('Please complete the CAPTCHA verification.')
         setLoading(false)
         return
       }
-      const result = await signUp(normalizedEmail, password, captchaToken, returnTo)
+      const result = await signUp(normalizedEmail, password, freshToken, returnTo)
       if (result.error) {
         console.error('sign_up error:', result.error)
         setError(mapAuthError(result.error, true))
@@ -155,13 +212,14 @@ export default function Auth() {
       return
     }
 
-    if (!captchaToken) {
+    const freshToken = TURNSTILE_SITE_KEY ? await getFreshToken() : captchaToken
+    if (!freshToken) {
       setError('Please complete the CAPTCHA verification.')
       setLoading(false)
       return
     }
 
-    const { error: signInError } = await signIn(normalizedEmail, password, captchaToken)
+    const { error: signInError } = await signIn(normalizedEmail, password, freshToken)
     if (signInError) {
       console.error('sign_in error:', signInError)
       setError(mapAuthError(signInError, false))
