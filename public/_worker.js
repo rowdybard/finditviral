@@ -84,7 +84,7 @@ function createContentSecurityPolicy(nonce) {
     "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com https://*.supabase.co",
     "manifest-src 'self'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com`,
+    `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://www.googletagmanager.com`,
     "style-src 'self'",
     'upgrade-insecure-requests',
   ].join('; ')
