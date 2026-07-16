@@ -80,7 +80,7 @@ function createContentSecurityPolicy(nonce) {
     "font-src 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "frame-src https://challenges.cloudflare.com about:blank",
+    "frame-src https://challenges.cloudflare.com",
     "img-src 'self' data: https://images.unsplash.com https://www.google-analytics.com https://*.supabase.co",
     "manifest-src 'self'",
     "object-src 'none'",
