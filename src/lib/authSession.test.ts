@@ -7,6 +7,8 @@ import {
 } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  canClearInspectedStaleSession,
+  doesAuthEventSupersedeInspection,
   getValidatedInitialSession,
   isDefinitivelyInvalidSession,
 } from './authSession'
@@ -45,7 +47,6 @@ function createAuthClient({
       data: { user },
       error: userError,
     })),
-    signOut: vi.fn(async () => ({ error: null })),
   }
 }
 
@@ -54,28 +55,32 @@ describe('validated initial auth sessions', () => {
     const auth = createAuthClient()
 
     await expect(getValidatedInitialSession(auth)).resolves.toEqual({
-      ...cachedSession,
-      user: serverUser,
+      status: 'valid',
+      session: {
+        ...cachedSession,
+        user: serverUser,
+      },
     })
-    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(auth.getUser).toHaveBeenCalledWith(cachedSession.access_token)
   })
 
   it('does not call the user endpoint when no cached session exists', async () => {
     const auth = createAuthClient({ session: null })
 
-    await expect(getValidatedInitialSession(auth)).resolves.toBeNull()
+    await expect(getValidatedInitialSession(auth)).resolves.toEqual({ status: 'none' })
     expect(auth.getUser).not.toHaveBeenCalled()
-    expect(auth.signOut).not.toHaveBeenCalled()
   })
 
-  it('clears a local session whose auth user was deleted', async () => {
+  it('marks a candidate stale when its auth user was deleted', async () => {
     const auth = createAuthClient({
       user: null,
       userError: authError('user_not_found', 403),
     })
 
-    await expect(getValidatedInitialSession(auth)).resolves.toBeNull()
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    await expect(getValidatedInitialSession(auth)).resolves.toEqual({
+      status: 'stale',
+      session: cachedSession,
+    })
   })
 
   it('does not destroy a cached session for a transient validation outage', async () => {
@@ -88,16 +93,17 @@ describe('validated initial auth sessions', () => {
       code: 'unexpected_failure',
       status: 503,
     })
-    expect(auth.signOut).not.toHaveBeenCalled()
   })
 
-  it('clears a mismatched user returned for the cached session', async () => {
+  it('marks a candidate stale when validation returns a different user', async () => {
     const auth = createAuthClient({
       user: { id: 'different-user' } as User,
     })
 
-    await expect(getValidatedInitialSession(auth)).resolves.toBeNull()
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    await expect(getValidatedInitialSession(auth)).resolves.toEqual({
+      status: 'stale',
+      session: cachedSession,
+    })
   })
 
   it('recognizes terminal session validation errors', () => {
@@ -105,5 +111,33 @@ describe('validated initial auth sessions', () => {
     expect(isDefinitivelyInvalidSession(new AuthSessionMissingError())).toBe(true)
     expect(isDefinitivelyInvalidSession(authError('session_not_found', 400))).toBe(false)
     expect(isDefinitivelyInvalidSession(authError('unexpected_failure', 503))).toBe(false)
+  })
+
+  it('allows cleanup after the startup SIGNED_IN event for the inspected token', () => {
+    const startupEvent = {
+      event: 'SIGNED_IN',
+      accessToken: cachedSession.access_token,
+    }
+
+    expect(doesAuthEventSupersedeInspection(startupEvent, cachedSession)).toBe(false)
+    expect(canClearInspectedStaleSession(cachedSession, cachedSession, startupEvent)).toBe(true)
+  })
+
+  it('never clears a stale candidate after a genuinely newer auth event', () => {
+    const newerSession = {
+      ...cachedSession,
+      access_token: 'newer-access-token',
+      user: { id: 'newer-user' } as User,
+    }
+
+    const newerSignIn = {
+      event: 'SIGNED_IN',
+      accessToken: newerSession.access_token,
+    }
+    const signedOut = { event: 'SIGNED_OUT', accessToken: null }
+
+    expect(doesAuthEventSupersedeInspection(newerSignIn, cachedSession)).toBe(true)
+    expect(canClearInspectedStaleSession(cachedSession, newerSession, newerSignIn)).toBe(false)
+    expect(canClearInspectedStaleSession(cachedSession, cachedSession, signedOut)).toBe(false)
   })
 })

@@ -1,10 +1,14 @@
 ﻿import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../types/database'
 import { buildOnboardingPath } from '../lib/authReturn'
 import { buildPasswordRecoveryRedirectUrl } from '../lib/authEntry'
-import { getValidatedInitialSession } from '../lib/authSession'
+import {
+  canClearInspectedStaleSession,
+  doesAuthEventSupersedeInspection,
+  getValidatedInitialSession,
+} from '../lib/authSession'
 
 type AuthContextType = {
   session: Session | null
@@ -33,20 +37,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let stopped = false
-    let authEventOccurred = false
+    let latestAuthEvent: { event: AuthChangeEvent; accessToken: string | null } | null = null
 
-    void getValidatedInitialSession(supabase.auth).then((validatedSession) => {
-      if (stopped || authEventOccurred) return
+    void getValidatedInitialSession(supabase.auth).then(async (inspection) => {
+      const inspectedSession = inspection.status === 'none' ? null : inspection.session
+      if (stopped || doesAuthEventSupersedeInspection(latestAuthEvent, inspectedSession)) return
 
+      if (inspection.status === 'stale') {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) throw error
+        if (
+          stopped
+          || !canClearInspectedStaleSession(
+            inspection.session,
+            data.session,
+            latestAuthEvent,
+          )
+        ) {
+          return
+        }
+
+        await supabase.auth.signOut({ scope: 'local' })
+        if (stopped || doesAuthEventSupersedeInspection(latestAuthEvent, inspection.session)) return
+        setSession(null)
+        setProfile(null)
+        setPasswordRecovery(false)
+        setLoading(false)
+        return
+      }
+
+      const validatedSession = inspection.status === 'valid' ? inspection.session : null
       setSession(validatedSession)
-      if (validatedSession) {
-        void fetchProfile(validatedSession.user.id)
-      } else {
+      if (!validatedSession) {
         setProfile(null)
         setLoading(false)
+        return
       }
+
+      void fetchProfile(validatedSession.user.id)
     }).catch((bootstrapError: unknown) => {
-      if (stopped || authEventOccurred) return
+      if (stopped || latestAuthEvent) return
       console.error(JSON.stringify({
         event: 'auth_bootstrap_failed',
         message: bootstrapError instanceof Error ? bootstrapError.message : 'unknown',
@@ -59,7 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
         if (event === 'INITIAL_SESSION') return
-        authEventOccurred = true
+        latestAuthEvent = {
+          event,
+          accessToken: newSession?.access_token ?? null,
+        }
         if (event === 'PASSWORD_RECOVERY') {
           setPasswordRecovery(true)
         } else if (event === 'SIGNED_OUT') {

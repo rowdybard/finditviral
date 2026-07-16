@@ -71,6 +71,7 @@ export default function Auth() {
   const [resetSent, setResetSent] = useState(false)
   const [passwordUpdated, setPasswordUpdated] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetId = useRef<string | null>(null)
   const turnstileTokenRequestRef = useRef(new TurnstileTokenRequestController())
@@ -389,15 +390,18 @@ export default function Auth() {
               </Link>
               <button
                 type="button"
-                disabled={loading}
+                disabled={signingOut}
                 onClick={async () => {
-                  setLoading(true)
-                  await signOut()
-                  setLoading(false)
+                  setSigningOut(true)
+                  try {
+                    await signOut()
+                  } finally {
+                    setSigningOut(false)
+                  }
                 }}
                 className="mx-auto mt-4 block text-sm font-medium text-stone-700 underline-offset-4 hover:text-stone-900 hover:underline disabled:opacity-60"
               >
-                {loading ? 'Signing out…' : 'Sign out and use another account'}
+                {signingOut ? 'Signing out…' : 'Sign out and use another account'}
               </button>
             </div>
           ) : confirmationPending ? (
