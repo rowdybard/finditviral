@@ -11,21 +11,7 @@ const TOY_SHADOW = 'shadow-[4px_4px_0_0_#1c1917]'
 const TOY_SHADOW_SM = 'shadow-[2px_2px_0_0_#1c1917]'
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
-const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-
-type TurnstileWidget = {
-  render: (container: HTMLElement, options: {
-    sitekey: string
-    callback: (token: string) => void
-    'expired-callback'?: () => void
-    'error-callback'?: () => void
-    'retry-callback'?: () => void
-    theme?: 'light' | 'dark' | 'auto'
-    size?: 'normal' | 'compact'
-  }) => string
-  remove: (widgetId: string) => void
-  reset: (widgetId: string) => void
-}
+const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
 
 export default function Auth() {
   const { signIn, signUp, passwordRecovery, requestPasswordReset, updatePassword } = useAuth()
@@ -52,13 +38,10 @@ export default function Auth() {
   const [passwordUpdated, setPasswordUpdated] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
-  const turnstileWidgetId = useRef<string | null>(null)
 
   function resetTurnstile() {
-    const ts = (window as unknown as { turnstile?: TurnstileWidget }).turnstile
-    if (turnstileWidgetId.current && ts) {
-      ts.reset(turnstileWidgetId.current)
-    }
+    const ts = window.turnstile
+    if (ts) ts.reset()
     setCaptchaToken(null)
     setCaptchaExpired(false)
   }
@@ -67,65 +50,29 @@ export default function Auth() {
 
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || !showCaptcha) return
-    let cancelled = false
 
-    function loadTurnstile() {
-      const ts = (window as unknown as { turnstile?: TurnstileWidget }).turnstile
-      if (ts) {
-        renderTurnstile()
-        return
-      }
-      const existing = document.querySelector(`script[src="${TURNSTILE_SCRIPT_URL}"]`)
-      if (existing) {
-        existing.addEventListener('load', renderTurnstile)
-        return
-      }
+    window.onTurnstileCallback = (token: string) => {
+      setCaptchaToken(token)
+      setCaptchaExpired(false)
+    }
+    window.onTurnstileExpired = () => {
+      setCaptchaToken(null)
+      setCaptchaExpired(true)
+    }
+    window.onTurnstileError = () => {
+      setCaptchaToken(null)
+    }
+
+    const existing = document.querySelector(`script[src="${TURNSTILE_SCRIPT_URL}"]`)
+    if (!existing) {
       const script = document.createElement('script')
       script.src = TURNSTILE_SCRIPT_URL
       script.async = true
       script.defer = true
-      script.onload = () => {
-        if (!cancelled) renderTurnstile()
-      }
       document.head.appendChild(script)
     }
 
-    function renderTurnstile() {
-      const ts = (window as unknown as { turnstile?: TurnstileWidget }).turnstile
-      if (!turnstileContainerRef.current || !ts) return
-      if (turnstileWidgetId.current) {
-        ts.remove(turnstileWidgetId.current)
-      }
-      turnstileWidgetId.current = ts.render(turnstileContainerRef.current, {
-        sitekey: TURNSTILE_SITE_KEY,
-        callback: (token: string) => {
-          setCaptchaToken(token)
-          setCaptchaExpired(false)
-        },
-        'expired-callback': () => {
-          setCaptchaToken(null)
-          setCaptchaExpired(true)
-        },
-        'error-callback': () => {
-          setCaptchaToken(null)
-        },
-        'retry-callback': () => {
-          setCaptchaToken(null)
-          setCaptchaExpired(false)
-        },
-        theme: 'light',
-      })
-    }
-
-    loadTurnstile()
-
     return () => {
-      cancelled = true
-      const ts = (window as unknown as { turnstile?: TurnstileWidget }).turnstile
-      if (turnstileWidgetId.current && ts) {
-        ts.remove(turnstileWidgetId.current)
-        turnstileWidgetId.current = null
-      }
       setCaptchaToken(null)
       setCaptchaExpired(false)
     }
@@ -517,7 +464,15 @@ export default function Auth() {
 
                 <div>
                   {TURNSTILE_SITE_KEY ? (
-                    <div ref={turnstileContainerRef} />
+                    <div
+                      ref={turnstileContainerRef}
+                      className="cf-turnstile"
+                      data-sitekey={TURNSTILE_SITE_KEY}
+                      data-callback="onTurnstileCallback"
+                      data-expired-callback="onTurnstileExpired"
+                      data-error-callback="onTurnstileError"
+                      data-theme="light"
+                    />
                   ) : (
                     <p role="alert" className="rounded-lg border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">Verification is unavailable.</p>
                   )}

@@ -22,7 +22,12 @@ interface Window {
   turnstile?: {
     render: (container: HTMLElement, options: TurnstileOptions) => string
     remove: (widgetId: string) => void
+    reset: (widgetId?: string) => void
+    getResponse: (widgetId?: string) => string | undefined
   }
+  onTurnstileCallback?: (token: string) => void
+  onTurnstileExpired?: () => void
+  onTurnstileError?: () => void
 }
 
 declare module '@fontsource-variable/*'
