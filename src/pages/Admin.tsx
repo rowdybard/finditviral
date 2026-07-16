@@ -26,6 +26,7 @@ import {
   adminUpdateStore,
 } from '../lib/launchApi'
 import { trackEvent } from '../lib/analytics'
+import TrendEnginePanel from './admin/TrendEnginePanel'
 import { useAdminReview } from '../contexts/AdminReviewContext'
 import type {
   AdminContribution,
@@ -38,10 +39,10 @@ import type {
   ModerationEvent,
 } from '../types/database'
 
-type Tab = 'review' | 'suggestions' | 'contributions' | 'interests' | 'members' | 'history' | 'stores' | 'products'
+type Tab = 'review' | 'suggestions' | 'contributions' | 'interests' | 'members' | 'history' | 'stores' | 'products' | 'trend-engine'
 type NewProductAvailability = 'available' | 'backorder' | 'preorder' | 'announced' | 'limited'
 
-const ADMIN_TABS = new Set<Tab>(['review', 'suggestions', 'contributions', 'interests', 'members', 'history', 'stores', 'products'])
+const ADMIN_TABS = new Set<Tab>(['review', 'suggestions', 'contributions', 'interests', 'members', 'history', 'stores', 'products', 'trend-engine'])
 
 function suggestionTitle(suggestion: CatalogSuggestion): string {
   return suggestion.product_name
@@ -592,6 +593,7 @@ export default function Admin() {
     { id: 'stores', label: 'Stores' },
     { id: 'products', label: 'Products' },
     { id: 'history', label: 'History' },
+    { id: 'trend-engine', label: 'Trend Engine' },
   ]
 
   return (
@@ -808,6 +810,8 @@ export default function Admin() {
           {history.length === 0 && <p className="card text-sm text-gray-600">No moderation history yet.</p>}
         </div>
       )}
+
+      {tab === 'trend-engine' && <TrendEnginePanel />}
     </div>
   )
 }

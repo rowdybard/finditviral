@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "finditviral-trend-engine",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "0467a04f-78f9-4ad1-a227-2997689ff822",
       "migrations_dir": "migrations"
     }
   ],

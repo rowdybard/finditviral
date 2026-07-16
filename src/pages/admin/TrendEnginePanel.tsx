@@ -1,0 +1,538 @@
+import { ArrowsCounterClockwise, Check, Lightning, Plus, X } from '@phosphor-icons/react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  createSource,
+  generatePatch,
+  getEngineHealth,
+  listCandidates,
+  listChanges,
+  listSources,
+  recomputeCandidates,
+  reviewCandidate,
+  type CandidateState,
+  type EngineCandidate,
+  type EngineChange,
+  type EngineHealth,
+  type EnginePatch,
+  type EngineSource,
+  type ReviewStatus,
+  type SourceCreateInput,
+  type SourceKind,
+} from '../../lib/trendEngine'
+
+type SubTab = 'sources' | 'candidates' | 'patches' | 'changes'
+
+const STATE_COLORS: Record<CandidateState, string> = {
+  candidate: 'bg-stone-100 text-stone-700',
+  emerging: 'bg-blue-100 text-blue-700',
+  trending: 'bg-green-100 text-green-700',
+  cooling: 'bg-amber-100 text-amber-700',
+  archived: 'bg-gray-200 text-gray-600',
+}
+
+const REVIEW_COLORS: Record<ReviewStatus, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-700',
+}
+
+function Spinner() {
+  return <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" />
+}
+
+function modeColor(mode: string): string {
+  if (mode === 'autopilot') return 'bg-green-100 text-green-800 border-green-300'
+  if (mode === 'review') return 'bg-blue-100 text-blue-800 border-blue-300'
+  return 'bg-stone-100 text-stone-700 border-stone-300'
+}
+
+export default function TrendEnginePanel() {
+  const [subTab, setSubTab] = useState<SubTab>('sources')
+  const [health, setHealth] = useState<EngineHealth | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
+  const [healthLoading, setHealthLoading] = useState(true)
+
+  const refreshHealth = useCallback(async () => {
+    setHealthLoading(true)
+    setHealthError(null)
+    try {
+      const h = await getEngineHealth()
+      setHealth(h)
+    } catch (err) {
+      setHealthError(err instanceof Error ? err.message : 'Failed to reach engine')
+    } finally {
+      setHealthLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void refreshHealth() }, [refreshHealth])
+
+  const subTabs: { id: SubTab; label: string }[] = [
+    { id: 'sources', label: 'Sources' },
+    { id: 'candidates', label: 'Candidates' },
+    { id: 'patches', label: 'Patches' },
+    { id: 'changes', label: 'Changes' },
+  ]
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xl font-black text-stone-950">Trend Engine</h2>
+        <p className="mt-1 text-sm text-stone-600">Autonomous catalog researcher — discovers, scores, and prepares viral product patches.</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        {healthLoading ? (
+          <Spinner />
+        ) : health ? (
+          <div className="flex items-center gap-3">
+            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${modeColor(health.mode)}`}>
+              {health.mode}
+            </span>
+            <span className="text-sm font-semibold text-green-700">● {health.status}</span>
+            <button type="button" className="btn-ghost text-xs" onClick={() => void refreshHealth()}>Refresh</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="rounded-lg bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">{healthError ?? 'Engine unreachable'}</span>
+            <button type="button" className="btn-ghost text-xs" onClick={() => void refreshHealth()}>Retry</button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2">
+        {subTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${subTab === item.id ? 'bg-brand-100 text-brand-800' : 'text-gray-600 hover:bg-gray-100'}`}
+            onClick={() => setSubTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'sources' && <SourcesTab />}
+      {subTab === 'candidates' && <CandidatesTab />}
+      {subTab === 'patches' && <PatchesTab />}
+      {subTab === 'changes' && <ChangesTab />}
+    </section>
+  )
+}
+
+function SourcesTab() {
+  const [sources, setSources] = useState<EngineSource[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setSources(await listSources())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sources')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-stone-900">Registered sources</h3>
+        <button type="button" className="btn-primary" onClick={() => setShowForm((v) => !v)}>
+          <Plus size={17} aria-hidden="true" /> {showForm ? 'Cancel' : 'Add source'}
+        </button>
+      </div>
+
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+
+      {showForm && <SourceForm onCreated={() => { setShowForm(false); void load() }} />}
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Spinner /></div>
+      ) : sources.length === 0 ? (
+        <p className="card text-sm text-gray-600">No sources registered yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {sources.map((src) => (
+            <article key={src.id} className="card space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-bold text-stone-900">{src.name}</p>
+                  <p className="text-xs font-mono text-stone-500">{src.id}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${src.enabled ? 'bg-green-100 text-green-700' : 'bg-stone-200 text-stone-600'}`}>
+                    {src.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{src.kind}</span>
+                </div>
+              </div>
+              <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                <div><dt className="font-bold text-stone-600">Independence key</dt><dd className="text-stone-800">{src.independence_key}</dd></div>
+                <div><dt className="font-bold text-stone-600">Trust weight</dt><dd className="text-stone-800">{src.trust_weight}</dd></div>
+                <div><dt className="font-bold text-stone-600">Poll interval</dt><dd className="text-stone-800">{src.poll_interval_minutes} min</dd></div>
+                <div><dt className="font-bold text-stone-600">Failures</dt><dd className="text-stone-800">{src.consecutive_failures}</dd></div>
+                {src.endpoint_url && <div className="sm:col-span-2"><dt className="font-bold text-stone-600">Endpoint</dt><dd className="break-all text-stone-800">{src.endpoint_url}</dd></div>}
+                {src.catalog_host_allowlist.length > 0 && <div className="sm:col-span-2"><dt className="font-bold text-stone-600">Catalog allowlist</dt><dd className="text-stone-800">{src.catalog_host_allowlist.join(', ')}</dd></div>}
+                {src.last_error_code && <div className="sm:col-span-2"><dt className="font-bold text-red-600">Last error</dt><dd className="text-red-700">{src.last_error_code}</dd></div>}
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SourceForm({ onCreated }: { onCreated: () => void }) {
+  const [form, setForm] = useState<SourceCreateInput>({
+    id: '',
+    name: '',
+    kind: 'json_feed',
+    endpoint_url: null,
+    independence_key: '',
+    catalog_host_allowlist: [],
+    trust_weight: 0.8,
+    poll_interval_minutes: 30,
+    enabled: true,
+  })
+  const [allowlistText, setAllowlistText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
+    try {
+      const hosts = allowlistText.split(',').map((s) => s.trim()).filter(Boolean)
+      await createSource({
+        ...form,
+        catalog_host_allowlist: hosts,
+        endpoint_url: form.endpoint_url || null,
+      })
+      onCreated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create source')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="card space-y-3">
+      <h4 className="font-bold text-stone-900">Register new source</h4>
+      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Source ID (lowercase, hyphens)</span>
+          <input className="input min-h-11" value={form.id} onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))} required pattern="[a-z0-9][a-z0-9_-]{1,63}" placeholder="market-rank-feed" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Name</span>
+          <input className="input min-h-11" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required maxLength={100} placeholder="Market rank feed" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Kind</span>
+          <select className="input min-h-11" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as SourceKind }))}>
+            <option value="json_feed">JSON feed</option>
+            <option value="push">Push</option>
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Independence key</span>
+          <input className="input min-h-11" value={form.independence_key} onChange={(e) => setForm((f) => ({ ...f, independence_key: e.target.value }))} required placeholder="market-rank-provider" />
+        </label>
+        <label className="space-y-1 sm:col-span-2">
+          <span className="text-xs font-bold text-stone-600">Endpoint URL (HTTPS only)</span>
+          <input className="input min-h-11" value={form.endpoint_url ?? ''} onChange={(e) => setForm((f) => ({ ...f, endpoint_url: e.target.value }))} placeholder="https://feeds.example.com/viral.json" />
+        </label>
+        <label className="space-y-1 sm:col-span-2">
+          <span className="text-xs font-bold text-stone-600">Catalog host allowlist (comma-separated)</span>
+          <input className="input min-h-11" value={allowlistText} onChange={(e) => setAllowlistText(e.target.value)} placeholder="brand.example, *.official-store.example" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Trust weight (0–1)</span>
+          <input type="number" className="input min-h-11" value={form.trust_weight} min={0} max={1} step={0.05} onChange={(e) => setForm((f) => ({ ...f, trust_weight: Number(e.target.value) }))} />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-bold text-stone-600">Poll interval (minutes)</span>
+          <input type="number" className="input min-h-11" value={form.poll_interval_minutes} min={1} onChange={(e) => setForm((f) => ({ ...f, poll_interval_minutes: Number(e.target.value) }))} />
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={form.enabled} onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))} />
+          <span className="text-sm font-bold text-stone-700">Enabled</span>
+        </label>
+      </div>
+      <button type="submit" className="btn-primary" disabled={submitting}>
+        {submitting ? 'Creating…' : 'Create source'}
+      </button>
+    </form>
+  )
+}
+
+function CandidatesTab() {
+  const [candidates, setCandidates] = useState<EngineCandidate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [stateFilter, setStateFilter] = useState<CandidateState | ''>('')
+  const [reviewFilter, setReviewFilter] = useState<ReviewStatus | ''>('')
+  const [recomputing, setRecomputing] = useState(false)
+  const [actionId, setActionId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await listCandidates({
+        state: stateFilter || undefined,
+        review_status: reviewFilter || undefined,
+        limit: 50,
+      })
+      setCandidates(data.candidates)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load candidates')
+    } finally {
+      setLoading(false)
+    }
+  }, [stateFilter, reviewFilter])
+
+  useEffect(() => { void load() }, [load])
+
+  async function handleReview(id: string, decision: 'approved' | 'rejected') {
+    setActionId(id)
+    try {
+      await reviewCandidate(id, { decision })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Review failed')
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  async function handleRecompute() {
+    setRecomputing(true)
+    setError(null)
+    try {
+      await recomputeCandidates()
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Recompute failed')
+    } finally {
+      setRecomputing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-bold text-stone-900">Candidates</h3>
+        <button type="button" className="btn-secondary" disabled={recomputing} onClick={() => void handleRecompute()}>
+          <ArrowsCounterClockwise size={17} aria-hidden="true" /> {recomputing ? 'Recomputing…' : 'Recompute scores'}
+        </button>
+      </div>
+
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+
+      <div className="flex flex-wrap gap-2">
+        <select className="input min-h-11" value={stateFilter} onChange={(e) => setStateFilter(e.target.value as CandidateState | '')}>
+          <option value="">All states</option>
+          <option value="candidate">Candidate</option>
+          <option value="emerging">Emerging</option>
+          <option value="trending">Trending</option>
+          <option value="cooling">Cooling</option>
+          <option value="archived">Archived</option>
+        </select>
+        <select className="input min-h-11" value={reviewFilter} onChange={(e) => setReviewFilter(e.target.value as ReviewStatus | '')}>
+          <option value="">All review statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Spinner /></div>
+      ) : candidates.length === 0 ? (
+        <p className="card text-sm text-gray-600">No candidates found.</p>
+      ) : (
+        <div className="space-y-2">
+          {candidates.map((c) => (
+            <article key={c.id} className="card space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h4 className="font-bold text-stone-900">{c.name}</h4>
+                  <p className="text-xs text-stone-500">{c.brand ?? 'No brand'} · {c.category ?? 'No category'}</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {c.score && (
+                    <span className={`rounded px-2 py-0.5 text-xs font-black ${STATE_COLORS[c.score.state]}`}>
+                      {c.score.state} · {c.score.value.toFixed(0)}
+                    </span>
+                  )}
+                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${REVIEW_COLORS[c.review_status]}`}>
+                    {c.review_status}
+                  </span>
+                </div>
+              </div>
+
+              <dl className="grid gap-1 text-xs sm:grid-cols-3">
+                <div><dt className="font-bold text-stone-600">Topic</dt><dd className="text-stone-800">{c.topic.name}</dd></div>
+                <div><dt className="font-bold text-stone-600">Sources</dt><dd className="text-stone-800">{c.score?.source_count ?? 0} sources, {c.score?.signal_count ?? 0} signals</dd></div>
+                <div><dt className="font-bold text-stone-600">Confidence</dt><dd className="text-stone-800">{c.score ? c.score.confidence.toFixed(2) : '—'}</dd></div>
+                {c.product_url && <div className="sm:col-span-3"><dt className="font-bold text-stone-600">Product URL</dt><dd className="break-all text-stone-800">{c.product_url}{!c.product_url_verified && ' (unverified)'}</dd></div>}
+              </dl>
+
+              {c.review_status === 'pending' && (
+                <div className="flex gap-2">
+                  <button type="button" className="btn-primary" disabled={actionId === c.id} onClick={() => void handleReview(c.id, 'approved')}>
+                    <Check size={16} aria-hidden="true" /> Approve
+                  </button>
+                  <button type="button" className="btn-secondary text-red-700" disabled={actionId === c.id} onClick={() => void handleReview(c.id, 'rejected')}>
+                    <X size={16} aria-hidden="true" /> Reject
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PatchesTab() {
+  const [patch, setPatch] = useState<EnginePatch | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setError(null)
+    try {
+      const result = await generatePatch()
+      setPatch(result.patch)
+      if (!result.patch) setError(result.reason ?? 'No eligible candidates for a patch in the current mode.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate patch')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-stone-900">Catalog patches</h3>
+        <button type="button" className="btn-primary" disabled={generating} onClick={() => void handleGenerate()}>
+          <Lightning size={17} aria-hidden="true" /> {generating ? 'Generating…' : 'Generate patch'}
+        </button>
+      </div>
+
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+
+      {patch ? (
+        <article className="card space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="font-bold text-stone-900">Patch {patch.patch_id}</p>
+              <p className="text-xs text-stone-500">Mode: {patch.mode} · Generated: {new Date(patch.generated_at).toLocaleString()}</p>
+            </div>
+            <span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-mono text-stone-600">{patch.checksum.slice(0, 20)}…</span>
+          </div>
+          <div className="space-y-2">
+            {patch.operations.map((op) => (
+              <div key={op.operation_id} className="rounded-lg border border-stone-200 p-3">
+                <div className="flex items-center gap-2">
+                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${op.action === 'ensure_trend' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                    {op.action}
+                  </span>
+                  <span className="text-xs font-mono text-stone-500">{op.candidate_id}</span>
+                </div>
+                <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-3">
+                  <div><dt className="font-bold text-stone-600">Score</dt><dd className="text-stone-800">{op.reason.score.toFixed(0)}</dd></div>
+                  <div><dt className="font-bold text-stone-600">Confidence</dt><dd className="text-stone-800">{op.reason.confidence.toFixed(2)}</dd></div>
+                  <div><dt className="font-bold text-stone-600">State</dt><dd className="text-stone-800">{op.reason.state}</dd></div>
+                </dl>
+                {op.reason.evidence_urls.length > 0 && (
+                  <div className="mt-1 text-xs">
+                    <span className="font-bold text-stone-600">Evidence: </span>
+                    {op.reason.evidence_urls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{i > 0 ? ', ' : ''}{url}</a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </article>
+      ) : (
+        <p className="card text-sm text-gray-600">No patch generated yet. Click "Generate patch" to create one in the current engine mode.</p>
+      )}
+    </div>
+  )
+}
+
+function ChangesTab() {
+  const [changes, setChanges] = useState<EngineChange[]>([])
+  const [cursor, setCursor] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+
+  const load = useCallback(async (after: number) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await listChanges(after, 50)
+      setChanges((prev) => after === 0 ? data.changes : [...prev, ...data.changes])
+      setCursor(data.next_cursor)
+      setHasMore(data.changes.length === 50)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load changes')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load(0) }, [load])
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-lg font-bold text-stone-900">Change log</h3>
+
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+
+      {loading && changes.length === 0 ? (
+        <div className="flex justify-center py-8"><Spinner /></div>
+      ) : changes.length === 0 ? (
+        <p className="card text-sm text-gray-600">No changes recorded yet.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {changes.map((ch) => (
+            <article key={ch.sequence} className="card flex flex-wrap items-center justify-between gap-2 py-2">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-stone-400">#{ch.sequence}</span>
+                <span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{ch.event_type}</span>
+                <span className="text-xs text-stone-500">{ch.entity_id}</span>
+              </div>
+              <time className="text-xs text-stone-400">{new Date(ch.occurred_at).toLocaleString()}</time>
+            </article>
+          ))}
+          {hasMore && !loading && (
+            <button type="button" className="btn-secondary w-full" onClick={() => void load(cursor)}>Load more</button>
+          )}
+          {loading && <div className="flex justify-center py-4"><Spinner /></div>}
+        </div>
+      )}
+    </div>
+  )
+}
