@@ -10,6 +10,13 @@
   body {
     @apply bg-stone-50 text-stone-900 antialiased;
     font-size: 0.875rem;
+    min-width: 320px;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  :target {
+    scroll-margin-top: calc(5rem + env(safe-area-inset-top));
   }
 
   .text-legible {
@@ -20,7 +27,7 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2;
   }
   .btn-primary {
     @apply btn bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700;
@@ -32,7 +39,7 @@
     @apply btn text-gray-600 hover:bg-gray-100 active:bg-gray-200;
   }
   .input {
-    @apply w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none;
+    @apply min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200;
   }
   .label {
     @apply block text-sm font-medium text-gray-700 mb-1.5;
@@ -85,6 +92,7 @@
 
   .fiv-action-strip {
     @apply sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
   .fiv-store-card {
@@ -116,7 +124,7 @@
   }
 
   .fiv-radius-btn {
-    @apply cursor-pointer rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold transition;
+    @apply min-h-11 cursor-pointer rounded-lg border-2 px-3 py-2 text-center text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2;
   }
 
   .fiv-radius-btn-active {
@@ -128,7 +136,7 @@
   }
 
   .fiv-availability-btn {
-    @apply cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-semibold transition;
+    @apply min-h-11 cursor-pointer rounded-xl border-2 px-3 py-3 text-center text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2;
   }
 
   .fiv-availability-btn-active {

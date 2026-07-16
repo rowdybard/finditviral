@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAuthPath,
   buildOnboardingPath,
+  buildReauthenticationPath,
   locationReturnPath,
   sanitizeReturnPath,
 } from './authReturn'
@@ -19,6 +20,9 @@ describe('authentication return paths', () => {
       search: '?draft=123',
       hash: '#photos',
     })).toBe('/sightings/new?draft=123#photos')
+    expect(buildReauthenticationPath('/sightings/new?draft=123#photos')).toBe(
+      '/auth?reason=session_expired&returnTo=%2Fsightings%2Fnew%3Fdraft%3D123%23photos',
+    )
   })
 
   it('rejects external, malformed, and auth-loop destinations', () => {
@@ -36,6 +40,7 @@ describe('authentication return paths', () => {
 
   it('omits the default home destination from generated URLs', () => {
     expect(buildAuthPath('/home')).toBe('/auth')
+    expect(buildReauthenticationPath('/home')).toBe('/auth?reason=session_expired')
     expect(buildOnboardingPath('/home')).toBe('/onboarding')
   })
 })

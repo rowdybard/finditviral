@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CalendarBlank, ShieldCheck, Sparkle, Storefront, Binoculars } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import CatalogSuggestionForm, {
+  createCatalogSuggestionDraft,
+  parseCatalogSuggestionDraft,
+  type CatalogSuggestionDraftValues,
   type ProductSuggestionValues,
   type StoreSuggestionValues,
 } from '../components/CatalogSuggestionForm'
 import ContributionDraftNotice from '../components/ContributionDraftNotice'
+import FormDraftStatus from '../components/FormDraftStatus'
 import {
   createBounty,
   discardContributionDraft,
@@ -22,6 +26,9 @@ import { activeMarket } from '../lib/market'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
 import { useMascotToast } from '../contexts/MascotToastContext'
+import { useAuth } from '../contexts/AuthContext'
+import { useFormDraft } from '../hooks/useFormDraft'
+import { createDraftSubmissionId } from '../lib/formDraftStore'
 import type { ContributionDraft, RetailerSearchResult, StoreSearchResult } from '../types/database'
 
 type BountyPayload = {
@@ -43,6 +50,15 @@ type BountyPayload = {
   storeSuggestionName?: string
 }
 
+type BountyLocalDraft = BountyPayload & {
+  localVersion: 1
+  submissionId: string
+  showPreview: boolean
+  suggestion: { kind: 'product' | 'store'; initialName: string } | null
+  suggestionValues: CatalogSuggestionDraftValues | null
+  serverDraftId: string | null
+}
+
 function localDateTime(date: Date): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
@@ -56,7 +72,72 @@ function isSelection(value: unknown): value is CatalogSelection {
     && typeof candidate.detail === 'string'
 }
 
+function parseBountyLocalDraft(value: unknown): BountyLocalDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (candidate.version !== 1 || candidate.localVersion !== 1 || typeof candidate.submissionId !== 'string') return null
+  const product = candidate.product === null ? null : isSelection(candidate.product) ? candidate.product : undefined
+  const store = candidate.store === null ? null : isSelection(candidate.store) ? candidate.store : undefined
+  if (product === undefined || store === undefined) return null
+  if (candidate.scope !== 'region' && candidate.scope !== 'retailers' && candidate.scope !== 'stores') return null
+  const stringFields = ['zipCode', 'radiusMiles', 'rewardAmount', 'deadline', 'requirements', 'quantityNeeded', 'variantRequirements'] as const
+  if (stringFields.some((field) => typeof candidate[field] !== 'string')) return null
+  if (typeof candidate.acceptEquivalent !== 'boolean' || typeof candidate.showPreview !== 'boolean') return null
+  if (!Array.isArray(candidate.selectedRetailers) || candidate.selectedRetailers.some((entry) => !isSelection(entry))) return null
+  if (!Array.isArray(candidate.selectedStores) || candidate.selectedStores.some((entry) => !isSelection(entry))) return null
+  let suggestion: BountyLocalDraft['suggestion'] = null
+  if (candidate.suggestion !== null) {
+    if (!candidate.suggestion || typeof candidate.suggestion !== 'object' || Array.isArray(candidate.suggestion)) return null
+    const raw = candidate.suggestion as Record<string, unknown>
+    if ((raw.kind !== 'product' && raw.kind !== 'store') || typeof raw.initialName !== 'string') return null
+    suggestion = { kind: raw.kind, initialName: raw.initialName }
+  }
+  const suggestionValues = candidate.suggestionValues === null ? null : parseCatalogSuggestionDraft(candidate.suggestionValues)
+  if (candidate.suggestionValues !== null && !suggestionValues) return null
+  if (suggestion && suggestionValues && suggestion.kind !== suggestionValues.kind) return null
+  if (candidate.serverDraftId !== null && typeof candidate.serverDraftId !== 'string') return null
+  return {
+    version: 1,
+    localVersion: 1,
+    submissionId: candidate.submissionId,
+    product,
+    scope: candidate.scope,
+    store,
+    zipCode: candidate.zipCode as string,
+    radiusMiles: candidate.radiusMiles as string,
+    rewardAmount: candidate.rewardAmount as string,
+    deadline: candidate.deadline as string,
+    requirements: candidate.requirements as string,
+    quantityNeeded: candidate.quantityNeeded as string,
+    variantRequirements: candidate.variantRequirements as string,
+    acceptEquivalent: candidate.acceptEquivalent,
+    selectedRetailers: candidate.selectedRetailers as CatalogSelection[],
+    selectedStores: candidate.selectedStores as CatalogSelection[],
+    showPreview: candidate.showPreview,
+    suggestion,
+    suggestionValues,
+    serverDraftId: candidate.serverDraftId as string | null,
+  }
+}
+
+function isEmptyBountyDraft(value: BountyLocalDraft): boolean {
+  return value.product === null
+    && value.store === null
+    && value.selectedRetailers.length === 0
+    && value.selectedStores.length === 0
+    && value.rewardAmount === ''
+    && value.requirements === ''
+    && value.quantityNeeded === ''
+    && value.variantRequirements === ''
+    && !value.acceptEquivalent
+    && value.suggestion === null
+}
+
 export default function NewBounty() {
+  const [searchParams] = useSearchParams()
+  const requestedDraftId = searchParams.get('draft')
+  const { user } = useAuth()
+  const [submissionId, setSubmissionId] = useState(createDraftSubmissionId)
   const [product, setProduct] = useState<CatalogSelection | null>(null)
   const [scope, setScope] = useState<'region' | 'retailers' | 'stores'>('region')
   const [store, setStore] = useState<CatalogSelection | null>(null)
@@ -77,12 +158,58 @@ export default function NewBounty() {
   const [showPreview, setShowPreview] = useState(false)
   const [draft, setDraft] = useState<ContributionDraft | null>(null)
   const [suggestion, setSuggestion] = useState<{ kind: 'product' | 'store'; initialName: string } | null>(null)
+  const [suggestionValues, setSuggestionValues] = useState<CatalogSuggestionDraftValues | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const restoredLocalDraftRef = useRef(false)
   const toast = useMascotToast()
+
+  const localDraftValue: BountyLocalDraft = {
+    ...currentPayload(),
+    localVersion: 1,
+    submissionId,
+    showPreview,
+    suggestion,
+    suggestionValues,
+    serverDraftId: draft?.id ?? null,
+  }
+  const localDraft = useFormDraft({
+    scope: user ? { userId: user.id, formType: 'bounty', entityId: 'new' } : null,
+    value: localDraftValue,
+    parse: parseBountyLocalDraft,
+    isEmpty: isEmptyBountyDraft,
+    metadata: {
+      title: product?.label || 'Bounty draft',
+      destination: '/bounties/new',
+      submissionId,
+      serverDraftId: draft?.id,
+    },
+    onRestore: (restored) => {
+      restoredLocalDraftRef.current = true
+      setSubmissionId(restored.submissionId)
+      setProduct(restored.product)
+      setScope(restored.scope)
+      setStore(restored.store)
+      setZipCode(restored.zipCode)
+      setRadiusMiles(restored.radiusMiles)
+      setRewardAmount(restored.rewardAmount)
+      setDeadline(restored.deadline)
+      setRequirements(restored.requirements)
+      setQuantityNeeded(restored.quantityNeeded)
+      setVariantRequirements(restored.variantRequirements)
+      setAcceptEquivalent(restored.acceptEquivalent)
+      setSelectedRetailers(restored.selectedRetailers)
+      setSelectedStores(restored.selectedStores)
+      setShowPreview(restored.showPreview)
+      setSuggestion(restored.suggestion)
+      setSuggestionValues(restored.suggestionValues)
+      if (restored.serverDraftId) void loadDraft(restored.serverDraftId, false)
+      trackEvent('draft_restored', { form: 'bounty' })
+    },
+  })
 
   function currentPayload(): BountyPayload {
     return { version: 1, product, scope, store, zipCode, radiusMiles, rewardAmount, deadline, requirements, quantityNeeded, variantRequirements, acceptEquivalent, selectedRetailers, selectedStores }
@@ -93,6 +220,16 @@ export default function NewBounty() {
     if (next && draft && (draft.state === 'waiting_for_approval' || draft.state === 'needs_attention')) {
       setDraft(null)
     }
+  }
+
+  function openSuggestion(kind: 'product' | 'store', initialName: string) {
+    setSuggestion({ kind, initialName })
+    setSuggestionValues(createCatalogSuggestionDraft(kind, initialName))
+  }
+
+  function closeSuggestion() {
+    setSuggestion(null)
+    setSuggestionValues(null)
   }
 
   function handleStoreChange(next: CatalogSelection | null) {
@@ -130,22 +267,25 @@ export default function NewBounty() {
     }
   }
 
-  async function loadDraft() {
+  async function loadDraft(idToLoad: string, restoreFields = true) {
     const { data } = await getMyContributionDrafts()
-    const nextDraft = (data ?? [])
-      .filter((candidate) => candidate.draft_type === 'bounty')
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
-    if (nextDraft) await restoreDraft(nextDraft)
+    const nextDraft = (data ?? []).find((candidate) => candidate.draft_type === 'bounty' && candidate.id === idToLoad)
+    if (!nextDraft) {
+      if (requestedDraftId === idToLoad) setError('That bounty draft could not be found. It may have expired or been discarded.')
+      return
+    }
+    if (restoreFields) await restoreDraft(nextDraft)
+    else setDraft(nextDraft)
   }
 
   useEffect(() => {
-    void loadDraft()
-  }, [])
+    if (requestedDraftId) void loadDraft(requestedDraftId, !restoredLocalDraftRef.current)
+  }, [requestedDraftId])
 
   async function saveDraft() {
     setError(null)
     setDraftLoading(true)
-    const { error: saveError } = await saveContributionDraft({
+    const { data: savedDraftId, error: saveError } = await saveContributionDraft({
       id: draft?.id ?? null,
       type: 'bounty',
       payload: currentPayload(),
@@ -158,7 +298,7 @@ export default function NewBounty() {
       return
     }
     toast('Draft saved!', 'Scout tucked it away safely.')
-    await loadDraft()
+    if (savedDraftId) await loadDraft(savedDraftId)
   }
 
   async function discardDraft() {
@@ -199,8 +339,33 @@ export default function NewBounty() {
       return
     }
     toast('Suggestion submitted!', 'Scout sent it for review.')
-    setSuggestion(null)
-    await loadDraft()
+    closeSuggestion()
+    const savedSuggestion = Array.isArray(result.data) ? result.data[0] : result.data
+    if (savedSuggestion?.draft_id) await loadDraft(savedSuggestion.draft_id)
+  }
+
+  function discardLocalDraft() {
+    localDraft.discard()
+    setSubmissionId(createDraftSubmissionId())
+    setProduct(null)
+    setScope('region')
+    setStore(null)
+    setSelectedRetailers([])
+    setSelectedStores([])
+    setRetailerQuery('')
+    setStoreQuery('')
+    setZipCode(activeMarket.defaultZip)
+    setRadiusMiles('50')
+    setRewardAmount('')
+    setDeadline(localDateTime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)))
+    setRequirements('')
+    setQuantityNeeded('')
+    setVariantRequirements('')
+    setAcceptEquivalent(false)
+    setShowPreview(false)
+    setDraft(null)
+    closeSuggestion()
+    trackEvent('draft_discarded', { form: 'bounty' })
   }
 
   async function handleValidate(): Promise<boolean> {
@@ -288,6 +453,7 @@ export default function NewBounty() {
       return
     }
     trackEvent('post_bounty', { reward_cents: rewardCents, scope })
+    localDraft.discard()
     setSubmitted(true)
   }
 
@@ -315,7 +481,7 @@ export default function NewBounty() {
           <p className="text-sm text-green-700">Your bounty has been submitted and will be visible once approved by a moderator. You can track its status in your bounties list.</p>
           <div className="flex gap-2">
             <Link to="/bounties" className="btn-secondary">View bounties</Link>
-            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setStore(null); setSelectedRetailers([]); setSelectedStores([]); setRewardAmount(''); setRequirements(''); setDraft(null) }}>Post another</button>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setStore(null); setSelectedRetailers([]); setSelectedStores([]); setRewardAmount(''); setRequirements(''); setDraft(null) }}>Post another</button>
           </div>
         </div>
       )}
@@ -323,6 +489,15 @@ export default function NewBounty() {
       {!submitted && (
         <>
       {draft && <ContributionDraftNotice draft={draft} onDiscard={discardDraft} discarding={draftLoading} />}
+      <FormDraftStatus
+        status={localDraft.status}
+        error={localDraft.error}
+        hasDraft={localDraft.hasDraft}
+        hasConflict={Boolean(localDraft.conflict)}
+        onDiscard={discardLocalDraft}
+        onRestoreConflict={localDraft.restoreConflict}
+        onKeepCurrent={localDraft.keepCurrent}
+      />
 
       <form onSubmit={handlePreview} className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         {/* LEFT COLUMN */}
@@ -335,11 +510,11 @@ export default function NewBounty() {
               label="Product"
               value={product}
               onChange={handleProductChange}
-              onSuggest={(initialName) => setSuggestion({ kind: 'product', initialName })}
+              onSuggest={(initialName) => openSuggestion('product', initialName)}
               required
             />
             {suggestion?.kind === 'product' && (
-              <CatalogSuggestionForm kind="product" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
+              <CatalogSuggestionForm kind="product" initialName={suggestion.initialName} value={suggestionValues ?? undefined} onChange={setSuggestionValues} loading={draftLoading} error={suggestionError} onCancel={closeSuggestion} onSubmit={submitSuggestion} />
             )}
           </div>
 
@@ -451,9 +626,9 @@ export default function NewBounty() {
             <div className="space-y-3">
               <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Preferred stores <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
               <p className="text-xs text-gray-500">Select one or more stores.</p>
-              <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={handleStoreChange} onSuggest={(initialName) => setSuggestion({ kind: 'store', initialName })} />
+              <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={handleStoreChange} onSuggest={(initialName) => openSuggestion('store', initialName)} />
               {suggestion?.kind === 'store' && (
-                <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} loading={draftLoading} error={suggestionError} onCancel={() => setSuggestion(null)} onSubmit={submitSuggestion} />
+                <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} value={suggestionValues ?? undefined} onChange={setSuggestionValues} loading={draftLoading} error={suggestionError} onCancel={closeSuggestion} onSubmit={submitSuggestion} />
               )}
               <div>
                 <label className="label" htmlFor="store-search">Or add multiple stores</label>

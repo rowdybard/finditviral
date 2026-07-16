@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Megaphone, MapPin, ShieldCheck, Users } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
+import FormDraftStatus from '../components/FormDraftStatus'
+import { useAuth } from '../contexts/AuthContext'
+import { useFormDraft } from '../hooks/useFormDraft'
 import { createLead } from '../lib/launchApi'
+import { createDraftSubmissionId } from '../lib/formDraftStore'
 import { activeMarket } from '../lib/market'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
@@ -17,7 +21,68 @@ const sourceTypeOptions = [
 
 const radiusOptions = [10, 25, 50, 100, 250]
 
+type LeadLocalDraft = {
+  version: 1
+  submissionId: string
+  product: CatalogSelection | null
+  headline: string
+  details: string
+  expectedDate: string
+  scope: 'region' | 'stores'
+  store: CatalogSelection | null
+  zipCode: string
+  radiusMiles: string
+  sourceType: typeof sourceTypeOptions[number]['value']
+  sourceUrl: string
+}
+
+function isSelection(value: unknown): value is CatalogSelection {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.id === 'string' && typeof candidate.label === 'string' && typeof candidate.detail === 'string'
+}
+
+function parseLeadLocalDraft(value: unknown): LeadLocalDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (candidate.version !== 1 || typeof candidate.submissionId !== 'string') return null
+  const product = candidate.product === null ? null : isSelection(candidate.product) ? candidate.product : undefined
+  const store = candidate.store === null ? null : isSelection(candidate.store) ? candidate.store : undefined
+  if (product === undefined || store === undefined) return null
+  const stringFields = ['headline', 'details', 'expectedDate', 'zipCode', 'radiusMiles', 'sourceUrl'] as const
+  if (stringFields.some((field) => typeof candidate[field] !== 'string')) return null
+  if (candidate.scope !== 'region' && candidate.scope !== 'stores') return null
+  if (!sourceTypeOptions.some((option) => option.value === candidate.sourceType)) return null
+  return {
+    version: 1,
+    submissionId: candidate.submissionId,
+    product,
+    headline: candidate.headline as string,
+    details: candidate.details as string,
+    expectedDate: candidate.expectedDate as string,
+    scope: candidate.scope,
+    store,
+    zipCode: candidate.zipCode as string,
+    radiusMiles: candidate.radiusMiles as string,
+    sourceType: candidate.sourceType as LeadLocalDraft['sourceType'],
+    sourceUrl: candidate.sourceUrl as string,
+  }
+}
+
+function isEmptyLeadDraft(value: LeadLocalDraft): boolean {
+  return value.product === null
+    && value.headline === ''
+    && value.details === ''
+    && value.expectedDate === ''
+    && value.store === null
+    && value.sourceUrl === ''
+    && value.scope === 'region'
+    && value.sourceType === 'employee_tip'
+}
+
 export default function NewLead() {
+  const { user } = useAuth()
+  const [submissionId, setSubmissionId] = useState(createDraftSubmissionId)
   const [product, setProduct] = useState<CatalogSelection | null>(null)
   const [headline, setHeadline] = useState('')
   const [details, setDetails] = useState('')
@@ -31,6 +96,44 @@ export default function NewLead() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+
+  const localDraft = useFormDraft({
+    scope: user ? { userId: user.id, formType: 'lead', entityId: 'new' } : null,
+    value: { version: 1, submissionId, product, headline, details, expectedDate, scope, store, zipCode, radiusMiles, sourceType, sourceUrl } satisfies LeadLocalDraft,
+    parse: parseLeadLocalDraft,
+    isEmpty: isEmptyLeadDraft,
+    metadata: { title: product?.label || headline.trim() || 'Restock lead draft', destination: '/leads/new', submissionId },
+    onRestore: (restored) => {
+      setSubmissionId(restored.submissionId)
+      setProduct(restored.product)
+      setHeadline(restored.headline)
+      setDetails(restored.details)
+      setExpectedDate(restored.expectedDate)
+      setScope(restored.scope)
+      setStore(restored.store)
+      setZipCode(restored.zipCode)
+      setRadiusMiles(restored.radiusMiles)
+      setSourceType(restored.sourceType)
+      setSourceUrl(restored.sourceUrl)
+      trackEvent('draft_restored', { form: 'lead' })
+    },
+  })
+
+  function discardLocalDraft() {
+    localDraft.discard()
+    setSubmissionId(createDraftSubmissionId())
+    setProduct(null)
+    setHeadline('')
+    setDetails('')
+    setExpectedDate('')
+    setScope('region')
+    setStore(null)
+    setZipCode(activeMarket.defaultZip)
+    setRadiusMiles('50')
+    setSourceType('employee_tip')
+    setSourceUrl('')
+    trackEvent('draft_discarded', { form: 'lead' })
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -78,6 +181,7 @@ export default function NewLead() {
     }
 
     trackEvent('post_lead', { scope, source_type: sourceType })
+    localDraft.discard()
     setSubmitted(true)
   }
 
@@ -105,12 +209,22 @@ export default function NewLead() {
           </p>
           <div className="flex gap-2">
             <Link to="/sightings" className="btn-secondary">Back to sightings</Link>
-            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setProduct(null); setHeadline(''); setDetails(''); setExpectedDate(''); setStore(null); setError(null) }}>Share another</button>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setHeadline(''); setDetails(''); setExpectedDate(''); setStore(null); setError(null) }}>Share another</button>
           </div>
         </div>
       )}
 
       {!submitted && (
+        <>
+        <FormDraftStatus
+          status={localDraft.status}
+          error={localDraft.error}
+          hasDraft={localDraft.hasDraft}
+          hasConflict={Boolean(localDraft.conflict)}
+          onDiscard={discardLocalDraft}
+          onRestoreConflict={localDraft.restoreConflict}
+          onKeepCurrent={localDraft.keepCurrent}
+        />
         <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_1fr]">
           {/* LEFT COLUMN */}
           <div className="space-y-6">
@@ -294,6 +408,7 @@ export default function NewLead() {
             </button>
           </div>
         </form>
+        </>
       )}
     </div>
   )

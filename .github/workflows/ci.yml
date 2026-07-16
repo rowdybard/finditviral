@@ -52,7 +52,7 @@ jobs:
         if: always()
         run: supabase stop --no-backup
 
-  worker:
+  workers:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -64,4 +64,21 @@ jobs:
       - run: npm ci
       - run: npm run check:worker
       - run: npm run test:worker
+      - run: npm run types:trend-engine -- --check
+      - run: npm run check:trend-engine
+      - run: npm run test:trend-engine
       - run: npx wrangler deploy --dry-run --config workers/interest-digest/wrangler.jsonc
+      - run: npx wrangler deploy --dry-run --config workers/trend-engine/wrangler.jsonc
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

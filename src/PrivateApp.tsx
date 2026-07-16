@@ -16,12 +16,19 @@ import Profile from './pages/Profile'
 import Sightings from './pages/Sightings'
 import TrendPage from './pages/TrendPage'
 import { buildOnboardingPath, locationReturnPath } from './lib/authReturn'
+import AuthRecoveryNotice from './components/AuthRecoveryNotice'
 
 export function OnboardingRedirect({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, authStatus, profileStatus, retryAuth } = useAuth()
   const location = useLocation()
 
   if (loading || !user) return <>{children}</>
+  if (
+    !profile
+    && (authStatus === 'recovering' || profileStatus === 'recoverable-error')
+  ) {
+    return <AuthRecoveryNotice onRetry={retryAuth} />
+  }
   const needsOnboarding = !profile || !profile.onboarding_completed
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to={buildOnboardingPath(locationReturnPath(location))} replace />
@@ -33,7 +40,11 @@ export default function PrivateApp() {
   return (
     <Routes>
         <Route path="/auth" element={<Auth />} />
-        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        <Route path="/onboarding" element={
+          <ProtectedRoute>
+            <OnboardingRedirect><Onboarding /></OnboardingRedirect>
+          </ProtectedRoute>
+        } />
         <Route path="*" element={
           <ProtectedRoute>
             <Layout>

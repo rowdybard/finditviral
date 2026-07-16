@@ -2,6 +2,7 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type {
   AdminContribution,
+  AdminReviewCounts,
   AdminMemberSearchResult,
   AdminProduct,
   AdminStore,
@@ -21,6 +22,9 @@ import type {
   ProductSearchResult,
   RetailerSearchResult,
   Sighting,
+  SightingSubmissionResult,
+  SightingVerificationResponse,
+  SightingVerificationSummary,
   Store,
   StoreSearchResult,
 } from '../types/database'
@@ -134,6 +138,7 @@ export async function suggestStoreForDraft(input: {
 }
 
 export async function createSightingsBatch(input: {
+  submissionId: string
   productId: string
   storeIds: string[]
   seenAt: string
@@ -142,8 +147,9 @@ export async function createSightingsBatch(input: {
   notes: string | null
   draftId: string | null
   photoUrls: string[] | null
-}): RpcResult<string[]> {
-  return callRpc<string[]>('create_sightings_batch', {
+}): RpcResult<SightingSubmissionResult> {
+  return callRpc<SightingSubmissionResult>('submit_sightings_v2', {
+    p_submission_id: input.submissionId,
     p_product_id: input.productId,
     p_store_ids: input.storeIds,
     p_seen_at: input.seenAt,
@@ -152,6 +158,35 @@ export async function createSightingsBatch(input: {
     p_notes: input.notes,
     p_draft_id: input.draftId,
     p_photo_urls: input.photoUrls,
+  })
+}
+
+export async function setSightingVerification(
+  sightingId: string,
+  response: SightingVerificationResponse,
+): RpcResult<SightingVerificationSummary | null> {
+  const result = await callRpc<SightingVerificationSummary | SightingVerificationSummary[]>(
+    'set_sighting_verification',
+    { p_sighting_id: sightingId, p_response: response },
+  )
+  return { data: firstRow(result.data), error: result.error }
+}
+
+export async function removeSightingVerification(
+  sightingId: string,
+): RpcResult<SightingVerificationSummary | null> {
+  const result = await callRpc<SightingVerificationSummary | SightingVerificationSummary[]>(
+    'remove_sighting_verification',
+    { p_sighting_id: sightingId },
+  )
+  return { data: firstRow(result.data), error: result.error }
+}
+
+export async function getSightingVerificationSummaries(
+  sightingIds: string[],
+): RpcResult<SightingVerificationSummary[]> {
+  return callRpc<SightingVerificationSummary[]>('get_sighting_verification_summaries', {
+    p_sighting_ids: sightingIds,
   })
 }
 
@@ -266,6 +301,11 @@ export async function listPublicBounties(filters: {
 
 export async function isAppOwner(): RpcResult<boolean> {
   return callRpc<boolean>('is_app_owner')
+}
+
+export async function getAdminReviewCounts(): RpcResult<AdminReviewCounts | null> {
+  const result = await callRpc<AdminReviewCounts | AdminReviewCounts[]>('get_admin_review_counts')
+  return { data: firstRow(result.data), error: result.error }
 }
 
 export async function adminListProductSuggestions(): RpcResult<CatalogSuggestion[]> {

@@ -1,6 +1,6 @@
 -- Issue 3: Contribution moderation (pending → approve)
--- Verify that new sightings/bounties are created as pending and excluded
--- from public listing, and that approve action makes them public.
+-- Trusted catalog sightings publish immediately through submit_sightings_v2;
+-- pending contributions remain excluded until an owner approves them.
 
 begin;
 
@@ -9,7 +9,7 @@ set search_path = public, extensions;
 
 select plan(4);
 
--- New sightings should default to pending + is_public = false
+-- Legacy entry points delegate to the trusted standard submission workflow.
 select ok(
   exists (
     select 1
@@ -17,10 +17,9 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'create_sighting'
-      and pg_get_functiondef(p.oid) ~ 'moderation_status'
-      and pg_get_functiondef(p.oid) ~ '''pending'''
+      and pg_get_functiondef(p.oid) ~ 'submit_sightings_v2'
   ),
-  'create_sighting sets moderation_status to pending'
+  'create_sighting delegates to the trusted v2 sighting workflow'
 );
 
 -- Pending sightings should not appear in list_public_sightings
