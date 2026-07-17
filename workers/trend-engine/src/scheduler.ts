@@ -13,7 +13,7 @@ import {
 } from './repository'
 
 export const SOURCE_POLL_CRON = '*/5 * * * *'
-export const SCORE_CRON = '3,13,23,33,43,53 * * * *'
+export const SCORE_CRON = '*/5 * * * *'
 export const PATCH_CRON = '8 * * * *'
 export const RETENTION_CRON = '37 3 * * *'
 
@@ -66,10 +66,12 @@ export async function processScheduledRun(
   try {
     await cleanupCronRuns(env.DB, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
     if (controller.cron === SOURCE_POLL_CRON) {
+      const queuedSources = await enqueueDueSources(env, scheduledAt, executionKey)
+      const recomputedCandidates = await recomputeAllCandidates(env.DB, now)
       return {
         duplicate: false,
-        queuedSources: await enqueueDueSources(env, scheduledAt, executionKey),
-        recomputedCandidates: 0,
+        queuedSources,
+        recomputedCandidates,
         patchId: null,
       }
     }
