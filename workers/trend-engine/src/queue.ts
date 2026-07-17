@@ -31,6 +31,14 @@ function retryDelay(attempts: number): number {
   return Math.min(30 * (2 ** Math.max(0, attempts - 1)), 3600)
 }
 
+export function researchRetryDelay(error: unknown, attempts: number): number {
+  const exponentialDelay = retryDelay(attempts)
+  if (!(error instanceof EngineError) || !error.retryAfterSeconds) return exponentialDelay
+  // The reset window is authoritative for the provider quota; the exponential
+  // delay still prevents rapid retries if a malformed header is ever returned.
+  return Math.min(Math.max(exponentialDelay, error.retryAfterSeconds), 3600)
+}
+
 export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
   for (const message of batch.messages) {
     if (isResearchMessage(message.body)) {
@@ -39,14 +47,16 @@ export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMes
       if (claim === 'completed') { message.ack(); continue }
       if (claim === 'busy') { message.retry({ delaySeconds: 60 }); continue }
       try {
-        await executeResearchRun(env, message.body.run_id, now)
-        logEvent('info', 'openai_research_completed', { message_id: message.id, run_id: message.body.run_id })
+        const useDefaultWebResultBudget = message.attempts > 1
+        await executeResearchRun(env, message.body.run_id, now, { useDefaultWebResultBudget })
+        logEvent('info', 'openai_research_completed', { message_id: message.id, run_id: message.body.run_id, web_result_budget: useDefaultWebResultBudget ? 'default' : 'unlimited' })
         message.ack()
       } catch (error) {
         const retryable = !(error instanceof EngineError) || error.retryable
         await recordResearchFailure(env, message.body.run_id, error, retryable)
-        logError('openai_research_failed', error, { message_id: message.id, run_id: message.body.run_id, retryable })
-        if (retryable) message.retry({ delaySeconds: retryDelay(message.attempts) })
+        const delaySeconds = researchRetryDelay(error, message.attempts)
+        logError('openai_research_failed', error, { message_id: message.id, run_id: message.body.run_id, retryable, delay_seconds: retryable ? delaySeconds : null })
+        if (retryable) message.retry({ delaySeconds })
         else message.ack()
       }
       continue

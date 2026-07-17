@@ -34,6 +34,31 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function rateLimitResetSeconds(value: string | null): number | undefined {
+  if (!value) return undefined
+  let matched = false
+  let seconds = 0
+  for (const match of value.matchAll(/(\d+(?:\.\d+)?)(ms|s|m|h)/g)) {
+    matched = true
+    const amount = Number(match[1])
+    const unit = match[2]
+    seconds += amount * (unit === 'ms' ? 0.001 : unit === 's' ? 1 : unit === 'm' ? 60 : 3600)
+  }
+  return matched && Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+}
+
+function providerRetryAfterSeconds(response: Response): number | undefined {
+  const resets = [
+    response.headers.get('x-ratelimit-reset-tokens'),
+    response.headers.get('x-ratelimit-reset-project-tokens'),
+    response.headers.get('x-ratelimit-reset-requests'),
+  ].flatMap((value) => {
+    const seconds = rateLimitResetSeconds(value)
+    return seconds === undefined ? [] : [seconds]
+  })
+  return resets.length > 0 ? Math.max(...resets) : undefined
+}
+
 function openAiHttpFailure(response: Response): EngineError {
   const requestId = response.headers.get('x-request-id')
   const requestSuffix = requestId ? ` OpenAI request ID: ${requestId}.` : ''
@@ -47,7 +72,9 @@ function openAiHttpFailure(response: Response): EngineError {
     return new EngineError('OPENAI_RESEARCH_MODEL_UNAVAILABLE', `The configured OpenAI research model is unavailable to this API project.${requestSuffix}`, 502, false)
   }
   if (response.status === 429) {
-    return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${requestSuffix}`, 502, true)
+    const retryAfterSeconds = providerRetryAfterSeconds(response)
+    const retrySuffix = retryAfterSeconds ? ` Retrying after the provider reset window (about ${retryAfterSeconds}s).` : ''
+    return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${retrySuffix}${requestSuffix}`, 502, true, retryAfterSeconds)
   }
   if (response.status >= 500 || response.status === 408) {
     return new EngineError('OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE', `OpenAI research is temporarily unavailable (HTTP ${response.status}).${requestSuffix}`, 502, true)
@@ -345,7 +372,7 @@ function responseSchema(): JsonRecord {
   }
 }
 
-async function callOpenAi(env: Env): Promise<JsonRecord> {
+async function callOpenAi(env: Env, useDefaultWebResultBudget: boolean): Promise<JsonRecord> {
   if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY.length < 20) {
     throw new EngineError('OPENAI_RESEARCH_NOT_CONFIGURED', 'OPENAI_API_KEY is missing or invalid.', 500, false)
   }
@@ -356,7 +383,11 @@ async function callOpenAi(env: Env): Promise<JsonRecord> {
       model: configuredModel(env),
       max_output_tokens: MAX_OUTPUT_TOKENS,
       reasoning: { effort: 'high' },
-      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'unlimited' }],
+      // Preserve broad discovery (the high context and five lanes) on every
+      // attempt. A retry uses the provider's normal result budget so a 429 can
+      // recover without asking the same rate-limited project for unbounded
+      // retrieved page text again.
+      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: useDefaultWebResultBudget ? 'default' : 'unlimited' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
       input: `You are FindItViral's high-recall consumer-product scout. Research newly viral, buyable products in the United States across collectibles, food, beauty, technology, apparel, home, and retail launches. Look above, below, and between the obvious headlines: uncover early chatter before it becomes mainstream, then verify it.
@@ -396,10 +427,10 @@ export async function enqueueResearchRun(env: Env, input: { trigger: 'scheduled'
   return result
 }
 
-export async function executeResearchRun(env: Env, runId: string, now = new Date()): Promise<void> {
+export async function executeResearchRun(env: Env, runId: string, now = new Date(), options: { useDefaultWebResultBudget?: boolean } = {}): Promise<void> {
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'Research run does not exist.', 404, false)
-  const response = await callOpenAi(env)
+  const response = await callOpenAi(env, options.useDefaultWebResultBudget === true)
   const research = await recordsFromResponse(response, run, now)
   const ingestion = { received: 0, accepted: 0, duplicates: 0, candidateIds: [] as string[] }
   for (let index = 0; index < research.records.length; index += 4) {

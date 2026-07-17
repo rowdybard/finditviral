@@ -2,13 +2,16 @@ export class EngineError extends Error {
   readonly code: string
   readonly status: number
   readonly retryable: boolean
+  /** Provider-recommended pause before the next attempt, when available. */
+  readonly retryAfterSeconds?: number
 
-  constructor(code: string, message: string, status = 500, retryable = false) {
+  constructor(code: string, message: string, status = 500, retryable = false, retryAfterSeconds?: number) {
     super(message)
     this.name = 'EngineError'
     this.code = code
     this.status = status
     this.retryable = retryable
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 

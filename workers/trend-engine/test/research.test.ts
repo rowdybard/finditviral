@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { claimResearchRun, getResearchRun, researchRunView } from '../src/repository'
 import { enqueueResearchRun, executeResearchRun, recordResearchFailure } from '../src/research'
+import { researchRetryDelay } from '../src/queue'
 import worker from '../src/index'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -125,6 +126,40 @@ describe('OpenAI research', () => {
       code: 'OPENAI_RESEARCH_AUTH_FAILED',
       retryable: false,
     })
+    await recordResearchFailure(env, queued.run.id, failure, false)
+  })
+
+  it('uses the default web result budget only after a rate-limited attempt, while preserving high search context', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `manual-rate-retry-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T14:15:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    const fetchMock = vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await executeResearchRun(env, queued.run.id, now, { useDefaultWebResultBudget: true })
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)
+    expect(requestBody.tools).toEqual([{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }])
+    expect(requestBody.max_output_tokens).toBe(8_000)
+    expect(requestBody.reasoning).toEqual({ effort: 'high' })
+  })
+
+  it('honors the provider token reset window after a 429 response', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `manual-rate-limit-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T14:30:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'x-ratelimit-reset-tokens': '6m0s' },
+    })))
+
+    const failure = await executeResearchRun(env, queued.run.id, now).catch((error: unknown) => error)
+    expect(failure).toMatchObject({ code: 'OPENAI_RESEARCH_RATE_LIMITED', retryable: true, retryAfterSeconds: 360 })
+    expect(researchRetryDelay(failure, 1)).toBe(360)
+    // The queue records this before retrying. Clean up the focused direct-call
+    // fixture so it does not occupy the single active-run slot for later tests.
     await recordResearchFailure(env, queued.run.id, failure, false)
   })
 
