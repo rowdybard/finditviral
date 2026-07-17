@@ -44,6 +44,16 @@ export default function Navbar() {
 
         <nav className="relative flex w-full items-center justify-between gap-0.5 border-t border-stone-200 pt-2 sm:w-auto sm:justify-start sm:gap-1 sm:border-t-0 sm:pt-0">
           <NavLink
+            to="/products"
+            className={({ isActive }) =>
+              `rounded-lg px-2 py-1.5 text-sm font-medium transition-colors ${
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-stone-600 hover:bg-stone-100'
+              }`
+            }
+          >
+            Browse
+          </NavLink>
+          <NavLink
             to="/bounties"
             className={({ isActive }) =>
               `rounded-lg px-2 py-1.5 text-sm font-medium transition-colors ${

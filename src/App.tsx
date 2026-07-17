@@ -7,6 +7,7 @@ import LeadDetail from './pages/LeadDetail'
 import NewLead from './pages/NewLead'
 import Privacy from './pages/Privacy'
 import ProductPage from './pages/ProductPage'
+import Products from './pages/Products'
 import StorePage from './pages/StorePage'
 import Stores from './pages/Stores'
 import CatalogLayout from './components/CatalogLayout'
@@ -57,6 +58,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<EarlyAccess />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/products" element={<CatalogLayout><Products /></CatalogLayout>} />
       <Route path="/products/:slug" element={<CatalogLayout><ProductPage /></CatalogLayout>} />
       <Route path="/stores" element={<CatalogLayout><Stores /></CatalogLayout>} />
       <Route path="/stores/:slug" element={<CatalogLayout><StorePage /></CatalogLayout>} />

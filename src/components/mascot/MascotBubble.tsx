@@ -63,6 +63,7 @@ export default function MascotBubble({
 
   const vertical = placement.openUp ? 'bottom-full mb-2' : 'top-full mt-2'
   const horizontal = placement.openLeft ? 'right-0' : 'left-0'
+  const canNavigate = notification.link.startsWith('/') && notification.link !== '/'
 
   return (
     <div
@@ -88,18 +89,17 @@ export default function MascotBubble({
           </svg>
         </button>
       </div>
-      <Link
-        to={notification.link}
-        onClick={() => setLeaving(true)}
-        className="block"
-      >
+      {canNavigate ? <Link to={notification.link} onClick={() => setLeaving(true)} className="block">
         <p className="text-sm font-black leading-tight text-stone-950">
           {notification.title}
         </p>
         <p className="mt-0.5 text-xs font-medium text-stone-600">
           {notification.subtitle}
         </p>
-      </Link>
+      </Link> : <div>
+        <p className="text-sm font-black leading-tight text-stone-950">{notification.title}</p>
+        <p className="mt-0.5 text-xs font-medium text-stone-600">{notification.subtitle}</p>
+      </div>}
       {/* Speech tail */}
       <div
         className={`absolute ${placement.openUp ? '-bottom-2 border-r-2 border-b-2' : '-top-2 border-l-2 border-t-2'} ${placement.openLeft ? 'right-6' : 'left-6'} h-4 w-4 rotate-45`}

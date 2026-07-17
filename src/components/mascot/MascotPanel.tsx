@@ -47,7 +47,7 @@ export default function MascotPanel({
           <ul>
             {notifications.map((n) => (
               <li key={n.id} className="border-b border-stone-200 last:border-b-0">
-                <Link to={n.link} onClick={onClose} className="block px-3 py-2 hover:bg-stone-100">
+                {n.link.startsWith('/') && n.link !== '/' ? <Link to={n.link} onClick={onClose} className="block px-3 py-2 hover:bg-stone-100">
                   <span
                     className={`text-[10px] font-black uppercase tracking-wider ${
                       n.type === 'sighting' ? 'text-green-700'
@@ -59,7 +59,11 @@ export default function MascotPanel({
                   </span>
                   <p className="text-sm font-black leading-tight text-stone-950">{n.title}</p>
                   <p className="text-xs font-medium text-stone-600">{n.subtitle}</p>
-                </Link>
+                </Link> : <div className="px-3 py-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-600">Update</span>
+                  <p className="text-sm font-black leading-tight text-stone-950">{n.title}</p>
+                  <p className="text-xs font-medium text-stone-600">{n.subtitle}</p>
+                </div>}
               </li>
             ))}
           </ul>
