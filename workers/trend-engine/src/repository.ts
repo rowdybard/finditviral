@@ -7,6 +7,7 @@ import type {
   ScoreSnapshot,
   ResearchRunRow,
   ResearchRunDiagnostics,
+  EvidenceClassification,
   ResearchTrigger,
   SignalType,
   SourceRow,
@@ -243,9 +244,11 @@ const CANDIDATE_PROJECTION = `
     s.signal_count,
     s.state,
     s.score_version,
-    s.computed_at AS score_computed_at
+    s.computed_at AS score_computed_at,
+    re.explanation_json AS research_explanation_json
   FROM candidates c
   LEFT JOIN current_scores s ON s.candidate_id = c.id
+  LEFT JOIN candidate_research_explanations re ON re.candidate_id = c.id
 `
 
 export async function getCandidate(db: D1Database, candidateId: string): Promise<CandidateProjectionRow | null> {
@@ -548,13 +551,16 @@ function parseJsonArray(value: string): unknown[] {
 }
 
 function parseResearchDiagnostics(value: string): ResearchRunDiagnostics {
-  const empty: ResearchRunDiagnostics = { source_urls: [], candidates: [], summary: null }
+  const empty: ResearchRunDiagnostics = { source_urls: [], discovery_lanes: [], candidates: [], summary: null }
   try {
     const parsed: unknown = JSON.parse(value)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return empty
     const record = parsed as Record<string, unknown>
     const sourceUrls = Array.isArray(record.source_urls)
       ? record.source_urls.filter((url): url is string => typeof url === 'string').slice(0, 40)
+      : []
+    const discoveryLanes = Array.isArray(record.discovery_lanes)
+      ? record.discovery_lanes.filter((lane): lane is string => typeof lane === 'string').slice(0, 4)
       : []
     const candidates = Array.isArray(record.candidates) ? record.candidates.flatMap((value) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return []
@@ -570,9 +576,14 @@ function parseResearchDiagnostics(value: string): ResearchRunDiagnostics {
       const reasons = Array.isArray(candidate.rejection_reasons)
         ? candidate.rejection_reasons.filter((reason): reason is string => typeof reason === 'string').slice(0, 8)
         : []
-      return [{ name, product_url: productUrl, evidence_urls: evidenceUrls, matched_evidence_count: matched, rejection_reasons: reasons }]
+      const whyDiscovered = Array.isArray(candidate.why_discovered) ? candidate.why_discovered.filter((reason): reason is string => typeof reason === 'string').slice(0, 4) : []
+      const missingValidation = Array.isArray(candidate.missing_validation) ? candidate.missing_validation.filter((reason): reason is string => typeof reason === 'string').slice(0, 4) : []
+      const classifications = Array.isArray(candidate.evidence_classifications) ? candidate.evidence_classifications.filter((classification): classification is EvidenceClassification => typeof classification === 'string' && ['brand_owned', 'founder_owned', 'press_release', 'retailer_listing', 'independent_editorial', 'independent_social', 'consumer_activity'].includes(classification)).slice(0, 2) : []
+      const maximumState: 'emerging' | null = candidate.maximum_state === 'emerging' ? 'emerging' : null
+      const countFlag = typeof candidate.count_flag === 'string' ? candidate.count_flag : null
+      return [{ name, product_url: productUrl, evidence_urls: evidenceUrls, matched_evidence_count: matched, rejection_reasons: reasons, why_discovered: whyDiscovered, missing_validation: missingValidation, evidence_classifications: classifications, maximum_state: maximumState, count_flag: countFlag }]
     }).slice(0, 12) : []
-    return { source_urls: sourceUrls, candidates, summary: typeof record.summary === 'string' ? record.summary : null }
+    return { source_urls: sourceUrls, discovery_lanes: discoveryLanes, candidates, summary: typeof record.summary === 'string' ? record.summary : null }
   } catch {
     return empty
   }
@@ -619,7 +630,7 @@ export async function createOrGetResearchRun(
   const result = await db.prepare(`
     INSERT OR IGNORE INTO research_runs (
       id, request_key, trigger_type, status, model, prompt_version, created_at
-    ) VALUES (?, ?, ?, 'queued', ?, 'consumer-products-v1', ?)
+    ) VALUES (?, ?, ?, 'queued', ?, 'consumer-products-v2', ?)
   `).bind(id, input.requestKey, input.trigger, input.model, input.now).run()
   if (result.meta.changes > 0) {
     const run = await getResearchRun(db, id)

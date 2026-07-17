@@ -52,6 +52,26 @@ describe('viral score', () => {
     expect(threeSources.sourceCount).toBe(3)
   })
 
+  it('requires two distinct signal categories before promoting a candidate to trending', () => {
+    const oneCategory = computeScore([
+      signal('source-a'), signal('source-b'), signal('source-c'),
+    ], null, now)
+    expect(oneCategory.state).toBe('emerging')
+    expect(oneCategory.explanation.confirmed_signal_categories).toEqual(['social_velocity'])
+    expect(oneCategory.explanation.trending_gate_passed).toBe(false)
+  })
+
+  it('caps launch-led research at emerging with conservative confidence', () => {
+    const result = computeScore([
+      signal('source-a'),
+      signal('source-b', { signalType: 'search_interest' }),
+      signal('source-c', { signalType: 'marketplace_rank' }),
+    ], null, now, { maximumState: 'emerging', maximumConfidence: 0.45 })
+    expect(result.state).toBe('emerging')
+    expect(result.confidence).toBeLessThanOrEqual(0.45)
+    expect(result.explanation.maximum_state).toBe('emerging')
+  })
+
   it('moves a formerly trending candidate into cooling when momentum reverses', () => {
     const result = computeScore([
       signal('source-a', { value: 55, velocity: -0.8 }),

@@ -5,6 +5,8 @@ import {
   type AvailabilityStatus,
   type CatalogOverrides,
   type EngineMode,
+  type EvidenceClassification,
+  type ResearchExplanation,
   type ViralSignalBatchV1,
   type ViralSignalV1,
 } from './domain'
@@ -151,6 +153,34 @@ function parseSearchTerms(value: unknown, path: string, issues: string[]): strin
   return terms
 }
 
+function parseResearchExplanation(value: unknown, path: string, issues: string[]): ResearchExplanation | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) { issues.push(`${path} must be an object`); return undefined }
+  rejectUnknownKeys(value, ['why_discovered', 'missing_validation', 'evidence_classifications', 'maximum_state', 'maximum_confidence'], path, issues)
+  const strings = (key: 'why_discovered' | 'missing_validation', required: boolean): string[] => {
+    const raw = value[key]
+    if (!Array.isArray(raw)) { if (required) issues.push(`${path}.${key} must be an array`); return [] }
+    if (raw.length > 4) issues.push(`${path}.${key} may contain at most 4 items`)
+    return raw.flatMap((item, index) => {
+      if (typeof item !== 'string' || item.trim().length < 3 || item.trim().length > 240) { issues.push(`${path}.${key}[${index}] must be 3 to 240 characters`); return [] }
+      return [item.trim()]
+    }).slice(0, 4)
+  }
+  const whyDiscovered = strings('why_discovered', true)
+  const missingValidation = strings('missing_validation', true)
+  const validClassifications: EvidenceClassification[] = ['brand_owned', 'founder_owned', 'press_release', 'retailer_listing', 'independent_editorial', 'independent_social', 'consumer_activity']
+  const rawClassifications = value.evidence_classifications
+  const classifications = Array.isArray(rawClassifications) ? rawClassifications.flatMap((item, index) => {
+    if (typeof item !== 'string' || !validClassifications.includes(item as EvidenceClassification)) { issues.push(`${path}.evidence_classifications[${index}] is invalid`); return [] }
+    return [item as EvidenceClassification]
+  }).slice(0, 2) : []
+  if (!Array.isArray(rawClassifications) || classifications.length === 0) issues.push(`${path}.evidence_classifications must identify the cited evidence`)
+  const maximumState = value.maximum_state === 'emerging' ? 'emerging' : null
+  if (value.maximum_state !== null && value.maximum_state !== 'emerging') issues.push(`${path}.maximum_state must be emerging or null`)
+  const maximumConfidence = value.maximum_confidence === null ? null : requiredNumber(value, 'maximum_confidence', path, issues, 0, 0.45)
+  return { why_discovered: whyDiscovered, missing_validation: missingValidation, evidence_classifications: classifications, maximum_state: maximumState, maximum_confidence: maximumConfidence }
+}
+
 function parseHostAllowlist(value: unknown, path: string, issues: string[]): string[] {
   if (value === undefined) return []
   if (!Array.isArray(value) || value.length > 20) {
@@ -215,7 +245,7 @@ function parseSignal(input: unknown, index: number, nowMs: number, issues: strin
   const candidatePath = `${path}.candidate`
   rejectUnknownKeys(input.candidate, [
     'external_id', 'name', 'brand', 'gtin', 'category', 'topic', 'product_url',
-    'image_url', 'search_terms', 'availability_status', 'release_date',
+    'image_url', 'search_terms', 'availability_status', 'release_date', 'research_explanation',
   ], candidatePath, issues)
   const externalId = requiredString(input.candidate, 'external_id', candidatePath, issues, 160)
   const name = requiredString(input.candidate, 'name', candidatePath, issues, 160)
@@ -259,6 +289,7 @@ function parseSignal(input: unknown, index: number, nowMs: number, issues: strin
     `${candidatePath}.release_date`,
     issues,
   )
+  const researchExplanation = parseResearchExplanation(input.candidate.research_explanation, `${candidatePath}.research_explanation`, issues)
 
   if (!isRecord(input.signal)) {
     issues.push(`${path}.signal must be an object`)
@@ -315,6 +346,7 @@ function parseSignal(input: unknown, index: number, nowMs: number, issues: strin
       ...(searchTerms ? { search_terms: searchTerms } : {}),
       ...(availabilityStatus ? { availability_status: availabilityStatus } : {}),
       ...(releaseDate ? { release_date: releaseDate } : {}),
+      ...(researchExplanation ? { research_explanation: researchExplanation } : {}),
     },
     signal: {
       type: signalTypeValue as typeof SIGNAL_TYPES[number],

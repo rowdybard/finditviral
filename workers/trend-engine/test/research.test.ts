@@ -6,7 +6,7 @@ import worker from '../src/index'
 
 afterEach(() => vi.unstubAllGlobals())
 
-function response(citations: string[], candidateUrls = citations): Response {
+function response(citations: string[], candidateUrls = citations, reviewMetrics: Record<string, unknown> = { rating_count: null, question_count: null, count_confidence: null, supporting_quote: null }): Response {
   return new Response(JSON.stringify({
     output: [
       { type: 'web_search_call', action: { sources: citations.map((url) => ({ type: 'url', url })) } },
@@ -18,6 +18,10 @@ function response(citations: string[], candidateUrls = citations): Response {
           availability_status: 'available', topic: { name: 'Pocket Creativity' },
           signal: { type: 'social_velocity', value: 82, velocity: 0.5 }, confidence: 0.7,
           evidence_urls: candidateUrls,
+          evidence: candidateUrls.map((url, index) => ({ url, classification: index === 0 ? 'independent_social' : 'retailer_listing', supporting_quote: `Evidence ${index + 1} supports this candidate.` })),
+          why_discovered: ['Independent consumer conversation and retail availability appeared in the current search.'],
+          missing_validation: ['No verified seven-day search baseline was found.'],
+          review_metrics: reviewMetrics,
         }] }),
         annotations: [],
       }] },
@@ -36,8 +40,8 @@ describe('OpenAI research', () => {
     const now = new Date('2026-07-17T12:00:00.000Z')
     expect(await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())).toBe('claimed')
     const fetchMock = vi.fn().mockResolvedValue(response([
-      'https://evidence.example.com/article-one',
-      'https://evidence.example.com/article-two',
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
     ]))
     vi.stubGlobal('fetch', fetchMock)
     await executeResearchRun(env, queued.run.id, now)
@@ -51,6 +55,8 @@ describe('OpenAI research', () => {
       model: 'gpt-5.6-luna',
       max_output_tokens: 8_000,
       include: ['web_search_call.action.sources'],
+      reasoning: { effort: 'high' },
+      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'unlimited' }],
     })
     const candidateSchema = requestBody.text.format.schema.properties.candidates.items
     expect(candidateSchema.required).toEqual(Object.keys(candidateSchema.properties))
@@ -60,6 +66,7 @@ describe('OpenAI research', () => {
 
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run).toMatchObject({ status: 'succeeded', accepted_count: 1, rejected_count: 0 })
+    expect(researchRunView(run!).diagnostics.discovery_lanes).toEqual(['social', 'commerce'])
     const signal = await env.DB.prepare("SELECT source_id FROM viral_signals WHERE source_id = 'openai-research'").first<{ source_id: string }>()
     expect(signal?.source_id).toBe('openai-research')
   })
@@ -70,18 +77,37 @@ describe('OpenAI research', () => {
     await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
       'https://evidence.example.com/article-one',
-      'https://evidence.example.com/article-two',
+      'https://evidence.example.net/article-two',
     ], [
       'https://invented.example.com/not-cited',
-      'https://evidence.example.com/article-two',
+      'https://evidence.example.net/article-two',
     ])))
     await executeResearchRun(env, queued.run.id, now)
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run).toMatchObject({ status: 'succeeded', accepted_count: 0, rejected_count: 1 })
     expect(researchRunView(run!).diagnostics).toMatchObject({
-      source_urls: ['https://evidence.example.com/article-one', 'https://evidence.example.com/article-two'],
+      source_urls: ['https://evidence.example.com/article-one', 'https://evidence.example.net/article-two'],
       summary: 'No candidates passed validation.',
-      candidates: [{ name: 'Galaxy Glow Mini Printer', matched_evidence_count: 1, rejection_reasons: ['requires_two_returned_web_sources'] }],
+      candidates: [{ name: 'Galaxy Glow Mini Printer', matched_evidence_count: 1, rejection_reasons: ['requires_two_returned_web_sources', 'missing_labeled_evidence_profiles'] }],
+    })
+  })
+
+  it('rejects implausibly concatenated review counts instead of treating them as velocity', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `manual-counts-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T13:30:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ], undefined, {
+      rating_count: 40, question_count: 402, count_confidence: 0.95, supporting_quote: '40402',
+    })))
+    await executeResearchRun(env, queued.run.id, now)
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run).toMatchObject({ status: 'succeeded', accepted_count: 0, rejected_count: 1 })
+    expect(researchRunView(run!).diagnostics.candidates[0]).toMatchObject({
+      count_flag: 'possible_concatenated_count',
+      rejection_reasons: expect.arrayContaining(['possible_concatenated_count']),
     })
   })
 

@@ -38,6 +38,15 @@ export type AvailabilityStatus = typeof AVAILABILITY_STATUSES[number]
 export type CandidateState = typeof CANDIDATE_STATES[number]
 export type EngineMode = typeof ENGINE_MODES[number]
 export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+export type EvidenceClassification = 'brand_owned' | 'founder_owned' | 'press_release' | 'retailer_listing' | 'independent_editorial' | 'independent_social' | 'consumer_activity'
+
+export interface ResearchExplanation {
+  why_discovered: string[]
+  missing_validation: string[]
+  evidence_classifications: EvidenceClassification[]
+  maximum_state: 'emerging' | null
+  maximum_confidence: number | null
+}
 
 export interface ViralCandidateInput {
   external_id: string
@@ -55,6 +64,7 @@ export interface ViralCandidateInput {
   search_terms?: string[]
   availability_status?: AvailabilityStatus
   release_date?: string
+  research_explanation?: ResearchExplanation
 }
 
 export interface ViralSignalV1 {
@@ -134,6 +144,9 @@ export interface ScoreSnapshot {
     momentum_adjustment: number
     active_signal_count: number
     distinct_source_count: number
+    confirmed_signal_categories: SignalType[]
+    trending_gate_passed: boolean
+    maximum_state: 'emerging' | null
   }
   scoreVersion: string
   computedAt: string
@@ -184,6 +197,7 @@ export interface CandidateProjectionRow {
   state: CandidateState | null
   score_version: string | null
   score_computed_at: string | null
+  research_explanation_json?: string | null
 }
 
 export interface CatalogOverrides {
@@ -275,11 +289,17 @@ export interface ResearchCandidateDiagnostic {
   evidence_urls: string[]
   matched_evidence_count: number
   rejection_reasons: string[]
+  why_discovered: string[]
+  missing_validation: string[]
+  evidence_classifications: EvidenceClassification[]
+  maximum_state: 'emerging' | null
+  count_flag: string | null
 }
 
 /** Safe, bounded audit information for an OpenAI research run. Never contains a raw provider response. */
 export interface ResearchRunDiagnostics {
   source_urls: string[]
+  discovery_lanes: string[]
   candidates: ResearchCandidateDiagnostic[]
   summary: string | null
 }

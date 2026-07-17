@@ -66,6 +66,13 @@ export interface EngineCandidate {
   last_seen_at: string
   review_status: ReviewStatus
   reviewed_at: string | null
+  research_explanation: {
+    why_discovered: string[]
+    missing_validation: string[]
+    evidence_classifications: string[]
+    maximum_state: 'emerging' | null
+    maximum_confidence: number | null
+  } | null
   score: EngineScore | null
 }
 
@@ -125,12 +132,18 @@ export interface EngineResearchRun {
   evidence: Array<{ candidate_id: string; urls: string[] }>
   diagnostics: {
     source_urls: string[]
+    discovery_lanes: string[]
     candidates: Array<{
       name: string | null
       product_url: string | null
       evidence_urls: string[]
       matched_evidence_count: number
       rejection_reasons: string[]
+      why_discovered: string[]
+      missing_validation: string[]
+      evidence_classifications: string[]
+      maximum_state: 'emerging' | null
+      count_flag: string | null
     }>
     summary: string | null
   }

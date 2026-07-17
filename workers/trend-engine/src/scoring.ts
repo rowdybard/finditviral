@@ -25,6 +25,11 @@ interface IndependenceGroup {
   qualityWeight: number
 }
 
+export interface PromotionGuard {
+  maximumState?: 'emerging'
+  maximumConfidence?: number
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
@@ -47,11 +52,14 @@ function classifyState(
   confidence: number,
   momentum: number,
   previous: CurrentScoreRow | null,
+  confirmedSignalCategoryCount: number,
 ): CandidateState {
   if (previous?.state === 'trending' && (score < 65 || momentum <= -0.2 || (previous.score - score) >= 12)) {
     return 'cooling'
   }
-  if (score >= 65 && confidence >= 0.5) return 'trending'
+  // Discovery is intentionally permissive. Promotion is not: a single kind of
+  // evidence (including launch coverage) cannot establish consumer virality.
+  if (score >= 65 && confidence >= 0.5 && confirmedSignalCategoryCount >= 2) return 'trending'
   if (score >= 40) return 'emerging'
   return 'candidate'
 }
@@ -60,6 +68,7 @@ export function computeScore(
   signals: ScoreSignalInput[],
   previous: CurrentScoreRow | null,
   now = new Date(),
+  guard: PromotionGuard = {},
 ): ScoreSnapshot {
   const nowMs = now.getTime()
   const active = signals.filter((signal) => {
@@ -85,6 +94,9 @@ export function computeScore(
         momentum_adjustment: -15,
         active_signal_count: 0,
         distinct_source_count: 0,
+        confirmed_signal_categories: [],
+        trending_gate_passed: false,
+        maximum_state: guard.maximumState ?? null,
       },
       scoreVersion: SCORE_VERSION,
       computedAt: now.toISOString(),
@@ -139,7 +151,11 @@ export function computeScore(
   const score = clamp((weightedSignal * 0.85) + breadthBonus + momentumAdjustment, 0, 100)
   const coverage = 1 - Math.exp(-weightTotal / 2)
   const diversity = clamp(independentSourceCount / 3, 0, 1)
-  const confidence = clamp((coverage * 0.7) + (diversity * 0.3), 0, 1)
+  const rawConfidence = clamp((coverage * 0.7) + (diversity * 0.3), 0, 1)
+  const confidence = guard.maximumConfidence === undefined ? rawConfidence : Math.min(rawConfidence, guard.maximumConfidence)
+  const confirmedSignalCategories = Array.from(new Set(active.map((signal) => signal.signalType))).sort()
+  let state = classifyState(score, confidence, momentum, previous, confirmedSignalCategories.length)
+  if (guard.maximumState === 'emerging' && state === 'trending') state = 'emerging'
 
   return {
     score: round(score, 2),
@@ -148,7 +164,7 @@ export function computeScore(
     confidence: round(confidence),
     sourceCount: independentSourceCount,
     signalCount: active.length,
-    state: classifyState(score, confidence, momentum, previous),
+    state,
     explanation: {
       policy_version: PATCH_POLICY_VERSION,
       weighted_signal: round(weightedSignal, 2),
@@ -157,6 +173,9 @@ export function computeScore(
       momentum_adjustment: round(momentumAdjustment, 2),
       active_signal_count: active.length,
       distinct_source_count: independentSourceCount,
+      confirmed_signal_categories: confirmedSignalCategories,
+      trending_gate_passed: confirmedSignalCategories.length >= 2 && state === 'trending',
+      maximum_state: guard.maximumState ?? null,
     },
     scoreVersion: SCORE_VERSION,
     computedAt: now.toISOString(),

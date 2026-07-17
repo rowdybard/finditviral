@@ -1,4 +1,4 @@
-import type { ResearchCandidateDiagnostic, ResearchRunDiagnostics, ResearchRunRow, ViralSignalV1 } from './domain'
+import type { EvidenceClassification, ResearchCandidateDiagnostic, ResearchExplanation, ResearchRunDiagnostics, ResearchRunRow, ViralSignalV1 } from './domain'
 import { EngineError, errorCode } from './errors'
 import { stableId } from './identity'
 import { ingestSignalBatch } from './ingest'
@@ -12,11 +12,18 @@ import {
 import { parseViralSignalBatch } from './validation'
 
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
-export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v1'
+export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
 const MAX_CANDIDATES = 12
 const MAX_OUTPUT_TOKENS = 8_000
 
 type JsonRecord = Record<string, unknown>
+type ResearchDiscoveryLane = 'social' | 'search demand' | 'commerce' | 'trend media'
+
+const SOCIAL_HOSTS = ['tiktok.com', 'x.com', 'twitter.com', 'reddit.com', 'facebook.com', 'instagram.com', 'youtube.com']
+const DEMAND_HOSTS = ['trends.google.com', 'shopping.google.com', 'google.com']
+const COMMERCE_HOSTS = ['amazon.', 'walmart.', 'target.', 'costco.', 'bestbuy.', 'sephora.', 'ulta.', 'etsy.', 'ebay.', 'shopify.', 'nike.', 'disney.', 'mattel.', 'lego.']
+const EVIDENCE_CLASSIFICATIONS: EvidenceClassification[] = ['brand_owned', 'founder_owned', 'press_release', 'retailer_listing', 'independent_editorial', 'independent_social', 'consumer_activity']
+const LAUNCH_CLASSIFICATIONS = new Set<EvidenceClassification>(['brand_owned', 'founder_owned', 'press_release', 'retailer_listing'])
 
 export interface ResearchEnqueueResult {
   run: ResearchRunRow
@@ -80,8 +87,40 @@ function suppliedHttpsUrls(value: unknown): string[] {
   }))).slice(0, 2)
 }
 
+function hasDistinctDomains(urls: string[]): boolean {
+  return new Set(urls.map((value) => new URL(value).hostname.toLowerCase())).size >= 2
+}
+
 function optionalString(value: unknown, max: number): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max ? value.trim() : undefined
+}
+
+function textList(value: unknown, maxItems: number, maxLength: number): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => typeof item === 'string' && item.trim().length >= 3 && item.trim().length <= maxLength ? [item.trim()] : []).slice(0, maxItems)
+}
+
+function evidenceProfiles(value: unknown, allowed: Set<string>): Array<{ url: string; classification: EvidenceClassification }> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.url !== 'string' || typeof item.classification !== 'string' || !EVIDENCE_CLASSIFICATIONS.includes(item.classification as EvidenceClassification) || typeof item.supporting_quote !== 'string' || item.supporting_quote.trim().length < 3 || item.supporting_quote.trim().length > 280) return []
+    try {
+      const url = new URL(item.url)
+      return url.protocol === 'https:' && allowed.has(url.toString()) ? [{ url: url.toString(), classification: item.classification as EvidenceClassification }] : []
+    } catch {
+      return []
+    }
+  }).slice(0, 2)
+}
+
+function hasConcatenatedReviewCounts(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  const ratingCount = value.rating_count
+  const questionCount = value.question_count
+  const quote = value.supporting_quote
+  return typeof ratingCount === 'number' && Number.isInteger(ratingCount) && ratingCount >= 0 &&
+    typeof questionCount === 'number' && Number.isInteger(questionCount) && questionCount >= 0 &&
+    questionCount > ratingCount * 5 && typeof quote === 'string' && quote.includes(`${ratingCount}${questionCount}`)
 }
 
 function allowedCitationUrls(response: JsonRecord): Set<string> {
@@ -119,6 +158,20 @@ function allowedCitationUrls(response: JsonRecord): Set<string> {
   return allowed
 }
 
+function sourceCoverage(urls: Iterable<string>): ResearchDiscoveryLane[] {
+  const lanes = new Set<ResearchDiscoveryLane>()
+  for (const value of urls) {
+    let host: string
+    try { host = new URL(value).hostname.toLowerCase() } catch { continue }
+    if (SOCIAL_HOSTS.some((domain) => host === domain || host.endsWith(`.${domain}`))) lanes.add('social')
+    else if (DEMAND_HOSTS.some((domain) => host === domain || host.endsWith(`.${domain}`))) lanes.add('search demand')
+    else if (COMMERCE_HOSTS.some((domain) => host.includes(domain))) lanes.add('commerce')
+    else lanes.add('trend media')
+  }
+  const ordered: ResearchDiscoveryLane[] = ['social', 'search demand', 'commerce', 'trend media']
+  return ordered.filter((lane) => lanes.has(lane))
+}
+
 function outputText(response: JsonRecord): string | null {
   if (typeof response.output_text === 'string') return response.output_text
   const output = response.output
@@ -146,12 +199,13 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
   const records: ViralSignalV1[] = []
   const evidence: Array<{ candidate_id: string; urls: string[] }> = []
   const diagnostics: ResearchCandidateDiagnostic[] = []
+  const emptyDiagnostic = { why_discovered: [] as string[], missing_validation: [] as string[], evidence_classifications: [] as EvidenceClassification[], maximum_state: null, count_flag: null }
   let rejected = 0
 
   for (const candidate of candidates) {
     if (!isRecord(candidate)) {
       rejected += 1
-      diagnostics.push({ name: null, product_url: null, evidence_urls: [], matched_evidence_count: 0, rejection_reasons: ['invalid_candidate_object'] })
+      diagnostics.push({ name: null, product_url: null, evidence_urls: [], matched_evidence_count: 0, rejection_reasons: ['invalid_candidate_object'], ...emptyDiagnostic })
       continue
     }
     const name = optionalString(candidate.name, 160)
@@ -160,6 +214,14 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
     const topicName = topic ? optionalString(topic.name, 100) : undefined
     const urls = parseUrls(candidate.evidence_urls, allowed)
     const suppliedUrls = suppliedHttpsUrls(candidate.evidence_urls)
+    const profiles = evidenceProfiles(candidate.evidence, allowed)
+    const whyDiscovered = textList(candidate.why_discovered, 4, 240)
+    const missingValidation = textList(candidate.missing_validation, 4, 240)
+    const classifications = profiles.map((profile) => profile.classification)
+    const launchEvidenceCount = classifications.filter((classification) => LAUNCH_CLASSIFICATIONS.has(classification)).length
+    const independentConsumerCount = classifications.filter((classification) => classification === 'independent_social' || classification === 'consumer_activity').length
+    const launchBiased = independentConsumerCount === 0 && launchEvidenceCount > classifications.length / 2
+    const countFlag = hasConcatenatedReviewCounts(candidate.review_metrics) ? 'possible_concatenated_count' : null
     const signal = isRecord(candidate.signal) ? candidate.signal : null
     const type = signal ? optionalString(signal.type, 40) : undefined
     const value = signal?.value
@@ -169,6 +231,10 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
     if (!productUrl) rejectionReasons.push('missing_product_url')
     if (!topicName) rejectionReasons.push('missing_topic_name')
     if (urls.length < 2) rejectionReasons.push('requires_two_returned_web_sources')
+    else if (!hasDistinctDomains(urls)) rejectionReasons.push('requires_two_independent_domains')
+    if (profiles.length !== 2 || new Set(profiles.map((profile) => profile.url)).size !== 2 || profiles.some((profile) => !urls.includes(profile.url))) rejectionReasons.push('missing_labeled_evidence_profiles')
+    if (whyDiscovered.length === 0) rejectionReasons.push('missing_discovery_explanation')
+    if (countFlag) rejectionReasons.push(countFlag)
     if (!signal) rejectionReasons.push('missing_signal')
     if (type && type !== 'search_interest' && type !== 'social_velocity' && type !== 'marketplace_rank' && type !== 'editorial_mentions') rejectionReasons.push('invalid_signal_type')
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) rejectionReasons.push('invalid_signal_value')
@@ -178,7 +244,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
       typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100 ||
       typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
       rejected += 1
-      diagnostics.push({ name: name ?? null, product_url: productUrl ?? null, evidence_urls: suppliedUrls, matched_evidence_count: urls.length, rejection_reasons: rejectionReasons })
+      diagnostics.push({ name: name ?? null, product_url: productUrl ?? null, evidence_urls: suppliedUrls, matched_evidence_count: urls.length, rejection_reasons: rejectionReasons, why_discovered: whyDiscovered, missing_validation: missingValidation, evidence_classifications: classifications, maximum_state: launchBiased ? 'emerging' : null, count_flag: countFlag })
       continue
     }
     // The branch above rejects every malformed field. Repeat the guard in a form
@@ -194,6 +260,13 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
     const availabilityStatus = availability === 'available' || availability === 'backorder' || availability === 'preorder' || availability === 'announced' || availability === 'limited'
       ? availability
       : 'announced'
+    const researchExplanation: ResearchExplanation = {
+      why_discovered: whyDiscovered,
+      missing_validation: missingValidation,
+      evidence_classifications: classifications,
+      maximum_state: launchBiased ? 'emerging' : null,
+      maximum_confidence: launchBiased ? 0.45 : null,
+    }
     records.push({
       schema_version: 1,
       kind: 'viral_signal',
@@ -216,17 +289,18 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
         ...(optionalString(candidate.image_url, 2048) ? { image_url: optionalString(candidate.image_url, 2048) } : {}),
         search_terms: [name, ...(brand ? [brand] : [])],
         availability_status: availabilityStatus,
+        research_explanation: researchExplanation,
       },
       signal: {
         type,
         value,
         ...(typeof signal.velocity === 'number' && signal.velocity >= -1 && signal.velocity <= 1 ? { velocity: signal.velocity } : {}),
       },
-      confidence,
+      confidence: Math.min(confidence, researchExplanation.maximum_confidence ?? 1),
       evidence_url: urls[0]!,
     })
     evidence.push({ candidate_id: candidateId, urls })
-    diagnostics.push({ name, product_url: productUrl, evidence_urls: urls, matched_evidence_count: urls.length, rejection_reasons: [] })
+    diagnostics.push({ name, product_url: productUrl, evidence_urls: urls, matched_evidence_count: urls.length, rejection_reasons: [], why_discovered: whyDiscovered, missing_validation: missingValidation, evidence_classifications: classifications, maximum_state: researchExplanation.maximum_state, count_flag: null })
   }
   return {
     records,
@@ -234,6 +308,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
     evidence,
     diagnostics: {
       source_urls: Array.from(allowed).slice(0, 40),
+      discovery_lanes: sourceCoverage(allowed),
       candidates: diagnostics,
       summary: candidates.length === 0 ? 'OpenAI returned no candidate objects.' : records.length === 0 ? 'No candidates passed validation.' : null,
     },
@@ -252,13 +327,17 @@ function responseSchema(): JsonRecord {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['name', 'brand', 'category', 'product_url', 'image_url', 'availability_status', 'topic', 'signal', 'confidence', 'evidence_urls'],
+          required: ['name', 'brand', 'category', 'product_url', 'image_url', 'availability_status', 'topic', 'signal', 'confidence', 'evidence_urls', 'evidence', 'why_discovered', 'missing_validation', 'review_metrics'],
           properties: {
             name: { type: 'string' }, brand: { type: ['string', 'null'] }, category: { type: ['string', 'null'] },
             product_url: { type: 'string' }, image_url: { type: ['string', 'null'] }, availability_status: { type: ['string', 'null'] },
             topic: { type: 'object', additionalProperties: false, required: ['name', 'slug', 'description'], properties: { name: { type: 'string' }, slug: { type: ['string', 'null'] }, description: { type: ['string', 'null'] } } },
             signal: { type: 'object', additionalProperties: false, required: ['type', 'value', 'velocity'], properties: { type: { type: 'string', enum: ['search_interest', 'social_velocity', 'marketplace_rank', 'editorial_mentions'] }, value: { type: 'number' }, velocity: { type: ['number', 'null'] } } },
             confidence: { type: 'number' }, evidence_urls: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string' } },
+            evidence: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'object', additionalProperties: false, required: ['url', 'classification', 'supporting_quote'], properties: { url: { type: 'string' }, classification: { type: 'string', enum: EVIDENCE_CLASSIFICATIONS }, supporting_quote: { type: 'string' } } } },
+            why_discovered: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } },
+            missing_validation: { type: 'array', maxItems: 4, items: { type: 'string' } },
+            review_metrics: { type: 'object', additionalProperties: false, required: ['rating_count', 'question_count', 'count_confidence', 'supporting_quote'], properties: { rating_count: { type: ['integer', 'null'], minimum: 0 }, question_count: { type: ['integer', 'null'], minimum: 0 }, count_confidence: { type: ['number', 'null'], minimum: 0, maximum: 1 }, supporting_quote: { type: ['string', 'null'] } } },
           },
         },
       },
@@ -276,10 +355,20 @@ async function callOpenAi(env: Env): Promise<JsonRecord> {
     body: JSON.stringify({
       model: configuredModel(env),
       max_output_tokens: MAX_OUTPUT_TOKENS,
-      tools: [{ type: 'web_search' }],
+      reasoning: { effort: 'high' },
+      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'unlimited' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
-      input: `Research newly viral consumer products in the United States. Find product-specific trends across collectibles, food, beauty, technology, and retail launches. Return only candidates with a real product URL and exactly two distinct current HTTPS citations from your web research. Do not invent metrics, citations, or availability. Keep confidence conservative and return at most ${MAX_CANDIDATES} candidates.`,
+      input: `You are FindItViral's high-recall consumer-product scout. Research newly viral, buyable products in the United States across collectibles, food, beauty, technology, apparel, home, and retail launches. Look above, below, and between the obvious headlines: uncover early chatter before it becomes mainstream, then verify it.
+
+Before synthesizing candidates, perform separate web searches in each lane when public results are available:
+1. Social conversation: TikTok product/hashtag discovery, X/Twitter discussions, Reddit communities, public Facebook/Instagram posts, and YouTube Shorts/creator coverage.
+2. Search demand: Google Trends, Google Shopping, autocomplete-style query coverage, and breakout-search reporting.
+3. Commerce: brand launches plus retailer and marketplace availability (including major retail, specialty, resale, and creator storefronts).
+4. Trend confirmation: consumer trend publications, deal/community sites, trade coverage, and local or niche communities that corroborate emerging demand.
+5. Counter-check: search for stock, product identity, and whether the claim is genuinely current rather than an old repost, rumor, or a single creator's ad.
+
+Treat social platforms as discovery signals, not proof by themselves. Search broadly across the listed platforms but never claim a platform was searched if no public result was available. Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. A product page is catalog evidence, not virality evidence. Use the one signal only for the strongest currently measured category; do not convert launch buzz into search or social velocity. For review counts, return null unless a labeled count and supporting quote are clear; never combine adjacent labels or infer a count from flattened text. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES} candidates.`,
       text: { format: { type: 'json_schema', name: 'viral_research_candidates', strict: true, schema: responseSchema() } },
     }),
   })

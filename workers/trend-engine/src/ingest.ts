@@ -7,6 +7,7 @@ import { EngineError, errorCode } from './errors'
 import { canonicalJson, candidateIdentityKey, normalizeGtin, sha256Hex, slugify, stableId } from './identity'
 import {
   getAliasCandidateId,
+  getCandidate,
   getCurrentScore,
   getSource,
   listCandidateIds,
@@ -218,15 +219,39 @@ async function persistSignal(
     ),
   ])
 
+  if (signal.candidate.research_explanation) {
+    await db.prepare(`
+      INSERT INTO candidate_research_explanations (candidate_id, explanation_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(candidate_id) DO UPDATE SET explanation_json = excluded.explanation_json, updated_at = excluded.updated_at
+    `).bind(candidateId, canonicalJson(signal.candidate.research_explanation), receivedAt).run()
+  }
+
   return { candidateId, accepted: (results[2]?.meta.changes ?? 0) > 0 }
 }
 
+function promotionGuard(candidate: Awaited<ReturnType<typeof getCandidate>>): { maximumState?: 'emerging'; maximumConfidence?: number } {
+  if (!candidate?.research_explanation_json) return {}
+  try {
+    const parsed: unknown = JSON.parse(candidate.research_explanation_json)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const explanation = parsed as Record<string, unknown>
+    return {
+      ...(explanation.maximum_state === 'emerging' ? { maximumState: 'emerging' as const } : {}),
+      ...(typeof explanation.maximum_confidence === 'number' && explanation.maximum_confidence >= 0 && explanation.maximum_confidence <= 1 ? { maximumConfidence: explanation.maximum_confidence } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
 export async function recomputeCandidate(db: D1Database, candidateId: string, now = new Date()): Promise<void> {
-  const [signals, previous] = await Promise.all([
+  const [signals, previous, candidate] = await Promise.all([
     listScoreSignals(db, candidateId, now.toISOString()),
     getCurrentScore(db, candidateId),
+    getCandidate(db, candidateId),
   ])
-  const snapshot = computeScore(signals, previous, now)
+  const snapshot = computeScore(signals, previous, now, promotionGuard(candidate))
   await saveScore(db, crypto.randomUUID(), candidateId, snapshot)
 }
 

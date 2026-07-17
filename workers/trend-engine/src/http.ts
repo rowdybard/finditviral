@@ -5,6 +5,8 @@ import {
   ENGINE_SERVICE,
   type CandidateState,
   type EngineMode,
+  type EvidenceClassification,
+  type ResearchExplanation,
   type ReviewStatus,
 } from './domain'
 import { EngineError, ValidationError } from './errors'
@@ -166,6 +168,7 @@ function candidateView(candidate: NonNullable<Awaited<ReturnType<typeof getCandi
     last_seen_at: candidate.last_seen_at,
     review_status: candidate.review_status,
     reviewed_at: candidate.reviewed_at,
+    research_explanation: researchExplanationView(candidate.research_explanation_json ?? null),
     score: candidate.score === null ? null : {
       value: candidate.score,
       previous: candidate.previous_score,
@@ -340,6 +343,22 @@ async function handleRecompute(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
   const count = await recomputeAllCandidates(env.DB)
   return json({ recomputed: count })
+}
+
+function researchExplanationView(value: string | null): ResearchExplanation | null {
+  if (!value) return null
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!isRecord(parsed) || !Array.isArray(parsed.why_discovered) || !Array.isArray(parsed.missing_validation) || !Array.isArray(parsed.evidence_classifications)) return null
+    const whyDiscovered = parsed.why_discovered.filter((item): item is string => typeof item === 'string').slice(0, 4)
+    const missingValidation = parsed.missing_validation.filter((item): item is string => typeof item === 'string').slice(0, 4)
+    const classifications = parsed.evidence_classifications.filter((item): item is EvidenceClassification => typeof item === 'string' && ['brand_owned', 'founder_owned', 'press_release', 'retailer_listing', 'independent_editorial', 'independent_social', 'consumer_activity'].includes(item)).slice(0, 2)
+    const maximumState = parsed.maximum_state === 'emerging' ? 'emerging' : null
+    const maximumConfidence = typeof parsed.maximum_confidence === 'number' && parsed.maximum_confidence >= 0 && parsed.maximum_confidence <= 1 ? parsed.maximum_confidence : null
+    return { why_discovered: whyDiscovered, missing_validation: missingValidation, evidence_classifications: classifications, maximum_state: maximumState, maximum_confidence: maximumConfidence }
+  } catch {
+    return null
+  }
 }
 
 async function handleResearchRuns(request: Request, env: Env, url: URL): Promise<Response> {

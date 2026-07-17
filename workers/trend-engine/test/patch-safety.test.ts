@@ -8,7 +8,7 @@ import { listCandidates, saveReviewDecision, upsertSource } from '../src/reposit
 import { makeSignal } from './fixtures'
 
 async function seedTrendingCandidate(now: Date) {
-  for (const id of ['patch-social', 'patch-search', 'patch-market']) {
+  for (const [id, type] of [['patch-social', 'social_velocity'], ['patch-search', 'search_interest'], ['patch-market', 'marketplace_rank']] as const) {
     await upsertSource(env.DB, {
       id,
       name: id,
@@ -22,7 +22,7 @@ async function seedTrendingCandidate(now: Date) {
     }, now.toISOString())
     const batch: ViralSignalBatchV1 = {
       schema_version: 1,
-      records: [makeSignal({ source: id, now })],
+      records: [makeSignal({ source: id, type, now })],
     }
     await ingestSignalBatch(env.DB, batch, 'push', now)
   }
