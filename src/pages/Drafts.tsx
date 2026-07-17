@@ -11,7 +11,7 @@ import { trackEvent } from '../lib/analytics'
 import type { ContributionDraft, ContributionDraftState } from '../types/database'
 
 const stateBadge: Record<ContributionDraftState, { label: string; class: string }> = {
-  editing: { label: 'Editing', class: 'bg-blue-100 text-blue-800' },
+  editing: { label: 'Editing', class: 'bg-brand-100 text-brand-800' },
   waiting_for_approval: { label: 'Waiting for approval', class: 'bg-amber-100 text-amber-800' },
   ready: { label: 'Ready', class: 'bg-green-100 text-green-800' },
   needs_attention: { label: 'Needs attention', class: 'bg-red-100 text-red-800' },
@@ -141,12 +141,12 @@ export default function Drafts() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/home" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
+        <Link to="/home" className="text-sm text-stone-500 hover:text-stone-700">← Home</Link>
         <div className="mt-3 flex items-center gap-4">
           <div className="fiv-step-badge text-lg"><Notepad size={16} weight="bold" aria-hidden="true" /></div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Drafts</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Private to you · Suggestions never publish automatically. Return here after owner review, reopen the form, and confirm the final contribution.</p>
+            <h1 className="text-2xl font-bold text-stone-900">My Drafts</h1>
+            <p className="mt-0.5 text-sm text-stone-500">Private to you · Suggestions never publish automatically. Return here after owner review, reopen the form, and confirm the final contribution.</p>
           </div>
           <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
             <Notepad size={32} weight="duotone" className="text-brand-600" />
@@ -161,16 +161,16 @@ export default function Drafts() {
           {unlinkedLocalDrafts.map((draft) => {
             const discardKey = `local:${draft.formType}:${draft.entityId}`
             return (
-              <article key={discardKey} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-white p-5 shadow-[5px_5px_0_0_#0c251d]">
+              <article key={discardKey} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-white p-5 shadow-[5px_5px_0_0_#1c1917]">
                 <div className="flex min-w-0 items-start gap-4">
-                  <span className="shrink-0 rounded-xl bg-blue-100 p-3 text-blue-700"><Notepad size={24} weight="bold" aria-hidden="true" /></span>
+                  <span className="shrink-0 rounded-xl bg-brand-100 p-3 text-brand-700"><Notepad size={24} weight="bold" aria-hidden="true" /></span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-black uppercase tracking-wide text-brand-700">{localDraftTypeLabel[draft.formType]}</span>
-                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-800">On this device</span>
+                      <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-brand-800">On this device</span>
                     </div>
                     <h2 className="mt-1 truncate text-lg font-black text-stone-950">{draft.metadata.title || `${localDraftTypeLabel[draft.formType]} draft`}</h2>
-                    <p className="mt-0.5 text-xs text-gray-500">Updated {new Date(draft.updatedAt).toLocaleString()}</p>
+                    <p className="mt-0.5 text-xs text-stone-500">Updated {new Date(draft.updatedAt).toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -190,7 +190,7 @@ export default function Drafts() {
             const sName = showSuggestion ? draftSuggestionName(draft) : null
             const sDesc = showSuggestion ? suggestionDescription[draft.state as 'waiting_for_approval' | 'ready' | 'needs_attention'] : null
             return (
-              <article key={draft.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#0c251d]">
+              <article key={draft.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#1c1917]">
                 <div className="flex min-w-0 items-start gap-4">
                   <span className="shrink-0 rounded-xl bg-brand-100 p-3 text-brand-700"><FileText size={24} weight="bold" aria-hidden="true" /></span>
                   <div className="min-w-0">
@@ -203,11 +203,11 @@ export default function Drafts() {
                     </div>
                     <h2 className="mt-1 truncate text-lg font-black text-stone-950">{linkedLocalDraft?.metadata.title || draftProductName(draft)}</h2>
                     {showSuggestion && sName && sDesc && (
-                      <p className="mt-0.5 text-xs text-gray-600">
-                        Your suggestion <strong className="text-gray-800">{sName}</strong> {sDesc}
+                      <p className="mt-0.5 text-xs text-stone-600">
+                        Your suggestion <strong className="text-stone-800">{sName}</strong> {sDesc}
                       </p>
                     )}
-                    <p className="mt-0.5 text-xs text-gray-500">Updated {new Date(Math.max(new Date(draft.updated_at).getTime(), linkedLocalDraft?.updatedAt ?? 0)).toLocaleString()}</p>
+                    <p className="mt-0.5 text-xs text-stone-500">Updated {new Date(Math.max(new Date(draft.updated_at).getTime(), linkedLocalDraft?.updatedAt ?? 0)).toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">

@@ -60,7 +60,7 @@ export default function Home() {
     <div className="space-y-8">
       {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
 
-      <section className="rounded-2xl border-2 border-stone-950 bg-[#fffdf7] p-5 shadow-[6px_6px_0_0_#0c251d] sm:p-7">
+      <section className="rounded-2xl border-2 border-stone-950 bg-[#fffdf7] p-5 shadow-[6px_6px_0_0_#1c1917] sm:p-7">
         <span className="inline-block rounded-full border border-brand-200 bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
           {activeMarket.betaLabel}
         </span>

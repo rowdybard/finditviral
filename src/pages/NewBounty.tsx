@@ -462,12 +462,12 @@ export default function NewBounty() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/bounties" className="text-sm text-gray-500 hover:text-gray-700">← Bounties</Link>
+        <Link to="/bounties" className="text-sm text-stone-500 hover:text-stone-700">← Bounties</Link>
         <div className="mt-3 flex items-center gap-4">
           <div className="fiv-step-badge text-lg">1</div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">New Bounty</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Post what you're looking for. The community will help you track it down.</p>
+            <h1 className="text-2xl font-bold text-stone-900">New Bounty</h1>
+            <p className="mt-0.5 text-sm text-stone-500">Post what you're looking for. The community will help you track it down.</p>
           </div>
           <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
             <Binoculars size={32} weight="duotone" className="text-brand-600" />
@@ -537,7 +537,7 @@ export default function NewBounty() {
                 aria-label="Bounty amount"
                 className="mt-3 w-full accent-brand-500"
               />
-              <div className="mt-1 flex justify-between text-xs text-gray-400">
+              <div className="mt-1 flex justify-between text-xs text-stone-400">
                 <span>$5</span><span>$25</span><span>$50</span><span>$100</span><span>$250+</span>
               </div>
             </div>
@@ -549,15 +549,15 @@ export default function NewBounty() {
             <fieldset>
               <legend className="label">Where should shoppers look? *</legend>
               <div className="grid grid-cols-3 gap-2">
-                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-stone-200 bg-white text-stone-600'}`}>
                   <input className="sr-only" type="radio" name="scope" checked={scope === 'region'} onChange={() => setScope('region')} />
                   ZIP Radius
                 </label>
-                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'retailers' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'retailers' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-stone-200 bg-white text-stone-600'}`}>
                   <input className="sr-only" type="radio" name="scope" checked={scope === 'retailers'} onChange={() => setScope('retailers')} />
                   Retailers
                 </label>
-                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-stone-200 bg-white text-stone-600'}`}>
                   <input className="sr-only" type="radio" name="scope" checked={scope === 'stores'} onChange={() => setScope('stores')} />
                   Stores
                 </label>
@@ -598,7 +598,7 @@ export default function NewBounty() {
                 {retailerResults.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {retailerResults.filter(r => !selectedRetailers.some(s => s.id === r.id)).map(r => (
-                      <button key={r.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedRetailers([...selectedRetailers, { id: r.id, label: r.name, detail: r.website_url ?? '' }]); setRetailerQuery(''); setRetailerResults([]) }}>
+                      <button key={r.id} type="button" className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:bg-stone-50" onClick={() => { setSelectedRetailers([...selectedRetailers, { id: r.id, label: r.name, detail: r.website_url ?? '' }]); setRetailerQuery(''); setRetailerResults([]) }}>
                         {r.name}
                       </button>
                     ))}
@@ -624,8 +624,8 @@ export default function NewBounty() {
           {/* Step 4: Preferred Stores */}
           {scope === 'stores' && (
             <div className="space-y-3">
-              <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Preferred stores <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
-              <p className="text-xs text-gray-500">Select one or more stores.</p>
+              <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Preferred stores <span className="text-xs font-normal text-stone-400">(Optional)</span></h2>
+              <p className="text-xs text-stone-500">Select one or more stores.</p>
               <CatalogSearchSelect kind="store" label="Exact store" value={store} onChange={handleStoreChange} onSuggest={(initialName) => openSuggestion('store', initialName)} />
               {suggestion?.kind === 'store' && (
                 <CatalogSuggestionForm kind="store" initialName={suggestion.initialName} value={suggestionValues ?? undefined} onChange={setSuggestionValues} loading={draftLoading} error={suggestionError} onCancel={closeSuggestion} onSubmit={submitSuggestion} />
@@ -636,7 +636,7 @@ export default function NewBounty() {
                 {storeResults.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {storeResults.filter(s => !selectedStores.some(sel => sel.id === s.id)).map(s => (
-                      <button key={s.id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreResults([]) }}>
+                      <button key={s.id} type="button" className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:bg-stone-50" onClick={() => { setSelectedStores([...selectedStores, { id: s.id, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` }]); setStoreResults([]) }}>
                         {s.store_name || s.retailer_name} — {s.city}, {s.state}
                       </button>
                     ))}
@@ -648,10 +648,10 @@ export default function NewBounty() {
                       <div key={s.id} className="fiv-store-card fiv-store-card-selected">
                         <Storefront size={20} weight="fill" className="shrink-0 text-brand-600" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-gray-900">{s.label}</p>
-                          <p className="truncate text-xs text-gray-500">{s.detail}</p>
+                          <p className="truncate text-sm font-semibold text-stone-900">{s.label}</p>
+                          <p className="truncate text-xs text-stone-500">{s.detail}</p>
                         </div>
-                        <button type="button" className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" onClick={() => setSelectedStores(selectedStores.filter(sel => sel.id !== s.id))}>
+                        <button type="button" className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700" onClick={() => setSelectedStores(selectedStores.filter(sel => sel.id !== s.id))}>
                           ×
                         </button>
                       </div>
@@ -666,16 +666,16 @@ export default function NewBounty() {
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">5</span> Expiration date</h2>
             <label className="relative block">
-              <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input id="deadline" className="input pr-10" type="datetime-local" min={localDateTime(new Date(Date.now() + 60 * 60 * 1000))} max={localDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
             </label>
           </div>
 
           {/* Step 6: Notes */}
           <div className="space-y-3">
-            <h2 className="fiv-section-heading"><span className="fiv-step-badge">6</span> Notes <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">6</span> Notes <span className="text-xs font-normal text-stone-400">(Optional)</span></h2>
             <textarea id="requirements" className="input min-h-24" value={requirements} onChange={(event) => setRequirements(event.target.value)} maxLength={2000} placeholder="Any additional details that may help finders..." />
-            <p className="text-right text-xs text-gray-400">{requirements.length}/2000</p>
+            <p className="text-right text-xs text-stone-400">{requirements.length}/2000</p>
           </div>
 
           {/* Advanced options */}
@@ -685,8 +685,8 @@ export default function NewBounty() {
               <input id="quantity-needed" className="input" type="number" min="1" max="999" step="1" value={quantityNeeded} onChange={(event) => setQuantityNeeded(event.target.value)} placeholder="1" />
             </div>
             <div className="flex items-end pb-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input type="checkbox" checked={acceptEquivalent} onChange={(event) => setAcceptEquivalent(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+                <input type="checkbox" checked={acceptEquivalent} onChange={(event) => setAcceptEquivalent(event.target.checked)} className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" />
                 Accept equivalent variants
               </label>
             </div>
@@ -694,7 +694,7 @@ export default function NewBounty() {
           <div>
             <label className="label" htmlFor="variant-requirements">Variant requirements (optional)</label>
             <textarea id="variant-requirements" className="input min-h-20" value={variantRequirements} onChange={(event) => setVariantRequirements(event.target.value)} maxLength={1000} placeholder="Specify acceptable variants, colors, sizes, editions…" />
-            <p className="mt-1 text-right text-xs text-gray-400">{variantRequirements.length}/1000</p>
+            <p className="mt-1 text-right text-xs text-stone-400">{variantRequirements.length}/1000</p>
           </div>
         </div>
 
@@ -702,10 +702,10 @@ export default function NewBounty() {
         {error && <div className="lg:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
         <div className="lg:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2 text-sm text-gray-600">
+          <div className="flex items-start gap-2 text-sm text-stone-600">
             <Sparkle size={18} weight="duotone" className="mt-0.5 shrink-0 text-brand-500" />
             <div>
-              <p className="font-semibold text-gray-900">The FindItViral community will keep an eye out for this item.</p>
+              <p className="font-semibold text-stone-900">The FindItViral community will keep an eye out for this item.</p>
               <p className="text-xs">You'll get notified when someone reports a sighting.</p>
             </div>
           </div>
@@ -722,18 +722,18 @@ export default function NewBounty() {
 
       {showPreview && (
         <div className="card space-y-4 border-2 border-brand-300">
-          <h2 className="text-lg font-bold text-gray-900">Preview your bounty</h2>
+          <h2 className="text-lg font-bold text-stone-900">Preview your bounty</h2>
           <dl className="space-y-2 text-sm">
-            <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Product</dt><dd className="text-right text-gray-900">{product?.label}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Scope</dt><dd className="text-right text-gray-900">{scope === 'region' ? `ZIP ${zipCode} · ${radiusMiles} mi` : scope === 'retailers' ? selectedRetailers.map(r => r.label).join(', ') : (store?.label ?? selectedStores.map(s => s.label).join(', '))}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Reward</dt><dd className="text-right text-gray-900">${rewardAmount}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Deadline</dt><dd className="text-right text-gray-900">{new Date(deadline).toLocaleString()}</dd></div>
-            {quantityNeeded && <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Quantity needed</dt><dd className="text-right text-gray-900">{quantityNeeded}</dd></div>}
-            {variantRequirements.trim() && <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Variant requirements</dt><dd className="text-right text-gray-900">{variantRequirements.trim()}</dd></div>}
-            <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Accept equivalents</dt><dd className="text-right text-gray-900">{acceptEquivalent ? 'Yes' : 'No'}</dd></div>
-            {requirements.trim() && <div className="flex justify-between gap-4"><dt className="font-bold text-gray-600">Requirements</dt><dd className="text-right text-gray-900">{requirements.trim()}</dd></div>}
+            <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Product</dt><dd className="text-right text-stone-900">{product?.label}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Scope</dt><dd className="text-right text-stone-900">{scope === 'region' ? `ZIP ${zipCode} · ${radiusMiles} mi` : scope === 'retailers' ? selectedRetailers.map(r => r.label).join(', ') : (store?.label ?? selectedStores.map(s => s.label).join(', '))}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Reward</dt><dd className="text-right text-stone-900">${rewardAmount}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Deadline</dt><dd className="text-right text-stone-900">{new Date(deadline).toLocaleString()}</dd></div>
+            {quantityNeeded && <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Quantity needed</dt><dd className="text-right text-stone-900">{quantityNeeded}</dd></div>}
+            {variantRequirements.trim() && <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Variant requirements</dt><dd className="text-right text-stone-900">{variantRequirements.trim()}</dd></div>}
+            <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Accept equivalents</dt><dd className="text-right text-stone-900">{acceptEquivalent ? 'Yes' : 'No'}</dd></div>
+            {requirements.trim() && <div className="flex justify-between gap-4"><dt className="font-bold text-stone-600">Requirements</dt><dd className="text-right text-stone-900">{requirements.trim()}</dd></div>}
           </dl>
-          <p className="text-xs text-gray-500">A clean bounty is published after an automated safety check. Flagged submissions stay private for owner review.</p>
+          <p className="text-xs text-stone-500">A clean bounty is published after an automated safety check. Flagged submissions stay private for owner review.</p>
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" onClick={() => setShowPreview(false)} disabled={loading}>Back to edit</button>

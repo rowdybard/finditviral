@@ -30,11 +30,11 @@ export default function Stores() {
       <header>
         <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">Greater Lansing directory</p>
         <h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950">Verified Stores & Boutiques</h1>
-        <p className="mt-2 text-sm text-gray-600">Browse exact locations used in community sightings. Only approved locations appear here.</p>
+        <p className="mt-2 text-sm text-stone-600">Browse exact locations used in community sightings. Only approved locations appear here.</p>
       </header>
 
       <div className="relative">
-        <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={19} aria-hidden="true" />
+        <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={19} aria-hidden="true" />
         <input className="input pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search store, city, or ZIP…" aria-label="Search stores" />
       </div>
 
@@ -45,13 +45,13 @@ export default function Stores() {
       ) : stores.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {stores.map((store) => (
-            <Link key={store.id} to={`/stores/${store.slug}`} className="card group block border-2 border-stone-900 shadow-[3px_3px_0_0_#0c251d] transition-transform hover:translate-x-0.5 hover:translate-y-0.5">
+            <Link key={store.id} to={`/stores/${store.slug}`} className="card group block border-2 border-stone-900 shadow-[3px_3px_0_0_#1c1917] transition-transform hover:translate-x-0.5 hover:translate-y-0.5">
               <div className="flex items-start gap-3">
                 <span className="rounded-lg bg-brand-100 p-2 text-brand-700"><Storefront size={22} weight="bold" aria-hidden="true" /></span>
                 <div className="min-w-0">
                   <h2 className="font-black text-stone-950 group-hover:text-brand-700">{store.store_name || store.retailer_name}</h2>
-                  {store.store_name && store.store_name !== store.retailer_name && <p className="text-xs font-semibold text-gray-500">{store.retailer_name}</p>}
-                  <p className="mt-2 flex gap-1.5 text-sm text-gray-600"><MapPin className="mt-0.5 shrink-0" size={16} weight="fill" aria-hidden="true" /><span>{store.address_line1}<br />{store.city}, {store.state} {store.zip_code}</span></p>
+                  {store.store_name && store.store_name !== store.retailer_name && <p className="text-xs font-semibold text-stone-500">{store.retailer_name}</p>}
+                  <p className="mt-2 flex gap-1.5 text-sm text-stone-600"><MapPin className="mt-0.5 shrink-0" size={16} weight="fill" aria-hidden="true" /><span>{store.address_line1}<br />{store.city}, {store.state} {store.zip_code}</span></p>
                   <p className="mt-3 text-xs font-bold uppercase text-green-700">{store.approved_sighting_count ?? 0} fresh sightings</p>
                 </div>
               </div>

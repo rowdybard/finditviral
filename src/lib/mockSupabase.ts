@@ -176,7 +176,7 @@ const initialData = {
   member_restrictions: [] as any[],
   moderation_events: [] as any[],
   sighting_verifications: [] as any[],
-  leads: [] as any[],
+  leads: [{ id: 'l1', user_id: 'u1', product_id: 'p2', slug: 'nice-cube-restock', headline: 'Nice Cube restock expected Friday', details: 'A store employee expects a Friday delivery.', expected_date: null, scope_type: 'region', store_id: null, zip_code: '48910', radius_miles: 50, source_type: 'employee_tip', source_url: null, status: 'active', confirmed_sighting_id: null, expires_at: new Date(now + 7 * 864e5).toISOString(), created_at: days(1) }] as any[],
   zip_codes: [
     { zip_code: '10001', latitude: 40.7484, longitude: -73.9967, city: 'New York', state: 'NY' },
     { zip_code: '90210', latitude: 34.0901, longitude: -118.4065, city: 'Beverly Hills', state: 'CA' },
@@ -494,6 +494,37 @@ export const mockSupabase = {
     const currentUserId = mockSession?.user?.id
     if (!currentUserId) {
       return Promise.resolve({ data: null, error: { message: 'Authentication required' } })
+    }
+
+    if (name === 'get_lead_detail') {
+      const lead = store.leads.find(item => item.slug === args.p_lead_slug)
+      if (!lead) return Promise.resolve({ data: [], error: null })
+      const product = store.products.find(item => item.id === lead.product_id)
+      const location = store.stores.find(item => item.id === lead.store_id)
+      const profile = store.profiles.find(item => item.id === lead.user_id)
+      return Promise.resolve({ data: [{ ...lead, product_name: product?.name ?? 'Unknown product', product_slug: product?.slug ?? '', store_name: location?.store_name ?? null, store_slug: location?.slug ?? null, store_city: location?.city ?? null, store_state: location?.state ?? null, confirmed_store_name: null, confirmed_seen_at: null, username: profile?.username ?? null, is_owner: lead.user_id === currentUserId, caller_vote: null, credible_count: 0, doubtful_count: 0, net_score: 0 }], error: null })
+    }
+
+    if (name === 'update_lead') {
+      const lead = store.leads.find(item => item.id === args.p_lead_id)
+      if (!lead || lead.user_id !== currentUserId || ['confirmed', 'hidden'].includes(lead.status)) return Promise.resolve({ data: null, error: { message: 'Only an editable lead owner can edit this lead' } })
+      Object.assign(lead, { headline: args.p_headline, details: args.p_details, expected_date: args.p_expected_date, source_type: args.p_source_type, source_url: args.p_source_url, edited_at: new Date().toISOString() })
+      return Promise.resolve({ data: null, error: null })
+    }
+
+    if (name === 'delete_lead') {
+      const lead = store.leads.find(item => item.id === args.p_lead_id)
+      if (!lead || lead.user_id !== currentUserId || lead.status === 'confirmed') return Promise.resolve({ data: null, error: { message: 'Only an unconfirmed lead owner can delete this lead' } })
+      store.leads = store.leads.filter(item => item.id !== lead.id)
+      return Promise.resolve({ data: null, error: null })
+    }
+
+    if (name === 'update_sighting') {
+      const sighting = store.sightings.find(item => item.id === args.p_sighting_id)
+      if (!sighting || sighting.user_id !== currentUserId || store.bounty_claims.some(item => item.sighting_id === sighting.id)) return Promise.resolve({ data: null, error: { message: 'Only an editable sighting owner can edit this sighting' } })
+      Object.assign(sighting, { notes: args.p_notes, quantity: args.p_quantity, availability: args.p_availability, edited_at: new Date().toISOString() })
+      store.sighting_verifications = store.sighting_verifications.filter(item => item.sighting_id !== sighting.id)
+      return Promise.resolve({ data: null, error: null })
     }
 
     if (name === 'is_app_owner') {

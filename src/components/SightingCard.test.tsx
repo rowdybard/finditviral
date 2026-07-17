@@ -18,6 +18,7 @@ vi.mock('../contexts/ViewerLocationContext', () => ({
 vi.mock('./SightingPhoto', () => ({ default: () => <div /> }))
 vi.mock('./ShareButton', () => ({ default: () => <button type="button">Share</button> }))
 vi.mock('./SightingVerificationControls', () => ({ default: () => <div /> }))
+vi.mock('../contexts/MascotToastContext', () => ({ useMascotToast: () => vi.fn() }))
 
 const sighting = {
   id: 'sighting-1',

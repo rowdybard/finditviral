@@ -31,7 +31,7 @@ export default function Navbar() {
   }, [accountOpen])
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-stone-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex min-h-14 max-w-2xl flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-2 sm:h-14 sm:flex-nowrap sm:py-0 sm:px-4">
         <Link to="/home" className="flex shrink-0 items-center gap-2 font-bold text-brand-600">
           <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +47,7 @@ export default function Navbar() {
             to="/bounties"
             className={({ isActive }) =>
               `rounded-lg px-2 py-1.5 text-sm font-medium transition-colors ${
-                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-100'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-stone-600 hover:bg-stone-100'
               }`
             }
           >
@@ -57,7 +57,7 @@ export default function Navbar() {
             to="/sightings"
             className={({ isActive }) =>
               `rounded-lg px-2 py-1.5 text-sm font-medium transition-colors ${
-                isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-100'
+                isActive ? 'bg-brand-50 text-brand-700' : 'text-stone-600 hover:bg-stone-100'
               }`
             }
           >
@@ -69,7 +69,7 @@ export default function Navbar() {
               <button
                 ref={accountButtonRef}
                 type="button"
-                className="flex min-h-11 max-w-[92px] items-center gap-1 rounded-lg px-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:max-w-36 sm:px-3"
+                className="flex min-h-11 max-w-[92px] items-center gap-1 rounded-lg px-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:max-w-36 sm:px-3"
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
                 onClick={() => setAccountOpen((open) => !open)}
@@ -78,15 +78,15 @@ export default function Navbar() {
                 <span aria-hidden="true">▾</span>
               </button>
               {accountOpen && (
-                <div role="menu" aria-label="Account" className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-1.5rem)] rounded-xl border-2 border-stone-900 bg-white p-1.5 shadow-[4px_4px_0_0_#0c251d]">
+                <div role="menu" aria-label="Account" className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-1.5rem)] rounded-xl border-2 border-stone-900 bg-white p-1.5 shadow-[4px_4px_0_0_#1c1917]">
                   {profile?.username && (
-                    <Link role="menuitem" to={`/profile/${profile.username}`} onClick={() => setAccountOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">Profile</Link>
+                    <Link role="menuitem" to={`/profile/${profile.username}`} onClick={() => setAccountOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">Profile</Link>
                   )}
-                  <Link role="menuitem" to="/drafts" onClick={() => { setAccountOpen(false); trackEvent('open_drafts', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                  <Link role="menuitem" to="/drafts" onClick={() => { setAccountOpen(false); trackEvent('open_drafts', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                     <span>My Drafts</span>
                   </Link>
                   {owner === true && (
-                    <Link role="menuitem" to="/admin?tab=review" onClick={() => { setAccountOpen(false); trackEvent('open_admin_review_queue', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                    <Link role="menuitem" to="/admin?tab=review" onClick={() => { setAccountOpen(false); trackEvent('open_admin_review_queue', { source: 'account_menu' }) }} className="flex min-h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                       <span>Admin</span>
                       {counts.total > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-black text-white" aria-label={`${counts.total} pending reviews`}>{counts.total}</span>}
                     </Link>

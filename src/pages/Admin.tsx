@@ -103,23 +103,23 @@ function SuggestionReviewCard({
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-brand-700">{kind}</p>
           <h3 className="text-lg font-black text-stone-950">{suggestionTitle(suggestion)}</h3>
-          {kind === 'product' && suggestion.brand && <p className="mt-1 text-sm text-gray-600">Brand: {suggestion.brand}</p>}
+          {kind === 'product' && suggestion.brand && <p className="mt-1 text-sm text-stone-600">Brand: {suggestion.brand}</p>}
           {kind === 'store' && (
             <>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-stone-600">
                 {[suggestion.address_line1, suggestion.city, suggestion.state, suggestion.zip_code].filter(Boolean).join(', ')}
               </p>
-              {suggestion.phone && <p className="text-sm text-gray-600">{suggestion.phone}</p>}
+              {suggestion.phone && <p className="text-sm text-stone-600">{suggestion.phone}</p>}
             </>
           )}
           {suggestion.source_url && <a className="mt-1 block text-sm font-semibold text-brand-700" href={suggestion.source_url} target="_blank" rel="noreferrer">Review source ↗</a>}
-          <p className="mt-2 text-xs text-gray-500">Submitted {new Date(suggestion.created_at).toLocaleString()}</p>
+          <p className="mt-2 text-xs text-stone-500">Submitted {new Date(suggestion.created_at).toLocaleString()}</p>
         </div>
         <span className="badge bg-amber-100 text-amber-800">{suggestion.status}</span>
       </div>
 
       {mode === 'duplicate' && (
-        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-stone-50 p-3">
+        <div className="mt-4 space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
           <CatalogSearchSelect kind={kind} label={`Link existing ${kind}`} value={canonical} onChange={setCanonical} required />
           <input className="input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Resolution note (optional)" maxLength={500} />
           <div className="flex gap-2">
@@ -143,10 +143,10 @@ function SuggestionReviewCard({
       {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {mode === 'idle' && suggestion.status === 'pending' && (
-        <div className="mt-4 space-y-3 border-t border-gray-200 pt-4">
+        <div className="mt-4 space-y-3 border-t border-stone-200 pt-4">
           {kind === 'product' && (
-            <div className="grid gap-3 rounded-lg border border-gray-200 bg-stone-50 p-3 sm:grid-cols-2">
-              <label className="text-sm font-semibold text-gray-800">
+            <div className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-stone-800">
                 Availability
                 <select className="input mt-1" value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value as NewProductAvailability)}>
                   <option value="available">Available now</option>
@@ -156,10 +156,10 @@ function SuggestionReviewCard({
                   <option value="limited">Limited release</option>
                 </select>
               </label>
-              <label className="text-sm font-semibold text-gray-800">
+              <label className="text-sm font-semibold text-stone-800">
                 Release date
                 <input className="input mt-1" type="date" value={releaseDate} onChange={(event) => setReleaseDate(event.target.value)} />
-                <span className="mt-1 block text-xs font-normal text-gray-500">Leave blank only when the official date is unknown.</span>
+                <span className="mt-1 block text-xs font-normal text-stone-500">Leave blank only when the official date is unknown.</span>
               </label>
             </div>
           )}
@@ -199,14 +199,14 @@ function ProductCatalogRow({
   const [searchTerms, setSearchTerms] = useState(product.search_terms ?? '')
 
   return (
-    <article className="card border border-gray-200">
+    <article className="card border border-stone-200">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate font-bold text-gray-900">{product.name}</h3>
+            <h3 className="truncate font-bold text-stone-900">{product.name}</h3>
             {!product.is_active && <span className="badge bg-red-100 text-red-800">disabled</span>}
           </div>
-          <p className="mt-0.5 text-sm text-gray-600">
+          <p className="mt-0.5 text-sm text-stone-600">
             {product.trend_name}{product.brand ? ` · ${product.brand}` : ''} · {product.availability_status}
             {product.category ? ` · ${product.category}` : ''}
           </p>
@@ -222,7 +222,7 @@ function ProductCatalogRow({
       </div>
 
       {editing && (
-        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-stone-50 p-3">
+        <div className="mt-4 space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" maxLength={160} />
           <div className="grid gap-3 sm:grid-cols-2">
             <select className="input" value={availabilityStatus} onChange={(e) => setAvailabilityStatus(e.target.value)}>
@@ -267,14 +267,14 @@ function StoreCatalogRow({
   const [addressLine1, setAddressLine1] = useState(store.address_line1 ?? '')
 
   return (
-    <article className="card border border-gray-200">
+    <article className="card border border-stone-200">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate font-bold text-gray-900">{store.name}</h3>
+            <h3 className="truncate font-bold text-stone-900">{store.name}</h3>
             {!store.is_active && <span className="badge bg-red-100 text-red-800">disabled</span>}
           </div>
-          <p className="mt-0.5 text-sm text-gray-600">
+          <p className="mt-0.5 text-sm text-stone-600">
             {store.retailer_name}{store.city ? ` · ${store.city}, ${store.state ?? ''}` : ''}{store.zip_code ? ` ${store.zip_code}` : ''}
           </p>
         </div>
@@ -289,7 +289,7 @@ function StoreCatalogRow({
       </div>
 
       {editing && (
-        <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-stone-50 p-3">
+        <div className="mt-4 space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Store name" maxLength={160} />
           <input className="input" value={addressLine1} onChange={(e) => setAddressLine1(e.target.value)} placeholder="Street address" maxLength={200} />
           <div className="flex gap-2">
@@ -608,8 +608,8 @@ export default function Admin() {
 
       {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
 
-      <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2" role="tablist">
-        {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${tab === item.id ? 'bg-brand-100 text-brand-800' : 'text-gray-600 hover:bg-gray-100'}`} onClick={() => selectTab(item.id)}>{item.label}</button>)}
+      <div className="flex gap-1 overflow-x-auto border-b border-stone-200 pb-2" role="tablist">
+        {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${tab === item.id ? 'bg-brand-100 text-brand-800' : 'text-stone-600 hover:bg-stone-100'}`} onClick={() => selectTab(item.id)}>{item.label}</button>)}
       </div>
 
       {tab === 'review' && (
@@ -619,7 +619,7 @@ export default function Admin() {
             <p className="mt-1 text-sm text-stone-600">Only unresolved work requiring an owner decision is counted.</p>
           </div>
           {reviewCounts.total === 0 ? (
-            <p className="card text-sm font-semibold text-gray-600">Nothing needs review right now.</p>
+            <p className="card text-sm font-semibold text-stone-600">Nothing needs review right now.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {[
@@ -650,7 +650,7 @@ export default function Admin() {
             .filter(({ item }) => item.status === 'pending')
             .filter(({ kind }) => !queue || queue === `${kind}_suggestions`)
             .map(({ item, kind }) => <SuggestionReviewCard key={`${kind}-${item.id}`} kind={kind} suggestion={item} onResolved={loadAdminData} />)}
-          {products.every((item) => item.status !== 'pending') && stores.every((item) => item.status !== 'pending') && <p className="card text-sm text-gray-600">No suggestions are waiting for review.</p>}
+          {products.every((item) => item.status !== 'pending') && stores.every((item) => item.status !== 'pending') && <p className="card text-sm text-stone-600">No suggestions are waiting for review.</p>}
         </div>
       )}
 
@@ -670,7 +670,7 @@ export default function Admin() {
             .filter((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state)
             .map((item) => (
             <article key={`${item.contribution_type}-${item.contribution_id}`} className="card flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs font-bold uppercase text-gray-500">{item.contribution_type} · {item.moderation_status}</p><h3 className="font-bold text-gray-900">{item.product_name}</h3><p className="text-sm text-gray-600">{item.username ? `@${item.username}` : 'Member'} · {new Date(item.occurred_at).toLocaleString()}</p></div>
+              <div><p className="text-xs font-bold uppercase text-stone-500">{item.contribution_type} · {item.moderation_status}</p><h3 className="font-bold text-stone-900">{item.product_name}</h3><p className="text-sm text-stone-600">{item.username ? `@${item.username}` : 'Member'} · {new Date(item.occurred_at).toLocaleString()}</p></div>
               {item.moderation_flagged && (
                 <p className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-red-800">
                   OpenAI flagged{item.moderation_categories?.length ? `: ${item.moderation_categories.join(', ')}` : ''}
@@ -692,26 +692,26 @@ export default function Admin() {
               )}
             </article>
           ))}
-          {!contributions.some((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state) && <p className="card text-sm text-gray-600">No contributions match this review filter.</p>}
+          {!contributions.some((item) => !queue || queue === `${item.contribution_type}s` || queue === item.community_state) && <p className="card text-sm text-stone-600">No contributions match this review filter.</p>}
         </div>
       )}
 
       {tab === 'interests' && (
         <div className="space-y-3">
-          {interests.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-xs font-bold uppercase text-brand-700">{item.source} · {item.digest_status ?? 'unassigned'}</p><time className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString()}</time></div>{item.email && item.source !== 'onboarding_looking_for' && <p className="mt-2 text-sm font-semibold text-gray-900">{item.email}{item.username ? ` · @${item.username}` : ''}</p>}<p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{item.reason ?? item.looking_for ?? 'No details supplied.'}</p></article>)}
-          {interests.length === 0 && <p className="card text-sm text-gray-600">No interest submissions yet.</p>}
+          {interests.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-xs font-bold uppercase text-brand-700">{item.source} · {item.digest_status ?? 'unassigned'}</p><time className="text-xs text-stone-500">{new Date(item.created_at).toLocaleString()}</time></div>{item.email && item.source !== 'onboarding_looking_for' && <p className="mt-2 text-sm font-semibold text-stone-900">{item.email}{item.username ? ` · @${item.username}` : ''}</p>}<p className="mt-1 whitespace-pre-wrap text-sm text-stone-700">{item.reason ?? item.looking_for ?? 'No details supplied.'}</p></article>)}
+          {interests.length === 0 && <p className="card text-sm text-stone-600">No interest submissions yet.</p>}
         </div>
       )}
 
       {tab === 'members' && (
         <div className="space-y-5">
           <form onSubmit={restrictMember} className="card space-y-3">
-            <h2 className="font-bold text-gray-900">Restrict a member</h2>
+            <h2 className="font-bold text-stone-900">Restrict a member</h2>
             <input className="input" value={memberSearchQuery} onChange={(event) => void searchMembers(event.target.value)} placeholder="Search by username…" />
             {memberSearchResults.length > 0 && (
               <div className="space-y-1">
                 {memberSearchResults.map((m) => (
-                  <button key={m.user_id} type="button" className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50" onClick={() => { setMemberId(m.user_id); setMemberSearchQuery(`@${m.username}`); setMemberSearchResults([]) }}>
+                  <button key={m.user_id} type="button" className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:bg-stone-50" onClick={() => { setMemberId(m.user_id); setMemberSearchQuery(`@${m.username}`); setMemberSearchResults([]) }}>
                     @{m.username} · {m.karma} karma · joined {new Date(m.created_at).toLocaleDateString()}
                   </button>
                 ))}
@@ -722,14 +722,14 @@ export default function Admin() {
             <textarea className="input min-h-20" value={memberReason} onChange={(event) => setMemberReason(event.target.value)} maxLength={500} placeholder="Reason (private)" required />
             <button type="submit" className="btn-primary">Apply restriction</button>
           </form>
-          {restrictions.map((item) => <article key={item.user_id} className="card flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-gray-900">{item.username ? `@${item.username}` : item.user_id}</h3><p className="text-sm text-gray-600">{item.status}{item.expires_at ? ` until ${new Date(item.expires_at).toLocaleString()}` : ''}</p>{item.reason && <p className="mt-1 text-sm text-gray-600">{item.reason}</p>}</div><button type="button" className="btn-secondary" onClick={() => void clearRestriction(item.user_id)}>Restore access</button></article>)}
+          {restrictions.map((item) => <article key={item.user_id} className="card flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-stone-900">{item.username ? `@${item.username}` : item.user_id}</h3><p className="text-sm text-stone-600">{item.status}{item.expires_at ? ` until ${new Date(item.expires_at).toLocaleString()}` : ''}</p>{item.reason && <p className="mt-1 text-sm text-stone-600">{item.reason}</p>}</div><button type="button" className="btn-secondary" onClick={() => void clearRestriction(item.user_id)}>Restore access</button></article>)}
         </div>
       )}
 
       {tab === 'stores' && (
         <div className="space-y-5">
           <form onSubmit={handleCreateStore} className="card space-y-3">
-            <h2 className="font-bold text-gray-900">Add a store</h2>
+            <h2 className="font-bold text-stone-900">Add a store</h2>
             <input className="input" value={newStoreRetailer} onChange={(event) => setNewStoreRetailer(event.target.value)} placeholder="Retailer name (e.g. Target)" required />
             <input className="input" value={newStoreName} onChange={(event) => setNewStoreName(event.target.value)} placeholder="Store name (e.g. Target Lansing)" required />
             <input className="input" value={newStoreAddress} onChange={(event) => setNewStoreAddress(event.target.value)} placeholder="Street address" required />
@@ -744,7 +744,7 @@ export default function Admin() {
 
           {catalogStores.length > 0 && (
             <div className="space-y-3">
-              <h2 className="font-bold text-gray-900">Manage stores ({catalogStores.length})</h2>
+              <h2 className="font-bold text-stone-900">Manage stores ({catalogStores.length})</h2>
               {catalogStores.map((store) => (
                 <StoreCatalogRow
                   key={store.id}
@@ -765,7 +765,7 @@ export default function Admin() {
       {tab === 'products' && (
         <div className="space-y-5">
           <form onSubmit={handleCreateProduct} className="card space-y-3">
-            <h2 className="font-bold text-gray-900">Add a product</h2>
+            <h2 className="font-bold text-stone-900">Add a product</h2>
             <input className="input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} placeholder="Product name" required />
             <input className="input" value={newProductTrend} onChange={(event) => setNewProductTrend(event.target.value)} placeholder="Trend UUID" required />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -786,7 +786,7 @@ export default function Admin() {
 
           {catalogProducts.length > 0 && (
             <div className="space-y-3">
-              <h2 className="font-bold text-gray-900">Manage products ({catalogProducts.length})</h2>
+              <h2 className="font-bold text-stone-900">Manage products ({catalogProducts.length})</h2>
               {catalogProducts.map((product) => (
                 <ProductCatalogRow
                   key={product.id}
@@ -806,8 +806,8 @@ export default function Admin() {
 
       {tab === 'history' && (
         <div className="space-y-3">
-          {history.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-bold text-gray-900">{item.contribution_type}: {item.previous_status ?? 'new'} → {item.new_status}</p><time className="text-xs text-gray-500">{new Date(item.created_at).toLocaleString()}</time></div><p className="mt-1 break-all text-xs text-gray-500">{item.contribution_id}</p>{item.reason && <p className="mt-2 text-sm text-gray-700">{item.reason}</p>}</article>)}
-          {history.length === 0 && <p className="card text-sm text-gray-600">No moderation history yet.</p>}
+          {history.map((item) => <article key={item.id} className="card"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-bold text-stone-900">{item.contribution_type}: {item.previous_status ?? 'new'} → {item.new_status}</p><time className="text-xs text-stone-500">{new Date(item.created_at).toLocaleString()}</time></div><p className="mt-1 break-all text-xs text-stone-500">{item.contribution_id}</p>{item.reason && <p className="mt-2 text-sm text-stone-700">{item.reason}</p>}</article>)}
+          {history.length === 0 && <p className="card text-sm text-stone-600">No moderation history yet.</p>}
         </div>
       )}
 

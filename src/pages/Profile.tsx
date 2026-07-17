@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -60,7 +60,7 @@ export default function ProfilePage() {
           .limit(20),
         supabase
           .from('sightings')
-          .select('id,user_id,product_id,store_id,store_name,city,state,zip_code,stock_level,availability,quantity,notes,seen_at,is_public,bounty_id,photo_urls,moderation_status,created_at,product:products(*)')
+          .select('id,user_id,product_id,store_id,store_name,city,state,zip_code,stock_level,availability,quantity,notes,seen_at,is_public,bounty_id,photo_urls,moderation_status,created_at,edited_at,product:products(*)')
           .eq('user_id', profileData.id)
           .eq('is_public', true)
           .order('created_at', { ascending: false })
@@ -204,8 +204,8 @@ export default function ProfilePage() {
           {profile.username.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900">{profile.username}</h1>
-          <div className="mt-1 flex items-center gap-3 text-sm text-gray-500">
+          <h1 className="text-xl font-bold text-stone-900">{profile.username}</h1>
+          <div className="mt-1 flex items-center gap-3 text-sm text-stone-500">
             <span className="flex items-center gap-1">
               <svg className="h-4 w-4 text-brand-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
               {profile.karma} karma
@@ -221,8 +221,8 @@ export default function ProfilePage() {
           className="card flex min-h-16 items-center justify-between gap-4 border-2 border-brand-200 transition hover:border-brand-400 hover:bg-brand-50"
         >
           <div>
-            <h2 className="font-bold text-gray-900">My Drafts</h2>
-            <p className="mt-1 text-sm text-gray-600">Resume unfinished sightings, bounties, leads, and claims.</p>
+            <h2 className="font-bold text-stone-900">My Drafts</h2>
+            <p className="mt-1 text-sm text-stone-600">Resume unfinished sightings, bounties, leads, and claims.</p>
           </div>
           <span className="inline-flex min-w-8 justify-center rounded-full bg-brand-600 px-2.5 py-1 text-sm font-black text-white" aria-label={`${draftCount} drafts`}>{draftCount}</span>
         </Link>
@@ -230,14 +230,14 @@ export default function ProfilePage() {
 
       {isOwnProfile && profile.looking_for && (
         <div className="card">
-          <h2 className="font-semibold text-gray-900">What you're looking for</h2>
-          <p className="mt-2 text-sm text-gray-600">{profile.looking_for}</p>
+          <h2 className="font-semibold text-stone-900">What you're looking for</h2>
+          <p className="mt-2 text-sm text-stone-600">{profile.looking_for}</p>
         </div>
       )}
 
       {isOwnProfile && profile.preferred_cities && profile.preferred_cities.length > 0 && (
         <div className="card">
-          <h2 className="font-semibold text-gray-900">Your cities</h2>
+          <h2 className="font-semibold text-stone-900">Your cities</h2>
           <div className="mt-2 flex flex-wrap gap-2">
             {profile.preferred_cities.map((city) => (
               <span key={city} className="badge bg-brand-100 text-brand-800">{city}</span>
@@ -249,7 +249,7 @@ export default function ProfilePage() {
       {isOwnProfile && (
         <div className="card">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Contact info</h2>
+            <h2 className="font-semibold text-stone-900">Contact info</h2>
             {!editing && (
               <button onClick={() => { setContactInfo(savedContactInfo ?? ''); setEditing(true); setSaveError(null) }} className="btn-ghost text-sm">
                 Edit
@@ -265,7 +265,7 @@ export default function ProfilePage() {
                 placeholder="Email, Discord, Venmo, etc."
                 maxLength={500}
               />
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-stone-500">
                 This is shown to bounty posters when they accept your claim. It is never public.
               </p>
               {saveError && (
@@ -281,7 +281,7 @@ export default function ProfilePage() {
               </div>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-stone-600">
               {savedContactInfo || 'No contact info set. Add one so bounty posters can reach you.'}
             </p>
           )}
@@ -289,7 +289,7 @@ export default function ProfilePage() {
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Bounties ({bounties.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold text-stone-900">Bounties ({bounties.length})</h2>
         {bounties.length > 0 ? (
           <div className="space-y-3">
             {bounties.map((b) => (
@@ -297,12 +297,12 @@ export default function ProfilePage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No bounties posted.</p>
+          <p className="text-sm text-stone-500">No bounties posted.</p>
         )}
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Public Sightings ({sightings.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold text-stone-900">Public Sightings ({sightings.length})</h2>
         {sightings.length > 0 ? (
           <div className="space-y-3">
             {sightings.map((s) => (
@@ -310,12 +310,12 @@ export default function ProfilePage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No public sightings reported.</p>
+          <p className="text-sm text-stone-500">No public sightings reported.</p>
         )}
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Claim History ({claims.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold text-stone-900">Claim History ({claims.length})</h2>
         {claims.length > 0 ? (
           <div className="space-y-3">
             {claims.map((c) => (
@@ -329,8 +329,8 @@ export default function ProfilePage() {
                   </Link>
                   <span className={`badge ${
                     c.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                    c.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-600'
+                    c.status === 'pending' ? 'bg-brand-100 text-brand-800' :
+                    'bg-stone-100 text-stone-600'
                   }`}>
                     {c.status}
                   </span>
@@ -339,7 +339,7 @@ export default function ProfilePage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No claims submitted.</p>
+          <p className="text-sm text-stone-500">No claims submitted.</p>
         )}
       </section>
     </div>

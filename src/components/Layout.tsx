@@ -14,7 +14,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className={`flex-1 mx-auto w-full px-4 py-6 ${isWide ? 'max-w-5xl' : 'max-w-2xl'}`}>{children}</main>
-      <footer className="border-t border-gray-200 py-4 text-center text-xs text-gray-400">
+      <footer className="border-t border-stone-200 py-4 text-center text-xs text-stone-400">
         FindItViral — {activeMarket.betaLabel}
         <MascotRestoreButton />
       </footer>

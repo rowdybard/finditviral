@@ -18,7 +18,7 @@ body {
   left: 0;
   right: 0;
   height: 6px;
-  background: #f97316;
+  background: #2563eb;
 }
 
 main {
@@ -54,8 +54,8 @@ a {
   border-radius: 0.5rem;
   border: 2px solid #1c1917;
   padding: 0.75rem 1.25rem;
-  background: #f97316;
-  color: #1c1917;
+  background: #2563eb;
+  color: #fff;
   font-weight: 700;
   text-decoration: none;
   box-shadow: 4px 4px 0 0 #1c1917;
@@ -68,6 +68,6 @@ a:hover {
 }
 
 a:focus {
-  outline: 3px solid #fdba74;
+  outline: 3px solid #93c5fd;
   outline-offset: 3px;
 }

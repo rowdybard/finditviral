@@ -136,19 +136,19 @@ export default function CatalogSearchSelect({
       </label>
 
       {value ? (
-        <div className="flex min-h-11 items-center gap-3 rounded-lg border border-gray-300 bg-white px-3.5 py-2">
+        <div className="flex min-h-11 items-center gap-3 rounded-lg border border-stone-300 bg-white px-3.5 py-2">
           {kind === 'product' && value.imageUrl
             ? <img src={value.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
             : kind === 'product'
               ? <Package aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="bold" />
               : <MapPin aria-hidden="true" className="shrink-0 text-brand-600" size={20} weight="fill" />}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-gray-900">{value.label}</p>
-            <p className="truncate text-xs text-gray-500">{value.detail}</p>
+            <p className="truncate text-sm font-semibold text-stone-900">{value.label}</p>
+            <p className="truncate text-xs text-stone-500">{value.detail}</p>
           </div>
           <button
             type="button"
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
             aria-label={`Clear selected ${kind}`}
             onClick={() => onChange(null)}
             disabled={disabled}
@@ -161,7 +161,7 @@ export default function CatalogSearchSelect({
           <div className="relative">
             <MagnifyingGlass
               aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
               size={18}
             />
             <input
@@ -189,16 +189,16 @@ export default function CatalogSearchSelect({
           <span className="sr-only" role="status" aria-live="polite">{statusMessage}</span>
 
           {query.trim().length > 0 && query.trim().length < 2 && (
-            <p className="mt-1 text-xs text-gray-500">Type at least 2 characters.</p>
+            <p className="mt-1 text-xs text-stone-500">Type at least 2 characters.</p>
           )}
 
           {open && query.trim().length >= 2 && (
             <div
               id={`${inputId}-results`}
               role="listbox"
-              className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl"
+              className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-stone-200 bg-white p-1 shadow-xl"
             >
-              {loading && <p className="px-3 py-3 text-sm text-gray-500">Searching…</p>}
+              {loading && <p className="px-3 py-3 text-sm text-stone-500">Searching…</p>}
               {!loading && error && <p className="px-3 py-3 text-sm text-red-600">{error}</p>}
               {!loading && !error && results.map((result, index) => (
                 <button
@@ -217,18 +217,18 @@ export default function CatalogSearchSelect({
                       ? <Package aria-hidden="true" className="shrink-0 text-brand-400" size={20} weight="bold" />
                       : <MapPin aria-hidden="true" className="shrink-0 text-brand-400" size={20} weight="fill" />}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{result.label}</span>
-                    <span className="block truncate text-xs text-gray-500">{result.detail}</span>
+                    <span className="block truncate text-sm font-semibold text-stone-900">{result.label}</span>
+                    <span className="block truncate text-xs text-stone-500">{result.detail}</span>
                   </span>
                 </button>
               ))}
               {!loading && !error && results.length === 0 && (
-                <p className="px-3 py-3 text-sm text-gray-500">No matches found.</p>
+                <p className="px-3 py-3 text-sm text-stone-500">No matches found.</p>
               )}
               {!loading && !error && onSuggest && (
                 <button
                   type="button"
-                  className="mt-1 block w-full rounded-lg border-t border-gray-100 px-3 py-2.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"
+                  className="mt-1 block w-full rounded-lg border-t border-stone-100 px-3 py-2.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setOpen(false)

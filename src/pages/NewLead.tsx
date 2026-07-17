@@ -188,12 +188,12 @@ export default function NewLead() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/sightings" className="text-sm text-gray-500 hover:text-gray-700">← Sightings</Link>
+        <Link to="/sightings" className="text-sm text-stone-500 hover:text-stone-700">← Sightings</Link>
         <div className="mt-3 flex items-center gap-4">
           <div className="fiv-step-badge text-lg">1</div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Share a Restock Lead</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Heard about an upcoming restock? Share what you know. Leads are unconfirmed until someone reports a sighting.</p>
+            <h1 className="text-2xl font-bold text-stone-900">Share a Restock Lead</h1>
+            <p className="mt-0.5 text-sm text-stone-500">Heard about an upcoming restock? Share what you know. Leads are unconfirmed until someone reports a sighting.</p>
           </div>
           <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
             <Megaphone size={32} weight="duotone" className="text-brand-600" />
@@ -255,7 +255,7 @@ export default function NewLead() {
                   placeholder="Expected restock at Target Lansing"
                   required
                 />
-                <p className="mt-1 text-right text-xs text-gray-400">{headline.length}/140</p>
+                <p className="mt-1 text-right text-xs text-stone-400">{headline.length}/140</p>
               </div>
               <div>
                 <label className="label" htmlFor="details">Details (optional)</label>
@@ -267,7 +267,7 @@ export default function NewLead() {
                   maxLength={2000}
                   placeholder="What did you hear? When? Any specifics about quantity or variants?"
                 />
-                <p className="mt-1 text-right text-xs text-gray-400">{details.length}/2000</p>
+                <p className="mt-1 text-right text-xs text-stone-400">{details.length}/2000</p>
               </div>
             </div>
 
@@ -277,11 +277,11 @@ export default function NewLead() {
               <fieldset>
                 <legend className="label">Where is this lead about? *</legend>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'region' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-stone-200 bg-white text-stone-600'}`}>
                     <input className="sr-only" type="radio" name="scope" checked={scope === 'region'} onChange={() => setScope('region')} />
                     ZIP Radius
                   </label>
-                  <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <label className={`cursor-pointer rounded-lg border-2 px-3 py-3 text-center text-sm font-semibold ${scope === 'stores' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-stone-200 bg-white text-stone-600'}`}>
                     <input className="sr-only" type="radio" name="scope" checked={scope === 'stores'} onChange={() => setScope('stores')} />
                     Store
                   </label>
@@ -341,8 +341,8 @@ export default function NewLead() {
           <div className="space-y-6">
             {/* Step 4: Expected Date */}
             <div className="space-y-3">
-              <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Expected date <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
-              <p className="text-xs text-gray-500">When do you expect the restock to happen?</p>
+              <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Expected date <span className="text-xs font-normal text-stone-400">(Optional)</span></h2>
+              <p className="text-xs text-stone-500">When do you expect the restock to happen?</p>
               <input
                 id="expected-date"
                 className="input"
@@ -396,10 +396,10 @@ export default function NewLead() {
           {error && <div className="lg:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
           <div className="lg:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2 text-sm text-gray-600">
+            <div className="flex items-start gap-2 text-sm text-stone-600">
               <Users size={18} weight="duotone" className="mt-0.5 shrink-0 text-brand-500" />
               <div>
-                <p className="font-semibold text-gray-900">Leads help the community spot restocks early.</p>
+                <p className="font-semibold text-stone-900">Leads help the community spot restocks early.</p>
                 <p className="text-xs">Someone might confirm it with a sighting.</p>
               </div>
             </div>

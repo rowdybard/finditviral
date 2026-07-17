@@ -5,13 +5,14 @@ type ShareButtonProps = {
   title: string
   text: string
   path: string
-  accent?: 'red' | 'green' | 'yellow'
+  accent?: 'red' | 'green' | 'yellow' | 'brand'
 }
 
 const accentClasses = {
   red: 'hover:bg-red-50 focus-visible:ring-red-600',
   green: 'hover:bg-green-50 focus-visible:ring-green-600',
-  yellow: 'hover:bg-yellow-50 focus-visible:ring-yellow-500',
+  yellow: 'hover:bg-brand-50 focus-visible:ring-amber-500',
+  brand: 'hover:bg-brand-50 focus-visible:ring-brand-600',
 }
 
 export default function ShareButton({

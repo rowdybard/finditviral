@@ -16,13 +16,13 @@ const messages: Record<ContributionDraft['state'], string> = {
 export default function ContributionDraftNotice({ draft, onDiscard, discarding = false }: Props) {
   const blocked = draft.state === 'waiting_for_approval' || draft.state === 'needs_attention'
   return (
-    <aside className={`rounded-xl border px-4 py-3 ${blocked ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
+    <aside className={`rounded-xl border px-4 py-3 ${blocked ? 'border-amber-300 bg-amber-50' : 'border-brand-200 bg-brand-50'}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-stone-900">
             {blocked ? 'Saved draft is not ready yet' : 'Saved draft restored'}
           </p>
-          <p className="mt-1 text-sm text-gray-700">{messages[draft.state]}</p>
+          <p className="mt-1 text-sm text-stone-700">{messages[draft.state]}</p>
         </div>
         <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={onDiscard} disabled={discarding}>
           {discarding ? 'Discarding…' : 'Discard draft'}

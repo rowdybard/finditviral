@@ -24,10 +24,10 @@ type SubTab = 'sources' | 'candidates' | 'patches' | 'changes'
 
 const STATE_COLORS: Record<CandidateState, string> = {
   candidate: 'bg-stone-100 text-stone-700',
-  emerging: 'bg-blue-100 text-blue-700',
+  emerging: 'bg-brand-100 text-brand-700',
   trending: 'bg-green-100 text-green-700',
   cooling: 'bg-amber-100 text-amber-700',
-  archived: 'bg-gray-200 text-gray-600',
+  archived: 'bg-stone-200 text-stone-600',
 }
 
 const REVIEW_COLORS: Record<ReviewStatus, string> = {
@@ -42,7 +42,7 @@ function Spinner() {
 
 function modeColor(mode: string): string {
   if (mode === 'autopilot') return 'bg-green-100 text-green-800 border-green-300'
-  if (mode === 'review') return 'bg-blue-100 text-blue-800 border-blue-300'
+  if (mode === 'review') return 'bg-brand-100 text-brand-800 border-brand-300'
   return 'bg-stone-100 text-stone-700 border-stone-300'
 }
 
@@ -100,12 +100,12 @@ export default function TrendEnginePanel() {
         )}
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-stone-200 pb-2">
         {subTabs.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${subTab === item.id ? 'bg-brand-100 text-brand-800' : 'text-gray-600 hover:bg-gray-100'}`}
+            className={`min-h-11 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${subTab === item.id ? 'bg-brand-100 text-brand-800' : 'text-stone-600 hover:bg-stone-100'}`}
             onClick={() => setSubTab(item.id)}
           >
             {item.label}
@@ -157,7 +157,7 @@ function SourcesTab() {
       {loading ? (
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : sources.length === 0 ? (
-        <p className="card text-sm text-gray-600">No sources registered yet.</p>
+        <p className="card text-sm text-stone-600">No sources registered yet.</p>
       ) : (
         <div className="space-y-2">
           {sources.map((src) => (
@@ -362,7 +362,7 @@ function CandidatesTab() {
       {loading ? (
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : candidates.length === 0 ? (
-        <p className="card text-sm text-gray-600">No candidates found.</p>
+        <p className="card text-sm text-stone-600">No candidates found.</p>
       ) : (
         <div className="space-y-2">
           {candidates.map((c) => (
@@ -452,7 +452,7 @@ function PatchesTab() {
             {patch.operations.map((op) => (
               <div key={op.operation_id} className="rounded-lg border border-stone-200 p-3">
                 <div className="flex items-center gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${op.action === 'ensure_trend' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                  <span className={`rounded px-2 py-0.5 text-xs font-bold ${op.action === 'ensure_trend' ? 'bg-brand-100 text-brand-700' : 'bg-green-100 text-green-700'}`}>
                     {op.action}
                   </span>
                   <span className="text-xs font-mono text-stone-500">{op.candidate_id}</span>
@@ -466,7 +466,7 @@ function PatchesTab() {
                   <div className="mt-1 text-xs">
                     <span className="font-bold text-stone-600">Evidence: </span>
                     {op.reason.evidence_urls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{i > 0 ? ', ' : ''}{url}</a>
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">{i > 0 ? ', ' : ''}{url}</a>
                     ))}
                   </div>
                 )}
@@ -475,7 +475,7 @@ function PatchesTab() {
           </div>
         </article>
       ) : (
-        <p className="card text-sm text-gray-600">No patch generated yet. Click "Generate patch" to create one in the current engine mode.</p>
+        <p className="card text-sm text-stone-600">No patch generated yet. Click "Generate patch" to create one in the current engine mode.</p>
       )}
     </div>
   )
@@ -514,7 +514,7 @@ function ChangesTab() {
       {loading && changes.length === 0 ? (
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : changes.length === 0 ? (
-        <p className="card text-sm text-gray-600">No changes recorded yet.</p>
+        <p className="card text-sm text-stone-600">No changes recorded yet.</p>
       ) : (
         <div className="space-y-1.5">
           {changes.map((ch) => (

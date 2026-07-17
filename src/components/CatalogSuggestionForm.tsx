@@ -162,10 +162,10 @@ export default function CatalogSuggestionForm({
 
   return (
     <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
-      <h3 className="font-semibold text-gray-900">
+      <h3 className="font-semibold text-stone-900">
         Suggest {kind === 'product' ? 'a product' : 'a store or boutique'}
       </h3>
-      <p className="mt-1 text-xs leading-relaxed text-gray-600">
+      <p className="mt-1 text-xs leading-relaxed text-stone-600">
         An owner will verify this before it enters the catalog. Your contribution will be saved as a private draft; nothing publishes automatically.
       </p>
 

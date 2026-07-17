@@ -338,9 +338,9 @@ export default function BountyDetail() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/bounties" className="text-sm text-gray-500 hover:text-gray-700">← Bounties</Link>
+        <Link to="/bounties" className="text-sm text-stone-500 hover:text-stone-700">← Bounties</Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-          <div><h1 className="text-2xl font-black text-gray-900">{bounty.product_name}</h1><p className="mt-1 text-sm text-gray-500">Posted by @{bounty.owner_username} · {timeAgo(bounty.created_at)}</p></div>
+          <div><h1 className="text-2xl font-black text-stone-900">{bounty.product_name}</h1><p className="mt-1 text-sm text-stone-500">Posted by @{bounty.owner_username} · {timeAgo(bounty.created_at)}</p></div>
           <span className={`badge ${statusColor(bounty.status)}`}>{statusLabel(bounty.status)}</span>
         </div>
       </div>
@@ -350,23 +350,23 @@ export default function BountyDetail() {
       )}
       {actionError && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
 
-      <section className="card space-y-4 border-2 border-stone-900 shadow-[4px_4px_0_0_#0c251d]">
+      <section className="card space-y-4 border-2 border-stone-900 shadow-[4px_4px_0_0_#1c1917]">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div><p className="text-xs font-bold uppercase text-gray-500">Reward</p><p className="text-2xl font-black text-red-600">{formatReward(bounty.reward_cents / 100)}</p></div>
-          <div><p className="text-xs font-bold uppercase text-gray-500">Scope</p><p className="font-bold text-gray-900">{bounty.scope_type === 'region' ? `ZIP ${bounty.zip_code}` : bounty.scope_type === 'retailers' ? (bounty.retailer_names?.length ? bounty.retailer_names.join(', ') : 'Retailers') : bounty.store_name ?? (bounty.store_names?.length ? bounty.store_names.join(', ') : 'Stores')}</p><p className="text-xs text-gray-500">{bounty.scope_type === 'region' ? `${bounty.radius_miles} mile radius` : bounty.scope_type === 'retailers' ? `Within ${bounty.radius_miles} mi of ${bounty.zip_code}` : 'Exact store'}</p></div>
-          <div><p className="text-xs font-bold uppercase text-gray-500">Deadline</p><p className="font-bold text-gray-900">{new Date(bounty.deadline).toLocaleDateString()}</p><p className="text-xs text-gray-500">{new Date(bounty.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p></div>
-          <div><p className="text-xs font-bold uppercase text-gray-500">Claims</p><p className="text-2xl font-black text-gray-900">{claims.length}</p></div>
+          <div><p className="text-xs font-bold uppercase text-stone-500">Reward</p><p className="text-2xl font-black text-red-600">{formatReward(bounty.reward_cents / 100)}</p></div>
+          <div><p className="text-xs font-bold uppercase text-stone-500">Scope</p><p className="font-bold text-stone-900">{bounty.scope_type === 'region' ? `ZIP ${bounty.zip_code}` : bounty.scope_type === 'retailers' ? (bounty.retailer_names?.length ? bounty.retailer_names.join(', ') : 'Retailers') : bounty.store_name ?? (bounty.store_names?.length ? bounty.store_names.join(', ') : 'Stores')}</p><p className="text-xs text-stone-500">{bounty.scope_type === 'region' ? `${bounty.radius_miles} mile radius` : bounty.scope_type === 'retailers' ? `Within ${bounty.radius_miles} mi of ${bounty.zip_code}` : 'Exact store'}</p></div>
+          <div><p className="text-xs font-bold uppercase text-stone-500">Deadline</p><p className="font-bold text-stone-900">{new Date(bounty.deadline).toLocaleDateString()}</p><p className="text-xs text-stone-500">{new Date(bounty.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</p></div>
+          <div><p className="text-xs font-bold uppercase text-stone-500">Claims</p><p className="text-2xl font-black text-stone-900">{claims.length}</p></div>
         </div>
-        {bounty.requirements && <div className="border-t border-gray-200 pt-4"><h2 className="text-sm font-bold text-gray-900">Requirements</h2><p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{bounty.requirements}</p></div>}
+        {bounty.requirements && <div className="border-t border-stone-200 pt-4"><h2 className="text-sm font-bold text-stone-900">Requirements</h2><p className="mt-1 whitespace-pre-wrap text-sm text-stone-700">{bounty.requirements}</p></div>}
         {(bounty.quantity_needed || bounty.variant_requirements || bounty.accept_equivalent) && (
-          <div className="border-t border-gray-200 pt-4 space-y-2">
-            <h2 className="text-sm font-bold text-gray-900">Details</h2>
-            {bounty.quantity_needed && <p className="text-sm text-gray-700"><span className="font-medium">Quantity needed:</span> {bounty.quantity_needed}</p>}
-            {bounty.variant_requirements && <p className="text-sm text-gray-700"><span className="font-medium">Variant requirements:</span> {bounty.variant_requirements}</p>}
-            {bounty.accept_equivalent && <p className="text-sm text-gray-700"><span className="font-medium">Accept equivalent variants</span></p>}
+          <div className="border-t border-stone-200 pt-4 space-y-2">
+            <h2 className="text-sm font-bold text-stone-900">Details</h2>
+            {bounty.quantity_needed && <p className="text-sm text-stone-700"><span className="font-medium">Quantity needed:</span> {bounty.quantity_needed}</p>}
+            {bounty.variant_requirements && <p className="text-sm text-stone-700"><span className="font-medium">Variant requirements:</span> {bounty.variant_requirements}</p>}
+            {bounty.accept_equivalent && <p className="text-sm text-stone-700"><span className="font-medium">Accept equivalent variants</span></p>}
           </div>
         )}
-        <p className="border-t border-gray-200 pt-4 text-xs leading-relaxed text-gray-500">FindItViral records the promised reward but does not process payment or hold funds. Participants arrange fulfillment directly.</p>
+        <p className="border-t border-stone-200 pt-4 text-xs leading-relaxed text-stone-500">FindItViral records the promised reward but does not process payment or hold funds. Participants arrange fulfillment directly.</p>
       </section>
 
       {bounty.is_owner && (bounty.status === 'open' || bounty.status === 'claimed') && (
@@ -381,7 +381,7 @@ export default function BountyDetail() {
 
       {editing && bounty.is_owner && bounty.status === 'open' && (
         <form className="card space-y-4 border-2 border-brand-300" onSubmit={(e) => { e.preventDefault(); void handleSaveEdit() }}>
-          <h2 className="font-bold text-gray-900">Edit bounty</h2>
+          <h2 className="font-bold text-stone-900">Edit bounty</h2>
           <div>
             <label className="label" htmlFor="edit-reward">Reward ($)</label>
             <input id="edit-reward" className="input" type="text" inputMode="decimal" value={editRewardAmount} onChange={(e) => setEditRewardAmount(e.target.value)} required />
@@ -404,7 +404,7 @@ export default function BountyDetail() {
               <input id="edit-variant" className="input" maxLength={1000} value={editVariantRequirements} onChange={(e) => setEditVariantRequirements(e.target.value)} />
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+          <label className="flex items-center gap-2 text-sm font-semibold text-stone-800">
             <input type="checkbox" checked={editAcceptEquivalent} onChange={(e) => setEditAcceptEquivalent(e.target.checked)} />
             Accept equivalent variants
           </label>
@@ -428,11 +428,11 @@ export default function BountyDetail() {
       )}
 
       {canClaim && !showClaimForm && <button type="button" className="btn-primary w-full" onClick={() => setShowClaimForm(true)}>I Found It</button>}
-      {!bounty.is_owner && bounty.caller_claim_status && <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">Your claim is {bounty.caller_claim_status}.</div>}
+      {!bounty.is_owner && bounty.caller_claim_status && <div className="rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-800">Your claim is {bounty.caller_claim_status}.</div>}
 
       {canClaim && showClaimForm && (
         <form onSubmit={handleClaimSubmit} className="card space-y-4 border-2 border-brand-300">
-          <div><h2 className="font-bold text-gray-900">Submit your exact-store sighting</h2><p className="mt-1 text-xs text-gray-600">The bounty owner can review this claim. It does not become a public sighting.</p></div>
+          <div><h2 className="font-bold text-stone-900">Submit your exact-store sighting</h2><p className="mt-1 text-xs text-stone-600">The bounty owner can review this claim. It does not become a public sighting.</p></div>
           <CatalogSearchSelect kind="store" label="Store" value={claimStore} onChange={setClaimStore} required disabled={Boolean(bounty.store_id)} />
           <div className="space-y-2">
             <label className="label">When did you see it?</label>
@@ -451,7 +451,7 @@ export default function BountyDetail() {
               <div>
                 <label className="label" htmlFor="claim-seen-date">Pick a date</label>
                 <div className="relative">
-                  <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
                     id="claim-seen-date"
                     className="input pr-10"
@@ -477,15 +477,15 @@ export default function BountyDetail() {
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-bold text-gray-900">Claims</h2>
+        <h2 className="mb-3 text-lg font-bold text-stone-900">Claims</h2>
         {claims.length > 0 ? (
           <div className="space-y-3">
             {claims.map((claim) => (
               <article key={claim.id} className="card">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-gray-900">@{claim.finder_username}</h3><p className="mt-1 text-sm text-gray-600">{claim.store_name} · {claim.availability.toUpperCase()} availability{claim.quantity ? ` · about ${claim.quantity}` : ''}</p><p className="text-xs text-gray-500">Seen {new Date(claim.seen_at).toLocaleString()}</p></div><span className={`badge ${statusColor(claim.status)}`}>{statusLabel(claim.status)}</span></div>
-                {claim.notes && <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{claim.notes}</p>}
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-stone-900">@{claim.finder_username}</h3><p className="mt-1 text-sm text-stone-600">{claim.store_name} · {claim.availability.toUpperCase()} availability{claim.quantity ? ` · about ${claim.quantity}` : ''}</p><p className="text-xs text-stone-500">Seen {new Date(claim.seen_at).toLocaleString()}</p></div><span className={`badge ${statusColor(claim.status)}`}>{statusLabel(claim.status)}</span></div>
+                {claim.notes && <p className="mt-3 whitespace-pre-wrap text-sm text-stone-700">{claim.notes}</p>}
                 {claim.contact_info && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Accepted finder contact: {claim.contact_info}</p>}
-                {bounty.is_owner && claim.status === 'pending' && <div className="mt-4 flex gap-2 border-t border-gray-200 pt-3"><button type="button" className="btn-primary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'accepted')}>Accept</button><button type="button" className="btn-secondary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'rejected')}>Reject</button></div>}
+                {bounty.is_owner && claim.status === 'pending' && <div className="mt-4 flex gap-2 border-t border-stone-200 pt-3"><button type="button" className="btn-primary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'accepted')}>Accept</button><button type="button" className="btn-secondary" disabled={actionLoading === claim.id} onClick={() => void handleClaimAction(claim.id, 'rejected')}>Reject</button></div>}
               </article>
             ))}
           </div>

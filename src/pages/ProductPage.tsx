@@ -75,7 +75,7 @@ export default function ProductPage() {
     <div className="space-y-8">
       {error && <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
 
-      <header className="overflow-hidden rounded-2xl border-2 border-stone-900 bg-[#fffdf7] shadow-[5px_5px_0_0_#0c251d]">
+      <header className="overflow-hidden rounded-2xl border-2 border-stone-900 bg-[#fffdf7] shadow-[5px_5px_0_0_#1c1917]">
         {product.image_url && (
           <img src={product.image_url} alt={product.name + (product.trend_name ? ` - ${product.trend_name}` : '')} className="h-52 w-full border-b-2 border-stone-900 object-cover" />
         )}
@@ -84,14 +84,14 @@ export default function ProductPage() {
           <h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950">{product.name}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             <span className="rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-800">{availabilityLabel(product)}</span>
-            {releaseLabel(product.release_date) && <span className="text-gray-600">Release: {releaseLabel(product.release_date)}</span>}
+            {releaseLabel(product.release_date) && <span className="text-stone-600">Release: {releaseLabel(product.release_date)}</span>}
             {product.source_url && (
               <a href={product.source_url} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:text-brand-800">
                 Verify at {product.retailer ?? 'official source'} ↗
               </a>
             )}
           </div>
-          {product.image_attribution && <p className="mt-3 text-xs text-gray-500">Image: {product.image_attribution}</p>}
+          {product.image_attribution && <p className="mt-3 text-xs text-stone-500">Image: {product.image_attribution}</p>}
           <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 text-center">
             <div><dt className="text-xs font-bold uppercase text-stone-500">Fresh sightings</dt><dd className="text-2xl font-black text-green-700">{product.approved_sighting_count}</dd></div>
             <div><dt className="text-xs font-bold uppercase text-stone-500">Open bounties</dt><dd className="text-2xl font-black text-red-600">{product.open_bounty_count}</dd></div>
@@ -101,7 +101,7 @@ export default function ProductPage() {
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-gray-900">Fresh Sightings</h2>
+          <h2 className="text-lg font-bold text-stone-900">Fresh Sightings</h2>
           <Link to="/sightings/new" className="text-sm font-semibold text-brand-700">Report one →</Link>
         </div>
         {sightings.length > 0
@@ -117,7 +117,7 @@ export default function ProductPage() {
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-gray-900">Restock Leads</h2>
+          <h2 className="text-lg font-bold text-stone-900">Restock Leads</h2>
           <Link to="/leads/new" className="text-sm font-semibold text-brand-700">Share one →</Link>
         </div>
         {leads.length > 0
@@ -128,7 +128,7 @@ export default function ProductPage() {
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-gray-900">Open Bounties</h2>
+          <h2 className="text-lg font-bold text-stone-900">Open Bounties</h2>
           <Link to="/bounties/new" className="text-sm font-semibold text-brand-700">Post one →</Link>
         </div>
         {bounties.length > 0

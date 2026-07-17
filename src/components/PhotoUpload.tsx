@@ -146,7 +146,7 @@ export default function PhotoUpload({
             return (
               <div
                 key={`photo-${slot}`}
-                className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-stone-200 bg-stone-100"
               >
                 <SightingPhoto
                   photoPath={photo}
@@ -170,7 +170,7 @@ export default function PhotoUpload({
             return (
               <div
                 key={`uploading-${uploadingItem.id}`}
-                className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
+                className="relative aspect-square overflow-hidden rounded-xl border border-stone-200 bg-stone-100"
               >
                 <img
                   src={uploadingItem.previewUrl}
@@ -190,7 +190,7 @@ export default function PhotoUpload({
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={disabled || isUploading}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-50"
+                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 text-stone-400 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-50"
               >
                 {isUploading ? (
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
@@ -206,7 +206,7 @@ export default function PhotoUpload({
           return (
             <div
               key={`empty-${slot}`}
-              className="aspect-square rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50"
+              className="aspect-square rounded-xl border-2 border-dashed border-stone-200 bg-stone-50/50"
             />
           )
         })}
@@ -226,10 +226,10 @@ export default function PhotoUpload({
         <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>
       )}
 
-      <p className="mt-2 text-xs text-gray-400">
+      <p className="mt-2 text-xs text-stone-400">
         Up to {maxPhotos} photos. JPG, PNG, or WebP. Max 8 MB each.
       </p>
-      <p className="mt-1 text-xs text-gray-400">
+      <p className="mt-1 text-xs text-stone-400">
         Completed uploads stay with this draft. Files that did not finish uploading must be selected again.
       </p>
     </div>

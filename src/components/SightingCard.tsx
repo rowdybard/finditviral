@@ -5,6 +5,7 @@ import {
   NavigationArrow,
   Storefront,
   Trash,
+  PencilSimple,
   UserCircle,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
@@ -16,6 +17,8 @@ import ShareButton from './ShareButton'
 import SightingPhoto from './SightingPhoto'
 import SightingVerificationControls from './SightingVerificationControls'
 import { useViewerLocation } from '../contexts/ViewerLocationContext'
+import { updateSighting } from '../lib/launchApi'
+import { useMascotToast } from '../contexts/MascotToastContext'
 
 const stockThemes = {
   in_stock: {
@@ -27,9 +30,9 @@ const stockThemes = {
     label: 'IN STOCK',
   },
   low_stock: {
-    rail: 'bg-yellow-400',
-    text: 'text-yellow-700',
-    dot: 'bg-yellow-400 border-yellow-500',
+    rail: 'bg-amber-400',
+    text: 'text-amber-700',
+    dot: 'bg-amber-400 border-amber-500',
     accent: 'yellow' as const,
     filledDots: 3,
     label: 'LOW STOCK',
@@ -53,9 +56,16 @@ const stockThemes = {
 }
 
 export default function SightingCard({ sighting, onDelete }: { sighting: Sighting; onDelete?: (id: string) => void }) {
-  const viewerLocation = useViewerLocation()
   const [photoFailed, setPhotoFailed] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [notes, setNotes] = useState(sighting.notes ?? '')
+  const [quantity, setQuantity] = useState(sighting.quantity?.toString() ?? '')
+  const [availabilityValue, setAvailabilityValue] = useState(sighting.availability ?? 'unknown')
+  const viewerLocation = useViewerLocation()
+  const toast = useMascotToast()
   const productName = sighting.product?.name ?? sighting.product_name ?? 'Unknown product'
   const productPath = `/products/${sighting.product?.slug ?? sighting.product_slug ?? ''}`
   const availability = sighting.availability
@@ -65,11 +75,30 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
   const location = [sighting.city, sighting.state].filter(Boolean).join(', ')
   const photoUrl = photoFailed ? undefined : sighting.photo_urls?.[0]
   const shareText = `${availabilityLabel} availability spotted for ${productName} at ${sighting.store_name}${location ? ` in ${location}` : ''}.`
+  const distanceOrigin = viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'
+
+  async function saveEdit() {
+    setSaving(true)
+    setEditError(null)
+    const parsedQuantity = quantity.trim() ? Number(quantity) : null
+    if (parsedQuantity !== null && (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 99)) {
+      setEditError('Quantity must be a whole number from 1 to 99.')
+      setSaving(false)
+      return
+    }
+    const { error } = await updateSighting({ sightingId: sighting.id, notes: notes.trim() || null, quantity: parsedQuantity, availability: availabilityValue })
+    if (error) {
+      setEditError(error.message)
+      setSaving(false)
+      return
+    }
+    window.location.reload()
+  }
 
   return (
     <article
       id={`sighting-${sighting.id}`}
-      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#0c251d] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#0c251d]"
+      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#1c1917] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#1c1917]"
       data-testid="sighting-card"
     >
       <div className={`flex flex-col items-center justify-between py-3 text-white ${theme.rail}`}>
@@ -115,7 +144,7 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
                   <p className="mt-0.5 text-sm font-semibold text-stone-600">
                     {sighting.product.trend.name}
                   </p>
-                  <span className="mt-2 inline-flex rounded border border-amber-400 bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-stone-900">
+                  <span className="mt-2 inline-flex rounded border border-brand-400 bg-brand-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-stone-900">
                     Trend: {sighting.product.trend.name}
                   </span>
                 </>
@@ -136,34 +165,40 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
             )}
           </div>
 
-          <dl className="grid border-t border-stone-300 text-sm font-bold text-stone-800 sm:grid-cols-3">
-            <div className="min-w-0 px-3 py-2.5 sm:border-r sm:border-stone-300">
-              <dt className={`flex min-w-0 items-center gap-2 font-black ${theme.text}`}>
-                <MapPin className="shrink-0" aria-hidden="true" size={20} weight="fill" />
-                <span className="truncate">{sighting.store_name}</span>
-              </dt>
-              <dd className="truncate pl-7 text-[11px] text-stone-600">
-                {location || (sighting.zip_code ? `ZIP ${sighting.zip_code}` : 'Greater Lansing')}
-              </dd>
-            </div>
-            <div className="border-t border-stone-300 px-3 py-2.5 sm:border-r sm:border-t-0">
-              <dt className={`flex items-center gap-2 font-black ${theme.text}`}>
-                <NavigationArrow className="shrink-0" aria-hidden="true" size={20} weight="fill" />
-                {sighting.distance_miles !== undefined ? formatDistance(sighting.distance_miles) : 'Local'}
-              </dt>
-              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">
-                {viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'}
-              </dd>
-            </div>
-            <div className="border-t border-stone-300 px-3 py-2.5 sm:border-t-0">
-              <dt className={`flex items-center gap-2 font-black ${theme.text}`}>
-                <Clock className="shrink-0" aria-hidden="true" size={20} weight="bold" />
-                {timeAgo(sighting.seen_at ?? sighting.created_at)}
-              </dt>
-              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">Spotted</dd>
-            </div>
-          </dl>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-300 px-3 py-1.5 text-xs font-bold text-stone-600 sm:px-4">
+            <span className="inline-flex items-center gap-1">
+              <MapPin aria-hidden="true" size={14} weight="fill" className={theme.text} />
+              <span className="truncate">{sighting.store_name}{location ? `, ${location}` : ''}</span>
+            </span>
+            {sighting.distance_miles !== undefined && (
+              <>
+                <span className="text-stone-300" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <NavigationArrow aria-hidden="true" size={14} weight="fill" className={theme.text} />
+                  {formatDistance(sighting.distance_miles)}
+                </span>
+                <span className="text-stone-500">{distanceOrigin}</span>
+              </>
+            )}
+            <span className="text-stone-300" aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Clock aria-hidden="true" size={14} weight="bold" className={theme.text} />
+              {timeAgo(sighting.seen_at ?? sighting.created_at)}
+            </span>
+          </div>
         </Link>
+
+        {editing && (
+          <div className="space-y-3 border-t border-stone-300 bg-stone-50 p-3 sm:p-4">
+            <label className="label">Notes<textarea className="input mt-1 min-h-20" value={notes} maxLength={2000} onChange={(event) => setNotes(event.target.value)} /></label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="label">Quantity<input className="input mt-1" inputMode="numeric" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+              <label className="label">Availability<select className="input mt-1" value={availabilityValue} onChange={(event) => setAvailabilityValue(event.target.value as typeof availabilityValue)}><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="sold_out">Sold out</option><option value="unknown">Unknown</option></select></label>
+            </div>
+            {editError && <p className="text-sm font-bold text-red-700">{editError}</p>}
+            <div className="flex gap-2"><button type="button" className="btn-primary text-sm" disabled={saving} onClick={() => void saveEdit()}>{saving ? 'Saving…' : 'Save changes'}</button><button type="button" className="btn-secondary text-sm" disabled={saving} onClick={() => setEditing(false)}>Cancel</button></div>
+          </div>
+        )}
 
         <SightingVerificationControls sighting={sighting} />
 
@@ -182,6 +217,10 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
             )}
           </div>
           <div className="flex items-center gap-2">
+            {sighting.is_owner && (
+              <button type="button" className="btn-ghost" title="Edit sighting" onClick={() => { setEditing((value) => !value); if (!editing) toast('Editing resets verifications', 'Heads up! Editing your sighting will reset all community verifications.') }}><PencilSimple size={17} aria-hidden="true" /></button>
+            )}
+            {sighting.edited_at && <span className="text-xs font-bold text-stone-500">Edited {timeAgo(sighting.edited_at)}</span>}
             {onDelete && sighting.is_owner && (
               <button
                 type="button"

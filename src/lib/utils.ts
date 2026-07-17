@@ -49,11 +49,11 @@ export function stockLevelColor(level: string): string {
     case 'in_stock':
       return 'bg-green-100 text-green-800'
     case 'low':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-brand-100 text-brand-800'
     case 'none':
       return 'bg-red-100 text-red-800'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-stone-100 text-stone-800'
   }
 }
 
@@ -83,11 +83,11 @@ export function statusColor(status: string): string {
       return 'bg-green-100 text-green-800'
     case 'claimed':
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-brand-100 text-brand-800'
     case 'closed':
     case 'rejected':
-      return 'bg-gray-100 text-gray-600'
+      return 'bg-stone-100 text-stone-600'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-stone-100 text-stone-800'
   }
 }

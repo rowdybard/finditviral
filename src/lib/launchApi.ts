@@ -280,6 +280,20 @@ export async function deleteSighting(sightingId: string): RpcResult<null> {
   return callRpc<null>('delete_sighting', { p_sighting_id: sightingId })
 }
 
+export async function updateSighting(input: {
+  sightingId: string
+  notes: string | null
+  quantity: number | null
+  availability: 'in_stock' | 'low_stock' | 'sold_out' | 'unknown'
+}): RpcResult<null> {
+  return callRpc<null>('update_sighting', {
+    p_sighting_id: input.sightingId,
+    p_notes: input.notes,
+    p_quantity: input.quantity,
+    p_availability: input.availability,
+  })
+}
+
 export async function getPublicProduct(slug: string): RpcResult<PublicProduct | null> {
   const result = await callRpc<PublicProduct | PublicProduct[]>('get_public_product', { p_slug: slug })
   return { data: firstRow(result.data), error: result.error }
@@ -579,6 +593,28 @@ export async function listPublicLeads(filters: {
 export async function getLeadDetail(slug: string): RpcResult<LeadDetailView | null> {
   const result = await callRpc<LeadDetailView | LeadDetailView[]>('get_lead_detail', { p_lead_slug: slug })
   return { data: firstRow(result.data), error: result.error }
+}
+
+export async function updateLead(input: {
+  leadId: string
+  headline: string
+  details: string | null
+  expectedDate: string | null
+  sourceType: 'employee_tip' | 'social_media' | 'press_release' | 'restock_schedule' | 'other'
+  sourceUrl: string | null
+}): RpcResult<null> {
+  return callRpc<null>('update_lead', {
+    p_lead_id: input.leadId,
+    p_headline: input.headline,
+    p_details: input.details,
+    p_expected_date: input.expectedDate,
+    p_source_type: input.sourceType,
+    p_source_url: input.sourceUrl,
+  })
+}
+
+export async function deleteLead(leadId: string): RpcResult<null> {
+  return callRpc<null>('delete_lead', { p_lead_id: leadId })
 }
 
 export async function voteOnLead(leadId: string, vote: 'credible' | 'doubtful'): RpcResult<null> {

@@ -12,9 +12,7 @@ import { Link } from 'react-router-dom'
 import type { Lead } from '../types/database'
 import { timeAgo } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
-import { activeMarket } from '../lib/market'
 import ShareButton from './ShareButton'
-import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 const sourceTypeLabels: Record<string, string> = {
   employee_tip: 'Employee tip',
@@ -24,13 +22,7 @@ const sourceTypeLabels: Record<string, string> = {
   other: 'Other',
 }
 
-const scopeLabels: Record<string, string> = {
-  region: 'Region',
-  stores: 'Store',
-}
-
 export default function LeadCard({ lead }: { lead: Lead }) {
-  const viewerLocation = useViewerLocation()
   const isConfirmed = lead.status === 'confirmed'
   const isExpired = lead.expires_at && new Date(lead.expires_at) <= new Date()
 
@@ -39,17 +31,16 @@ export default function LeadCard({ lead }: { lead: Lead }) {
     : `${lead.zip_code ?? ''} (${lead.radius_miles ?? 0}mi)`
 
   const statusLabel = isConfirmed ? 'CONFIRMED' : isExpired ? 'EXPIRED' : 'UNCONFIRMED'
-  const statusColor = isConfirmed ? 'text-green-700' : isExpired ? 'text-stone-500' : 'text-blue-700'
+  const statusColor = isConfirmed ? 'text-green-700' : isExpired ? 'text-stone-500' : 'text-brand-700'
   const productName = lead.product_name ?? 'Unknown product'
-  const productPath = `/products/${lead.product_slug ?? ''}`
   const shareText = `Restock lead: ${lead.headline}`
 
   return (
     <article
-      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#0c251d] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#0c251d]"
+      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#1c1917] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#1c1917]"
       data-testid="lead-card"
     >
-      <div className="flex flex-col items-center justify-between bg-blue-600 py-3 text-white">
+      <div className="flex flex-col items-center justify-between bg-brand-600 py-3 text-white">
         <span className="rotate-180 text-sm font-black tracking-[0.18em] [writing-mode:vertical-rl]">
           LEAD
         </span>
@@ -59,7 +50,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
       <div className="min-w-0">
         <Link
           to={`/leads/${lead.slug}`}
-          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
           aria-label={`View lead: ${lead.headline}`}
         >
           <div className="grid min-w-0 gap-4 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:p-4">
@@ -85,12 +76,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
               <h3 className="text-xl font-black leading-tight tracking-tight text-stone-950 sm:text-2xl">
                 {lead.headline}
               </h3>
-              <Link
-                to={productPath}
-                className="mt-0.5 inline-block text-sm font-semibold text-stone-600 hover:text-blue-600"
-              >
-                {productName}
-              </Link>
+              <p className="mt-0.5 text-sm font-semibold text-stone-600">{productName}</p>
               {lead.details && (
                 <p className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-stone-700">
                   {lead.details}
@@ -98,53 +84,40 @@ export default function LeadCard({ lead }: { lead: Lead }) {
               )}
               <p className="mt-2 text-xs font-medium text-stone-500">
                 {sourceTypeLabels[lead.source_type] ?? lead.source_type}
-                {lead.source_url && (
-                  <a href={lead.source_url} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-600 underline">source</a>
-                )}
+                {lead.source_url && <span className="ml-1 text-brand-600 underline">source available</span>}
               </p>
             </div>
           </div>
 
-          <dl className="grid border-t border-stone-300 text-sm font-bold text-stone-800 sm:grid-cols-3">
-            <div className="min-w-0 px-3 py-2.5 sm:border-r sm:border-stone-300">
-              <dt className="flex min-w-0 items-center gap-2 font-black text-blue-700">
-                <MapPin className="shrink-0" aria-hidden="true" size={20} weight="fill" />
-                <span className="truncate">{scopeText}</span>
-              </dt>
-              <dd className="truncate pl-7 text-[11px] text-stone-600">
-                {scopeLabels[lead.scope_type] ?? lead.scope_type}
-              </dd>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-300 px-3 py-1.5 text-xs font-bold text-stone-600 sm:px-4">
+            <span className="inline-flex items-center gap-1">
+              <MapPin aria-hidden="true" size={14} weight="fill" className="text-brand-700" />
+              <span className="truncate">{scopeText}</span>
+            </span>
             {lead.distance_miles != null && (
-              <div className="border-t border-stone-300 px-3 py-2.5 sm:border-r sm:border-t-0">
-                <dt className="flex items-center gap-2 font-black text-blue-700">
-                  <NavigationArrow className="shrink-0" aria-hidden="true" size={20} weight="fill" />
+              <>
+                <span className="text-stone-300" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <NavigationArrow aria-hidden="true" size={14} weight="fill" className="text-brand-700" />
                   {formatDistance(lead.distance_miles)}
-                </dt>
-                <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">
-                  {viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : `Approx. from ${activeMarket.name}`}
-                </dd>
-              </div>
+                </span>
+              </>
             )}
-            <div className={`border-t border-stone-300 px-3 py-2.5 ${lead.distance_miles === undefined ? 'sm:border-r sm:border-t-0' : 'sm:border-t-0'}`}>
-              <dt className="flex items-center gap-2 font-black text-blue-700">
-                {lead.expected_date ? (
-                  <>
-                    <CalendarBlank className="shrink-0" aria-hidden="true" size={20} weight="fill" />
-                    {new Date(lead.expected_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </>
-                ) : (
-                  <>
-                    <Clock className="shrink-0" aria-hidden="true" size={20} weight="bold" />
-                    {timeAgo(lead.created_at)}
-                  </>
-                )}
-              </dt>
-              <dd className="pl-7 text-[10px] font-bold uppercase text-stone-600">
-                {lead.expected_date ? 'Expected' : 'Posted'}
-              </dd>
-            </div>
-          </dl>
+            <span className="text-stone-300" aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              {lead.expected_date ? (
+                <>
+                  <CalendarBlank aria-hidden="true" size={14} weight="fill" className="text-brand-700" />
+                  {new Date(lead.expected_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </>
+              ) : (
+                <>
+                  <Clock aria-hidden="true" size={14} weight="bold" className="text-brand-700" />
+                  {timeAgo(lead.created_at)}
+                </>
+              )}
+            </span>
+          </div>
         </Link>
 
         <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-stone-300 px-3 sm:px-4">
@@ -165,7 +138,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             {!isConfirmed && !isExpired && (
               <Link
                 to={`/sightings/new?lead=${lead.slug}`}
-                className="inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                className="inline-flex min-h-11 items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
               >
                 Confirm with a sighting
               </Link>

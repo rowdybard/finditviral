@@ -98,15 +98,15 @@ export default function TrendPage() {
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       <div>
-        <Link to="/home" className="text-sm text-gray-500 hover:text-gray-700">← Home</Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">{trend.name}</h1>
-        {trend.description && <p className="mt-1 text-gray-600">{trend.description}</p>}
+        <Link to="/home" className="text-sm text-stone-500 hover:text-stone-700">← Home</Link>
+        <h1 className="mt-2 text-2xl font-bold text-stone-900">{trend.name}</h1>
+        {trend.description && <p className="mt-1 text-stone-600">{trend.description}</p>}
       </div>
 
       {products.length > 0 && (
         <section>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <h2 className="text-lg font-semibold text-gray-900">Products</h2>
+            <h2 className="text-lg font-semibold text-stone-900">Products</h2>
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-stone-500">
               <span className="text-brand-700">FiV Heat</span> · relative interest
             </p>
@@ -166,7 +166,7 @@ export default function TrendPage() {
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Open Bounties</h2>
+        <h2 className="mb-3 text-lg font-semibold text-stone-900">Open Bounties</h2>
         {bounties.length > 0 ? (
           <div className="space-y-3">
             {bounties.map((b) => (
@@ -182,7 +182,7 @@ export default function TrendPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Recent Sightings</h2>
+        <h2 className="mb-3 text-lg font-semibold text-stone-900">Recent Sightings</h2>
         {sightings.length > 0 ? (
           <div className="space-y-3">
             {sightings.map((s) => (

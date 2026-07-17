@@ -14,7 +14,6 @@ import { timeAgo, statusLabel } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
 import { activeMarket } from '../lib/market'
 import ShareButton from './ShareButton'
-import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 function cardReward(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -26,7 +25,6 @@ function cardReward(amount: number): string {
 }
 
 export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDelete?: (id: string) => void }) {
-  const viewerLocation = useViewerLocation()
   const [deleting, setDeleting] = useState(false)
   const productName = bounty.product?.name ?? bounty.product_name ?? 'Unknown product'
   const rewardAmount = bounty.reward_cents !== undefined
@@ -41,21 +39,14 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
     : exactStore
     ? `${exactStore}${bounty.store?.city ? ` in ${bounty.store.city}` : ''}`
     : `ZIP ${bounty.zip_code ?? activeMarket.defaultZip}`
-  const scopeDetail = scopeType === 'retailers'
-    ? `Within ${bounty.radius_miles ?? 50} mi of ${bounty.zip_code ?? activeMarket.defaultZip}`
-    : scopeType === 'stores' && !exactStore
-    ? 'Multi-store'
-    : exactStore
-    ? 'Exact store'
-    : `${bounty.radius_miles ?? 50} mi radius`
   const shareText = `Help find ${productName} near ${locationLabel} for a ${cardReward(rewardAmount)} reward.`
 
   return (
     <article
-      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#0c251d] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#0c251d]"
+      className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#1c1917] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#1c1917]"
       data-testid="bounty-card"
     >
-      <div className="flex flex-col items-center justify-between bg-red-600 py-3 text-white">
+      <div className="flex flex-col items-center justify-between bg-brand-600 py-3 text-white">
         <span className="rotate-180 text-sm font-black tracking-[0.18em] [writing-mode:vertical-rl]">
           BOUNTY
         </span>
@@ -65,18 +56,18 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
       <div className="min-w-0">
         <Link
           to={`/bounties/${bounty.id}`}
-          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-600"
+          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
           aria-label={`View bounty for ${productName}`}
         >
-          <div className="grid min-w-0 gap-4 p-3 sm:grid-cols-[7.25rem_minmax(0,1fr)_8.5rem] sm:p-4">
+          <div className="grid min-w-0 gap-4 p-3 sm:grid-cols-[7.25rem_minmax(0,1fr)] sm:p-4">
             <div className="rounded-lg border border-stone-300 bg-white px-3 py-3 text-center shadow-[2px_2px_0_0_#d6d3d1]">
               <p className="text-[11px] font-black uppercase tracking-[0.1em] text-stone-700">
                 Reward
               </p>
-              <p className="mt-1 text-4xl font-black leading-none tracking-tight text-red-600 sm:text-5xl">
+              <p className="mt-1 text-4xl font-black leading-none tracking-tight text-brand-600 sm:text-5xl">
                 {cardReward(rewardAmount)}
               </p>
-              <span className="mt-3 inline-flex items-center rounded-md border-2 border-red-500 px-3 py-0.5 text-xs font-black uppercase text-red-600">
+              <span className="mt-3 inline-flex items-center rounded-md border-2 border-brand-500 px-3 py-0.5 text-xs font-black uppercase text-brand-600">
                 {statusLabel(bounty.status)}
               </span>
             </div>
@@ -90,7 +81,7 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
                   <p className="mt-0.5 text-sm font-semibold text-stone-600">
                     {bounty.product.trend.name}
                   </p>
-                  <span className="mt-2 inline-flex rounded border border-amber-400 bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-stone-900">
+                  <span className="mt-2 inline-flex rounded border border-brand-400 bg-brand-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-stone-900">
                     Trend: {bounty.product.trend.name}
                   </span>
                 </>
@@ -99,47 +90,27 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
                 {bounty.requirements || bounty.notes || 'No additional requirements yet. Tap through for the full bounty.'}
               </p>
             </div>
+          </div>
 
-            <dl className="grid grid-cols-3 gap-2 border-t border-stone-200 pt-3 text-stone-800 sm:grid-cols-1 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-              <div className="min-w-0">
-                <dt className="sr-only">ZIP and radius</dt>
-                <dd className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 shrink-0 text-red-600" aria-hidden="true" size={20} weight="fill" />
-                  <span>
-                    <strong className="block text-sm font-black text-red-600">{exactStore ?? bounty.zip_code ?? 'Local'}</strong>
-                    <span className="block text-[10px] font-bold uppercase leading-tight text-stone-600">
-                      {scopeDetail}
-                    </span>
-                  </span>
-                </dd>
-              </div>
-              {bounty.distance_miles !== undefined && (
-                <div className="min-w-0">
-                  <dt className="sr-only">Distance</dt>
-                  <dd className="flex items-start gap-2">
-                    <NavigationArrow className="mt-0.5 shrink-0 text-red-600" aria-hidden="true" size={20} weight="fill" />
-                    <span>
-                      <strong className="block text-sm font-black text-red-600">
-                        {formatDistance(bounty.distance_miles)}
-                      </strong>
-                      <span className="block text-[10px] font-bold uppercase text-stone-600">
-                        {viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'}
-                      </span>
-                    </span>
-                  </dd>
-                </div>
-              )}
-              <div className="min-w-0">
-                <dt className="sr-only">Posted</dt>
-                <dd className="flex items-start gap-2">
-                  <Clock className="mt-0.5 shrink-0 text-red-600" aria-hidden="true" size={20} weight="bold" />
-                  <span>
-                    <strong className="block text-sm font-black text-red-600">{timeAgo(bounty.created_at)}</strong>
-                    <span className="block text-[10px] font-bold uppercase text-stone-600">Posted</span>
-                  </span>
-                </dd>
-              </div>
-            </dl>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-300 px-3 py-1.5 text-xs font-bold text-stone-600 sm:px-4">
+            <span className="inline-flex items-center gap-1">
+              <MapPin aria-hidden="true" size={14} weight="fill" className="text-brand-600" />
+              <span className="truncate">{locationLabel}</span>
+            </span>
+            {bounty.distance_miles !== undefined && (
+              <>
+                <span className="text-stone-300" aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <NavigationArrow aria-hidden="true" size={14} weight="fill" className="text-brand-600" />
+                  {formatDistance(bounty.distance_miles)}
+                </span>
+              </>
+            )}
+            <span className="text-stone-300" aria-hidden="true">·</span>
+            <span className="inline-flex items-center gap-1">
+              <Clock aria-hidden="true" size={14} weight="bold" className="text-brand-600" />
+              {timeAgo(bounty.created_at)}
+            </span>
           </div>
         </Link>
 
@@ -178,7 +149,7 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
               title={`Bounty: ${productName}`}
               text={shareText}
               path={`/bounties/${bounty.id}`}
-              accent="red"
+              accent="brand"
             />
           </div>
         </footer>

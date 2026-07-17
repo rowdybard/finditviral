@@ -169,6 +169,7 @@ export type Sighting = {
   viewer_response?: SightingVerificationResponse | null
   community_state?: SightingCommunityState
   is_owner?: boolean
+  edited_at?: string | null
 }
 
 export type SightingVerificationResponse = 'verified' | 'not_found'
@@ -426,6 +427,8 @@ export type Lead = {
   doubtful_count?: number
   net_score?: number
   distance_miles?: number | null
+  is_owner?: boolean
+  edited_at?: string | null
 }
 
 export type LeadDetailView = {
@@ -459,4 +462,5 @@ export type LeadDetailView = {
   credible_count: number
   doubtful_count: number
   net_score: number
+  edited_at?: string | null
 }

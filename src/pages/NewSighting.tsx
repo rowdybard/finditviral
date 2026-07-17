@@ -506,20 +506,20 @@ export default function NewSighting() {
 
   const availabilityOptions = [
     { value: 'in_stock', label: 'In Stock', activeClass: 'border-green-600 bg-green-50 text-green-700' },
-    { value: 'low_stock', label: 'Low Stock', activeClass: 'border-yellow-500 bg-yellow-50 text-yellow-800' },
+    { value: 'low_stock', label: 'Low Stock', activeClass: 'border-amber-500 bg-brand-50 text-brand-800' },
     { value: 'sold_out', label: 'Sold Out', activeClass: 'border-red-500 bg-red-50 text-red-700' },
-    { value: 'unknown', label: 'Unknown', activeClass: 'border-gray-400 bg-gray-50 text-gray-600' },
+    { value: 'unknown', label: 'Unknown', activeClass: 'border-stone-400 bg-stone-50 text-stone-600' },
   ] as const
 
   return (
     <div className="space-y-6">
       <div>
-        <Link to={lead ? `/leads/${lead.slug}` : '/sightings'} className="text-sm text-gray-500 hover:text-gray-700">← {lead ? 'Back to lead' : 'Sightings'}</Link>
+        <Link to={lead ? `/leads/${lead.slug}` : '/sightings'} className="text-sm text-stone-500 hover:text-stone-700">← {lead ? 'Back to lead' : 'Sightings'}</Link>
         <div className="mt-3 flex items-center gap-4">
           <div className="fiv-step-badge text-lg">1</div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{lead ? 'Confirm Lead' : 'New Sighting'}</h1>
-            <p className="mt-0.5 text-sm text-gray-500">{lead ? 'Report what you saw to confirm this restock lead.' : 'Found it? Help the community by sharing the details.'}</p>
+            <h1 className="text-2xl font-bold text-stone-900">{lead ? 'Confirm Lead' : 'New Sighting'}</h1>
+            <p className="mt-0.5 text-sm text-stone-500">{lead ? 'Report what you saw to confirm this restock lead.' : 'Found it? Help the community by sharing the details.'}</p>
           </div>
           <div className="ml-auto hidden h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 sm:flex">
             <ShoppingCart size={32} weight="duotone" className="text-brand-600" />
@@ -591,7 +591,7 @@ export default function NewSighting() {
           {/* Step 2: Store Selection */}
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">2</span> Where did you see it?</h2>
-            <p className="text-xs text-gray-500">{lead ? 'Select the exact store where you confirmed the product.' : 'Select one or more stores where you spotted the product.'}</p>
+            <p className="text-xs text-stone-500">{lead ? 'Select the exact store where you confirmed the product.' : 'Select one or more stores where you spotted the product.'}</p>
             <div>
               {(!lead || selectedStores.length === 0) && (
                 <>
@@ -618,7 +618,7 @@ export default function NewSighting() {
                     <button
                       key={s.id}
                       type="button"
-                      className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                      className="block w-full rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:bg-stone-50"
                       onClick={() => {
                         addStore({ id: s.id, slug: s.slug, label: s.store_name || s.retailer_name, detail: `${s.address_line1}, ${s.city}, ${s.state} ${s.zip_code}` })
                         setStoreResults([])
@@ -650,13 +650,13 @@ export default function NewSighting() {
                   <div key={s.id} className="fiv-store-card fiv-store-card-selected">
                     <Storefront size={20} weight="fill" className="shrink-0 text-brand-600" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">{s.label}</p>
-                      <p className="truncate text-xs text-gray-500">{s.detail}</p>
+                      <p className="truncate text-sm font-semibold text-stone-900">{s.label}</p>
+                      <p className="truncate text-xs text-stone-500">{s.detail}</p>
                     </div>
                     {(!lead || selectedStores.length > 1) && (
                       <button
                         type="button"
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
                         onClick={() => removeStore(s.id)}
                       >
                         ×
@@ -670,8 +670,8 @@ export default function NewSighting() {
 
           {/* Step 3: Exact Location Notes */}
           <div className="space-y-3">
-            <h2 className="fiv-section-heading"><span className="fiv-step-badge">3</span> Exact location <span className="text-xs font-normal text-gray-400">(Optional)</span></h2>
-            <p className="text-xs text-gray-500">Help others find it faster.</p>
+            <h2 className="fiv-section-heading"><span className="fiv-step-badge">3</span> Exact location <span className="text-xs font-normal text-stone-400">(Optional)</span></h2>
+            <p className="text-xs text-stone-500">Help others find it faster.</p>
             <textarea
               className="input min-h-20"
               value={notes}
@@ -679,7 +679,7 @@ export default function NewSighting() {
               maxLength={2000}
               placeholder="Aisle G32, top shelf on the right..."
             />
-            <p className="text-right text-xs text-gray-400">{notes.length}/2000</p>
+            <p className="text-right text-xs text-stone-400">{notes.length}/2000</p>
           </div>
         </div>
 
@@ -703,7 +703,7 @@ export default function NewSighting() {
               <div>
                 <label className="label" htmlFor="seen-date">Pick a date</label>
                 <div className="relative">
-                  <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <CalendarBlank size={18} weight="duotone" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-stone-400" />
                   <input
                     id="seen-date"
                     className="input pr-10"
@@ -722,7 +722,7 @@ export default function NewSighting() {
           {/* Step 5: Photo Upload */}
           <div className="space-y-3">
             <h2 className="fiv-section-heading"><span className="fiv-step-badge">5</span> Upload a photo</h2>
-            <p className="text-xs text-gray-500">A clear photo helps verify the sighting.</p>
+            <p className="text-xs text-stone-500">A clear photo helps verify the sighting.</p>
             <PhotoUpload
               photoUrls={photoUrls}
               onChange={(urls) => { setPhotoUrls(urls); setMediaRestored(false) }}
@@ -770,10 +770,10 @@ export default function NewSighting() {
         {error && <div className="lg:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
         <div className="lg:col-span-2 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2 text-sm text-gray-600">
+          <div className="flex items-start gap-2 text-sm text-stone-600">
             <Users size={18} weight="duotone" className="mt-0.5 shrink-0 text-brand-500" />
             <div>
-              <p className="font-semibold text-gray-900">Thanks! Your sighting helps the community.</p>
+              <p className="font-semibold text-stone-900">Thanks! Your sighting helps the community.</p>
               <p className="text-xs">It might make someone's day.</p>
             </div>
           </div>

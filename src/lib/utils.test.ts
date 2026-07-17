@@ -75,7 +75,7 @@ describe('stockLevelColor', () => {
   })
 
   it('returns yellow classes for low', () => {
-    expect(stockLevelColor('low')).toBe('bg-yellow-100 text-yellow-800')
+    expect(stockLevelColor('low')).toBe('bg-brand-100 text-brand-800')
   })
 
   it('returns red classes for none', () => {
@@ -105,12 +105,12 @@ describe('statusColor', () => {
   })
 
   it('returns yellow for claimed and pending', () => {
-    expect(statusColor('claimed')).toBe('bg-yellow-100 text-yellow-800')
-    expect(statusColor('pending')).toBe('bg-yellow-100 text-yellow-800')
+    expect(statusColor('claimed')).toBe('bg-brand-100 text-brand-800')
+    expect(statusColor('pending')).toBe('bg-brand-100 text-brand-800')
   })
 
   it('returns gray for closed and rejected', () => {
-    expect(statusColor('closed')).toBe('bg-gray-100 text-gray-600')
-    expect(statusColor('rejected')).toBe('bg-gray-100 text-gray-600')
+    expect(statusColor('closed')).toBe('bg-stone-100 text-stone-600')
+    expect(statusColor('rejected')).toBe('bg-stone-100 text-stone-600')
   })
 })

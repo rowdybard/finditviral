@@ -56,22 +56,22 @@ export default function StorePage() {
   return (
     <div className="space-y-7">
       {error && <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
-      <header className="rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#0c251d]">
-        <Link to="/stores" className="text-sm font-semibold text-gray-500 hover:text-gray-800">← Store directory</Link>
+      <header className="rounded-2xl border-2 border-stone-900 bg-[#fffdf7] p-5 shadow-[5px_5px_0_0_#1c1917]">
+        <Link to="/stores" className="text-sm font-semibold text-stone-500 hover:text-stone-800">← Store directory</Link>
         <div className="mt-4 flex items-start gap-3">
           <span className="rounded-xl bg-brand-100 p-3 text-brand-700"><Storefront size={28} weight="bold" aria-hidden="true" /></span>
           <div>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">{store.retailer_name}</p>
             <h1 className="text-2xl font-black tracking-tight text-stone-950">{store.store_name || store.retailer_name}</h1>
-            <p className="mt-2 flex gap-1.5 text-sm text-gray-600"><MapPin className="mt-0.5 shrink-0" size={17} weight="fill" aria-hidden="true" /><span>{store.address_line1}<br />{store.city}, {store.state} {store.zip_code}</span></p>
+            <p className="mt-2 flex gap-1.5 text-sm text-stone-600"><MapPin className="mt-0.5 shrink-0" size={17} weight="fill" aria-hidden="true" /><span>{store.address_line1}<br />{store.city}, {store.state} {store.zip_code}</span></p>
           </div>
         </div>
-        <p className="mt-5 border-t border-stone-200 pt-4 text-sm text-gray-600">Community reports are time-sensitive. Confirm inventory with the store before making a long trip.</p>
+        <p className="mt-5 border-t border-stone-200 pt-4 text-sm text-stone-600">Community reports are time-sensitive. Confirm inventory with the store before making a long trip.</p>
       </header>
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-gray-900">Fresh Sightings</h2>
+          <h2 className="text-lg font-bold text-stone-900">Fresh Sightings</h2>
           <Link to="/sightings/new" className="text-sm font-semibold text-brand-700">Report one →</Link>
         </div>
         {sightings.length > 0

@@ -120,7 +120,7 @@ export default function Sightings() {
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Local Sightings</h1>
+        <h1 className="text-2xl font-bold text-stone-900">Local Sightings</h1>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-stone-100 p-1">

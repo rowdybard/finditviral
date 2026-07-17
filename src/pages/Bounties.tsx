@@ -80,7 +80,7 @@ export default function Bounties() {
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Local Bounties</h1>
+        <h1 className="text-2xl font-bold text-stone-900">Local Bounties</h1>
         <Link to="/bounties/new" className="btn-primary text-sm">
           + Post Bounty
         </Link>
