@@ -21,10 +21,14 @@ import {
   getCandidate,
   listCandidates,
   listChanges,
+  getResearchRun,
+  listResearchRuns,
+  researchRunView,
   listSources,
   saveReviewDecision,
   upsertSource,
 } from './repository'
+import { enqueueResearchRun } from './research'
 import { ingestSignalBatch } from './ingest'
 import {
   parseCatalogLink,
@@ -337,6 +341,30 @@ async function handleRecompute(request: Request, env: Env): Promise<Response> {
   return json({ recomputed: count })
 }
 
+async function handleResearchRuns(request: Request, env: Env, url: URL): Promise<Response> {
+  await authorize(request, env, 'admin')
+  if (request.method === 'GET') {
+    const limit = boundedInteger(url.searchParams.get('limit'), 20, 1, 50)
+    return json({ runs: (await listResearchRuns(env.DB, limit)).map(researchRunView) })
+  }
+  if (request.method === 'POST') {
+    const result = await enqueueResearchRun(env, {
+      trigger: 'manual',
+      requestKey: `manual:${crypto.randomUUID()}`,
+    })
+    return json({ run: researchRunView(result.run), created: result.created }, result.created ? 202 : 200)
+  }
+  throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
+}
+
+async function handleResearchRunDetail(request: Request, env: Env, runId: string): Promise<Response> {
+  await authorize(request, env, 'admin')
+  if (request.method !== 'GET') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
+  const run = await getResearchRun(env.DB, runId)
+  if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'The research run does not exist.', 404)
+  return json({ run: researchRunView(run) })
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
@@ -354,6 +382,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/v1/catalog-links') return handleCatalogLink(request, env)
   if (url.pathname === '/v1/changes') return handleChanges(request, env, url)
   if (url.pathname === '/v1/recompute') return handleRecompute(request, env)
+  if (url.pathname === '/v1/research/runs') return handleResearchRuns(request, env, url)
 
   const reviewMatch = url.pathname.match(/^\/v1\/candidates\/([^/]+)\/review$/)
   if (reviewMatch?.[1]) return handleCandidateReview(request, env, decodeURIComponent(reviewMatch[1]))
@@ -363,6 +392,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (ackMatch?.[1]) return handlePatchAck(request, env, decodeURIComponent(ackMatch[1]))
   const patchMatch = url.pathname.match(/^\/v1\/patches\/([^/]+)$/)
   if (patchMatch?.[1] && request.method === 'GET') return handlePatchDetail(request, env, decodeURIComponent(patchMatch[1]))
+  const researchRunMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)$/)
+  if (researchRunMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchRunMatch[1]))
 
   throw new EngineError('NOT_FOUND', 'Not found.', 404)
 }

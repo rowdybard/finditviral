@@ -239,6 +239,35 @@ export interface PollSourceMessage {
   execution_key: string
 }
 
+export interface OpenAiResearchMessage {
+  kind: 'openai_research'
+  run_id: string
+}
+
+export type TrendEngineQueueMessage = PollSourceMessage | OpenAiResearchMessage
+export type ResearchTrigger = 'scheduled' | 'manual'
+export type ResearchRunStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export interface ResearchRunRow {
+  id: string
+  request_key: string
+  trigger_type: ResearchTrigger
+  status: ResearchRunStatus
+  model: string
+  prompt_version: string
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  lease_until: string | null
+  received_count: number
+  accepted_count: number
+  duplicate_count: number
+  rejected_count: number
+  candidate_ids_json: string
+  evidence_json: string
+  error_code: string | null
+}
+
 export interface PatchPolicyDecision {
   eligible: boolean
   ready: boolean

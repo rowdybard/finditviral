@@ -149,13 +149,16 @@ describe('trend engine end-to-end', () => {
     const shadowEnv: Env = {
       DB: env.DB,
       SOURCE_QUEUE: env.SOURCE_QUEUE,
+      RESEARCH_QUEUE: env.RESEARCH_QUEUE,
       ENVIRONMENT: env.ENVIRONMENT,
       AUTOPILOT_MODE: 'shadow',
       SOURCE_HOST_ALLOWLIST: env.SOURCE_HOST_ALLOWLIST,
+      OPENAI_RESEARCH_MODEL: env.OPENAI_RESEARCH_MODEL,
       ENGINE_ADMIN_TOKEN: env.ENGINE_ADMIN_TOKEN,
       ENGINE_READ_TOKEN: env.ENGINE_READ_TOKEN,
       ENGINE_INGEST_TOKEN: env.ENGINE_INGEST_TOKEN,
       ENGINE_PUBLISHER_TOKEN: env.ENGINE_PUBLISHER_TOKEN,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
     }
     const shadowBlocked = await worker.fetch(
       request('/v1/patches/next', {}, PUBLISHER_TOKEN),

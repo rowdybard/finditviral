@@ -107,6 +107,25 @@ export interface EngineChange {
   payload: unknown
 }
 
+export interface EngineResearchRun {
+  id: string
+  request_key: string
+  trigger_type: 'scheduled' | 'manual'
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  model: string
+  prompt_version: string
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  received_count: number
+  accepted_count: number
+  duplicate_count: number
+  rejected_count: number
+  candidateIds: string[]
+  evidence: Array<{ candidate_id: string; urls: string[] }>
+  error_code: string | null
+}
+
 export interface SourceCreateInput {
   id: string
   name: string
@@ -213,6 +232,15 @@ export async function recomputeCandidates(): Promise<{ recomputed: number }> {
 
 export async function generatePatch(): Promise<{ patch: EnginePatch | null; mode: EngineMode; reason?: string }> {
   return engineFetch('/v1/patches', { method: 'POST', body: JSON.stringify({}) })
+}
+
+export async function startResearchRun(): Promise<{ run: EngineResearchRun; created: boolean }> {
+  return engineFetch('/v1/research/runs', { method: 'POST', body: JSON.stringify({}) })
+}
+
+export async function listResearchRuns(limit = 12): Promise<EngineResearchRun[]> {
+  const data = await engineFetch<{ runs: EngineResearchRun[] }>(`/v1/research/runs?limit=${limit}`)
+  return data.runs
 }
 
 export async function listChanges(after?: number, limit?: number): Promise<{ changes: EngineChange[]; next_cursor: number }> {

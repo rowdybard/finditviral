@@ -6,9 +6,11 @@ import {
   getEngineHealth,
   listCandidates,
   listChanges,
+  listResearchRuns,
   listSources,
   recomputeCandidates,
   reviewCandidate,
+  startResearchRun,
   type CandidateState,
   type EngineCandidate,
   type EngineChange,
@@ -20,7 +22,7 @@ import {
   type SourceKind,
 } from '../../lib/trendEngine'
 
-type SubTab = 'sources' | 'candidates' | 'patches' | 'changes'
+type SubTab = 'sources' | 'research' | 'candidates' | 'patches' | 'changes'
 
 const STATE_COLORS: Record<CandidateState, string> = {
   candidate: 'bg-stone-100 text-stone-700',
@@ -69,6 +71,7 @@ export default function TrendEnginePanel() {
 
   const subTabs: { id: SubTab; label: string }[] = [
     { id: 'sources', label: 'Sources' },
+    { id: 'research', label: 'Research' },
     { id: 'candidates', label: 'Candidates' },
     { id: 'patches', label: 'Patches' },
     { id: 'changes', label: 'Changes' },
@@ -114,11 +117,54 @@ export default function TrendEnginePanel() {
       </div>
 
       {subTab === 'sources' && <SourcesTab />}
+      {subTab === 'research' && <ResearchTab onCandidates={() => setSubTab('candidates')} />}
       {subTab === 'candidates' && <CandidatesTab />}
       {subTab === 'patches' && <PatchesTab />}
       {subTab === 'changes' && <ChangesTab />}
     </section>
   )
+}
+
+function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
+  const [runs, setRuns] = useState<import('../../lib/trendEngine').EngineResearchRun[]>([])
+  const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try { setRuns(await listResearchRuns()) } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load research runs') } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!runs.some((run) => run.status === 'queued' || run.status === 'running')) return
+    const timer = window.setInterval(() => { void load() }, 3000)
+    return () => window.clearInterval(timer)
+  }, [load, runs])
+
+  async function start() {
+    setStarting(true); setError(null)
+    try { await startResearchRun(); await load() } catch (err) { setError(err instanceof Error ? err.message : 'Research could not be started') } finally { setStarting(false) }
+  }
+
+  return <div className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h3 className="text-lg font-bold text-stone-900">OpenAI research</h3><p className="text-sm text-stone-600">Evidence-backed discoveries enter the normal review queue; nothing publishes automatically.</p></div>
+      <button type="button" className="btn-primary" disabled={starting || runs.some((run) => run.status === 'queued' || run.status === 'running')} onClick={() => void start()}>
+        <Lightning size={17} aria-hidden="true" /> {starting ? 'Queueing…' : 'Research now'}
+      </button>
+    </div>
+    {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+    {loading ? <div className="flex justify-center py-8"><Spinner /></div> : runs.length === 0 ? <p className="card text-sm text-stone-600">No research runs yet. Scheduled research runs every four hours.</p> : <div className="space-y-2">
+      {runs.map((run) => <article key={run.id} className="card space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold text-stone-900">{run.trigger_type === 'manual' ? 'Manual' : 'Scheduled'} research</p><p className="text-xs text-stone-500">{new Date(run.created_at).toLocaleString()} · {run.model}</p></div><span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{run.status}</span></div>
+        {run.status === 'succeeded' && <p className="text-sm text-stone-700">{run.accepted_count} accepted · {run.duplicate_count} duplicate · {run.rejected_count} rejected</p>}
+        {run.error_code && <p className="text-sm text-red-700">Research failed: {run.error_code}</p>}
+        {run.evidence.map((item) => <p key={item.candidate_id} className="break-words text-xs text-stone-600">Evidence: {item.urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">{index ? ' · ' : ''}{new URL(url).hostname}</a>)}</p>)}
+        {run.candidateIds.length > 0 && <button type="button" className="btn-secondary text-xs" onClick={onCandidates}>Review {run.candidateIds.length} candidate{run.candidateIds.length === 1 ? '' : 's'}</button>}
+      </article>)}
+    </div>}
+  </div>
 }
 
 function SourcesTab() {

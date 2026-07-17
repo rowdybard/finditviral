@@ -5,6 +5,8 @@ import type {
   EngineMode,
   ScoreSignalInput,
   ScoreSnapshot,
+  ResearchRunRow,
+  ResearchTrigger,
   SignalType,
   SourceRow,
 } from './domain'
@@ -529,6 +531,134 @@ export async function releaseSourcePollJob(db: D1Database, jobKey: string, now: 
   `).bind(now, jobKey).run()
 }
 
+export interface ResearchRunView extends ResearchRunRow {
+  candidateIds: string[]
+  evidence: Array<{ candidate_id: string; urls: string[] }>
+}
+
+function parseJsonArray(value: string): unknown[] {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function researchRunView(row: ResearchRunRow): ResearchRunView {
+  return {
+    ...row,
+    candidateIds: parseJsonArray(row.candidate_ids_json).filter((value): value is string => typeof value === 'string'),
+    evidence: parseJsonArray(row.evidence_json).flatMap((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const item = value as Record<string, unknown>
+      if (typeof item.candidate_id !== 'string' || !Array.isArray(item.urls)) return []
+      const urls = item.urls.filter((url): url is string => typeof url === 'string')
+      return urls.length > 0 ? [{ candidate_id: item.candidate_id, urls }] : []
+    }),
+  }
+}
+
+export async function getResearchRun(db: D1Database, id: string): Promise<ResearchRunRow | null> {
+  return db.prepare('SELECT * FROM research_runs WHERE id = ?').bind(id).first<ResearchRunRow>()
+}
+
+export async function listResearchRuns(db: D1Database, limit = 20): Promise<ResearchRunRow[]> {
+  const result = await db.prepare('SELECT * FROM research_runs ORDER BY created_at DESC LIMIT ?')
+    .bind(limit)
+    .all<ResearchRunRow>()
+  return result.results
+}
+
+export async function createOrGetResearchRun(
+  db: D1Database,
+  input: { requestKey: string; trigger: ResearchTrigger; model: string; now: string },
+): Promise<{ run: ResearchRunRow; created: boolean }> {
+  const existing = await db.prepare(`
+    SELECT * FROM research_runs
+    WHERE status IN ('queued', 'running')
+    ORDER BY created_at DESC LIMIT 1
+  `).first<ResearchRunRow>()
+  if (existing) return { run: existing, created: false }
+
+  const id = `research_${crypto.randomUUID()}`
+  const result = await db.prepare(`
+    INSERT OR IGNORE INTO research_runs (
+      id, request_key, trigger_type, status, model, prompt_version, created_at
+    ) VALUES (?, ?, ?, 'queued', ?, 'consumer-products-v1', ?)
+  `).bind(id, input.requestKey, input.trigger, input.model, input.now).run()
+  if (result.meta.changes > 0) {
+    const run = await getResearchRun(db, id)
+    if (run) return { run, created: true }
+  }
+  const fallback = await db.prepare(`
+    SELECT * FROM research_runs
+    WHERE request_key = ? OR status IN ('queued', 'running')
+    ORDER BY created_at DESC LIMIT 1
+  `).bind(input.requestKey).first<ResearchRunRow>()
+  if (!fallback) throw new Error('Research run was not persisted')
+  return { run: fallback, created: false }
+}
+
+export type ResearchRunClaim = 'claimed' | 'completed' | 'busy'
+
+export async function claimResearchRun(db: D1Database, id: string, now: string, leaseUntil: string): Promise<ResearchRunClaim> {
+  const claimed = await db.prepare(`
+    UPDATE research_runs
+    SET status = 'running', started_at = COALESCE(started_at, ?), lease_until = ?
+    WHERE id = ?
+      AND (status = 'queued' OR (status = 'running' AND lease_until <= ?))
+    RETURNING id
+  `).bind(now, leaseUntil, id, now).first<{ id: string }>()
+  if (claimed) return 'claimed'
+  const existing = await getResearchRun(db, id)
+  return existing?.status === 'succeeded' || existing?.status === 'failed' ? 'completed' : 'busy'
+}
+
+export async function completeResearchRun(
+  db: D1Database,
+  id: string,
+  input: {
+    now: string
+    received: number
+    accepted: number
+    duplicates: number
+    rejected: number
+    candidateIds: string[]
+    evidence: Array<{ candidate_id: string; urls: string[] }>
+  },
+): Promise<void> {
+  await db.prepare(`
+    UPDATE research_runs
+    SET status = 'succeeded', completed_at = ?, lease_until = NULL,
+        received_count = ?, accepted_count = ?, duplicate_count = ?, rejected_count = ?,
+        candidate_ids_json = ?, evidence_json = ?, error_code = NULL
+    WHERE id = ? AND status = 'running'
+  `).bind(
+    input.now,
+    input.received,
+    input.accepted,
+    input.duplicates,
+    input.rejected,
+    JSON.stringify(input.candidateIds),
+    JSON.stringify(input.evidence),
+    id,
+  ).run()
+}
+
+export async function failResearchRun(db: D1Database, id: string, errorCode: string, now: string, retryable: boolean): Promise<void> {
+  await db.prepare(`
+    UPDATE research_runs
+    SET status = ?, completed_at = CASE WHEN ? THEN completed_at ELSE ? END,
+        lease_until = CASE WHEN ? THEN NULL ELSE ? END, error_code = ?
+    WHERE id = ? AND status = 'running'
+  `).bind(retryable ? 'queued' : 'failed', retryable ? 1 : 0, now, retryable ? 1 : 0, retryable ? null : null, errorCode, id).run()
+}
+
+export async function deleteQueuedResearchRun(db: D1Database, id: string): Promise<void> {
+  await db.prepare("DELETE FROM research_runs WHERE id = ? AND status = 'queued'").bind(id).run()
+}
+
 export async function cleanupRetention(
   db: D1Database,
   evidenceBefore: string,
@@ -541,6 +671,7 @@ export async function cleanupRetention(
     db.prepare('DELETE FROM score_snapshots WHERE computed_at < ?').bind(evidenceBefore),
     db.prepare(`DELETE FROM source_runs WHERE completed_at IS NOT NULL AND completed_at < ?`).bind(evidenceBefore),
     db.prepare('DELETE FROM source_poll_jobs WHERE updated_at < ?').bind(evidenceBefore),
+    db.prepare("DELETE FROM research_runs WHERE completed_at IS NOT NULL AND completed_at < ?").bind(evidenceBefore),
     db.prepare('DELETE FROM change_log WHERE occurred_at < ?').bind(changeLogBefore),
     db.prepare(`
       DELETE FROM candidates

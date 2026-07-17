@@ -441,6 +441,17 @@ describe('handleTrendEngineProxy', () => {
     )
   })
 
+  it('allows a browser health request without an Origin header', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"status":"ok"}'))
+    const response = await handleTrendEngineProxy(
+      new Request('https://finditviral.com/api/trend-engine/health'),
+      { TREND_ENGINE_URL: 'https://trend-engine.example' },
+      fetchImpl,
+    )
+    expect(response.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('requires a same-origin authenticated owner for protected engine routes', async () => {
     const fetchImpl = vi.fn()
     const response = await handleTrendEngineProxy(
@@ -469,6 +480,17 @@ describe('handleTrendEngineProxy', () => {
 
     expect(response.status).toBe(200)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts an authenticated same-origin request without Origin but rejects an explicit foreign origin', async () => {
+    const fetchImpl = vi.fn(async (input) => String(input).includes('is_app_owner') ? new Response('true') : new Response('{}'))
+    const env = { TREND_ENGINE_URL: 'https://trend-engine.example', TREND_ENGINE_ADMIN_TOKEN: 'engine-secret', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret' }
+    const sameOrigin = await handleTrendEngineProxy(new Request('https://finditviral.com/api/trend-engine/v1/candidates', {
+      headers: { Authorization: 'Bearer member-session' },
+    }), env, fetchImpl)
+    expect(sameOrigin.status).toBe(200)
+    const foreign = await handleTrendEngineProxy(trendRequest('/v1/candidates', { token: 'member-session', origin: 'https://evil.example' }), env, fetchImpl)
+    expect(foreign.status).toBe(403)
   })
 })
 

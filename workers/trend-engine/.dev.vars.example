@@ -2,3 +2,4 @@ ENGINE_ADMIN_TOKEN=replace-me
 ENGINE_READ_TOKEN=replace-me-too
 ENGINE_INGEST_TOKEN=replace-me-four
 ENGINE_PUBLISHER_TOKEN=replace-me-three
+OPENAI_API_KEY=replace-me-five

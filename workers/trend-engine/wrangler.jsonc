@@ -7,7 +7,8 @@
   "vars": {
     "ENVIRONMENT": "production",
     "AUTOPILOT_MODE": "shadow",
-    "SOURCE_HOST_ALLOWLIST": ""
+    "SOURCE_HOST_ALLOWLIST": "",
+    "OPENAI_RESEARCH_MODEL": "gpt-5.6-luna"
   },
   "d1_databases": [
     {
@@ -22,6 +23,10 @@
       {
         "binding": "SOURCE_QUEUE",
         "queue": "finditviral-trend-source-polls"
+      },
+      {
+        "binding": "RESEARCH_QUEUE",
+        "queue": "finditviral-trend-research"
       }
     ],
     "consumers": [
@@ -32,11 +37,19 @@
         "max_retries": 5,
         "retry_delay": 60,
         "dead_letter_queue": "finditviral-trend-source-polls-dlq"
+      },
+      {
+        "queue": "finditviral-trend-research",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 300,
+        "dead_letter_queue": "finditviral-trend-research-dlq"
       }
     ]
   },
   "triggers": {
-    "crons": ["*/5 * * * *", "8 * * * *", "37 3 * * *"]
+    "crons": ["*/5 * * * *", "8 * * * *", "17 */4 * * *"]
   },
   "observability": {
     "enabled": true,

@@ -360,14 +360,15 @@ export async function handleTrendEngineProxy(request, env, fetchImpl = fetch) {
     return createApiResponse(503, { error: 'unavailable' })
   }
   const url = new URL(request.url)
-  if (request.headers.get('Origin') !== url.origin) return createApiResponse(403, { error: 'forbidden' })
-
   const suffix = url.pathname.slice(TREND_ENGINE_PROXY_PATH.length)
   if (suffix === '/health' && request.method === 'GET') {
     const upstream = new URL(`${env.TREND_ENGINE_URL.replace(/\/$/, '')}/health`)
     const response = await fetchImpl(upstream, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers: response.headers })
   }
+
+  const origin = request.headers.get('Origin')
+  if (origin && origin !== url.origin) return createApiResponse(403, { error: 'forbidden' })
 
   if (!env.TREND_ENGINE_ADMIN_TOKEN || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
     return createApiResponse(503, { error: 'unavailable' })

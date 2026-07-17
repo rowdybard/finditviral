@@ -1,14 +1,16 @@
-import type { PollSourceMessage } from './domain'
+import type { OpenAiResearchMessage, PollSourceMessage, TrendEngineQueueMessage } from './domain'
 import { EngineError, errorCode } from './errors'
 import { pollSource } from './collector'
 import { stableId } from './identity'
 import { logError, logEvent } from './logging'
 import {
   claimSourcePollJob,
+  claimResearchRun,
   completeSourcePollJob,
   recordSourceFailure,
   releaseSourcePollJob,
 } from './repository'
+import { executeResearchRun, recordResearchFailure } from './research'
 
 function isPollSourceMessage(value: unknown): value is PollSourceMessage {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -19,12 +21,36 @@ function isPollSourceMessage(value: unknown): value is PollSourceMessage {
     && typeof record.execution_key === 'string'
 }
 
+function isResearchMessage(value: unknown): value is OpenAiResearchMessage {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return record.kind === 'openai_research' && typeof record.run_id === 'string'
+}
+
 function retryDelay(attempts: number): number {
   return Math.min(30 * (2 ** Math.max(0, attempts - 1)), 3600)
 }
 
-export async function processSourceQueue(batch: MessageBatch<PollSourceMessage>, env: Env): Promise<void> {
+export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
   for (const message of batch.messages) {
+    if (isResearchMessage(message.body)) {
+      const now = new Date()
+      const claim = await claimResearchRun(env.DB, message.body.run_id, now.toISOString(), new Date(now.getTime() + 10 * 60 * 1000).toISOString())
+      if (claim === 'completed') { message.ack(); continue }
+      if (claim === 'busy') { message.retry({ delaySeconds: 60 }); continue }
+      try {
+        await executeResearchRun(env, message.body.run_id, now)
+        logEvent('info', 'openai_research_completed', { message_id: message.id, run_id: message.body.run_id })
+        message.ack()
+      } catch (error) {
+        const retryable = !(error instanceof EngineError) || error.retryable
+        await recordResearchFailure(env, message.body.run_id, error, retryable)
+        logError('openai_research_failed', error, { message_id: message.id, run_id: message.body.run_id, retryable })
+        if (retryable) message.retry({ delaySeconds: retryDelay(message.attempts) })
+        else message.ack()
+      }
+      continue
+    }
     if (!isPollSourceMessage(message.body)) {
       logEvent('warn', 'queue_message_invalid', { message_id: message.id })
       message.ack()

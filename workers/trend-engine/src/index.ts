@@ -1,4 +1,4 @@
-import type { PollSourceMessage } from './domain'
+import type { TrendEngineQueueMessage } from './domain'
 import { handleHttpRequest } from './http'
 import { errorCode, errorMessage } from './errors'
 import { logError, logEvent } from './logging'
@@ -8,7 +8,7 @@ import { processScheduledRun } from './scheduler'
 export { computeScore } from './scoring'
 export { evaluatePatchPolicy } from './policy'
 export { parseViralSignalBatch } from './validation'
-export type { PollSourceMessage, ViralSignalV1, CatalogPatchV1 } from './domain'
+export type { PollSourceMessage, OpenAiResearchMessage, TrendEngineQueueMessage, ViralSignalV1, CatalogPatchV1 } from './domain'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -25,6 +25,7 @@ export default {
         queued_sources: result.queuedSources,
         recomputed_candidates: result.recomputedCandidates,
         patch_id: result.patchId,
+        research_run_id: result.researchRunId,
       })
     } catch (error) {
       logError('scheduled_run_failed', error, {
@@ -37,7 +38,7 @@ export default {
     }
   },
 
-  async queue(batch: MessageBatch<PollSourceMessage>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
     await processSourceQueue(batch, env)
   },
-} satisfies ExportedHandler<Env, PollSourceMessage>
+} satisfies ExportedHandler<Env, TrendEngineQueueMessage>

@@ -35,7 +35,7 @@ test('authenticated navigation and community controls fit the viewport', async (
 
   const controls = page.getByTestId('sighting-card').filter({ has: page.getByRole('button', { name: 'Verify' }) }).first()
   const verifyBox = await controls.getByRole('button', { name: 'Verify' }).boundingBox()
-  const notFoundBox = await controls.getByRole('button', { name: 'Not found' }).boundingBox()
+  const notFoundBox = await controls.getByRole('button', { name: 'No longer there' }).boundingBox()
   expect(verifyBox?.height ?? 0).toBeGreaterThanOrEqual(44)
   expect(notFoundBox?.height ?? 0).toBeGreaterThanOrEqual(44)
 })

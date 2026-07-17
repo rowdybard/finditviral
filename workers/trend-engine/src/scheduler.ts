@@ -3,6 +3,7 @@ import { EngineError } from './errors'
 import { stableId } from './identity'
 import { recomputeAllCandidates } from './ingest'
 import { generateCatalogPatch } from './patches'
+import { enqueueResearchRun } from './research'
 import {
   claimCronRun,
   claimDueSources,
@@ -15,13 +16,14 @@ import {
 export const SOURCE_POLL_CRON = '*/5 * * * *'
 export const SCORE_CRON = '*/5 * * * *'
 export const PATCH_CRON = '8 * * * *'
-export const RETENTION_CRON = '37 3 * * *'
+export const OPENAI_RESEARCH_CRON = '17 */4 * * *'
 
 export interface ScheduledResult {
   duplicate: boolean
   queuedSources: number
   recomputedCandidates: number
   patchId: string | null
+  researchRunId: string | null
 }
 
 async function enqueueDueSources(env: Env, scheduledAt: string, executionKey: string): Promise<number> {
@@ -60,7 +62,7 @@ export async function processScheduledRun(
   const claimed = await claimCronRun(env.DB, executionKey, controller.cron, scheduledAt, now.toISOString())
   if (!claimed) {
     controller.noRetry()
-    return { duplicate: true, queuedSources: 0, recomputedCandidates: 0, patchId: null }
+    return { duplicate: true, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: null }
   }
 
   try {
@@ -73,6 +75,7 @@ export async function processScheduledRun(
         queuedSources,
         recomputedCandidates,
         patchId: null,
+        researchRunId: null,
       }
     }
 
@@ -82,32 +85,37 @@ export async function processScheduledRun(
         queuedSources: 0,
         recomputedCandidates: await recomputeAllCandidates(env.DB, now),
         patchId: null,
+        researchRunId: null,
       }
     }
 
     if (controller.cron === PATCH_CRON) {
       const result = await generateCatalogPatch(env.DB, configuredMode(env), 'scheduled', now)
+      if (now.getUTCHours() === 3) {
+        await cleanupRetention(
+          env.DB,
+          new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+          new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+          now.toISOString(),
+        )
+      }
       return {
         duplicate: false,
         queuedSources: 0,
         recomputedCandidates: 0,
         patchId: result.patch?.patch_id ?? null,
+        researchRunId: null,
       }
     }
 
-    if (controller.cron === RETENTION_CRON) {
-      await cleanupRetention(
-        env.DB,
-        new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-        new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-        now.toISOString(),
-      )
-      return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null }
+    if (controller.cron === OPENAI_RESEARCH_CRON) {
+      const research = await enqueueResearchRun(env, { trigger: 'scheduled', requestKey: `cron:${executionKey}`, now })
+      return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: research.run.id }
     }
 
     controller.noRetry()
-    return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null }
+    return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: null }
   } catch (error) {
     await releaseCronRun(env.DB, executionKey)
     throw error
