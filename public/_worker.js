@@ -76,7 +76,7 @@ function createContentSecurityPolicy(nonce) {
   return [
     "default-src 'self'",
     "base-uri 'self'",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com https://www.google-analytics.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://challenges.cloudflare.com https://www.google-analytics.com https://*.maxpug17.workers.dev",
     "font-src 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
