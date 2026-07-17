@@ -1,5 +1,6 @@
-const ENGINE_URL = import.meta.env.VITE_TREND_ENGINE_URL ?? ''
-const ENGINE_TOKEN = import.meta.env.VITE_TREND_ENGINE_ADMIN_TOKEN ?? ''
+import { supabase } from './supabase'
+
+const ENGINE_PROXY_URL = '/api/trend-engine'
 
 export type EngineMode = 'shadow' | 'review' | 'autopilot'
 export type CandidateState = 'candidate' | 'emerging' | 'trending' | 'cooling' | 'archived'
@@ -136,19 +137,19 @@ export interface ReviewInput {
   }
 }
 
-function authHeaders(): Record<string, string> {
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Sign in as an app owner to use Trend Engine controls.')
   return {
-    'Authorization': `Bearer ${ENGINE_TOKEN}`,
+    'Authorization': `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
   }
 }
 
 async function engineFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!ENGINE_URL) throw new Error('VITE_TREND_ENGINE_URL is not configured')
-  if (!ENGINE_TOKEN) throw new Error('VITE_TREND_ENGINE_ADMIN_TOKEN is not configured')
-  const res = await fetch(`${ENGINE_URL}${path}`, {
+  const res = await fetch(`${ENGINE_PROXY_URL}${path}`, {
     ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+    headers: { ...(await authHeaders()), ...(init?.headers ?? {}) },
   })
   if (res.status === 204) return undefined as T
   const body = await res.json().catch(() => null)
@@ -162,7 +163,7 @@ async function engineFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function getEngineHealth(): Promise<EngineHealth> {
-  const res = await fetch(`${ENGINE_URL}/health`)
+  const res = await fetch(`${ENGINE_PROXY_URL}/health`)
   if (!res.ok) throw new Error(`Health check failed: HTTP ${res.status}`)
   return res.json()
 }

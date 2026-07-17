@@ -16,8 +16,6 @@ jobs:
       VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
       VITE_SUPABASE_ANON_KEY: ci-publishable-key
       VITE_TURNSTILE_SITE_KEY: 0x4AAAAAAD2z_wAcZ0_FypRg
-      VITE_TREND_ENGINE_URL: https://ci-placeholder.trend-engine.example.com
-      VITE_TREND_ENGINE_ADMIN_TOKEN: ci-placeholder-admin-token-xxxxxxxxxxxx
     steps:
       - uses: actions/checkout@v4
         with:

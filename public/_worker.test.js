@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getPageMetadata, handleEarlyAccess, handleProductClick } from './_worker.js'
+import { getPageMetadata, handleEarlyAccess, handleProductClick, handleTrendEngineProxy } from './_worker.js'
 import worker from './_worker.js'
 
 const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
@@ -409,6 +409,66 @@ describe('handleEarlyAccess', () => {
     expect(responses.map((response) => response.status).sort()).toEqual([204, 204, 204, 204, 204, 429])
     expect(turnstileCalls).toBe(5)
     expect(persistenceCalls).toBe(5)
+  })
+})
+
+describe('handleTrendEngineProxy', () => {
+  function trendRequest(path, { method = 'GET', origin = 'https://finditviral.com', token } = {}) {
+    return new Request(`https://finditviral.com/api/trend-engine${path}`, {
+      method,
+      headers: {
+        Origin: origin,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  }
+
+  it('proxies the public health endpoint without exposing the engine credential', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{"status":"ok"}', {
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    const response = await handleTrendEngineProxy(
+      trendRequest('/health'),
+      { TREND_ENGINE_URL: 'https://trend-engine.example' },
+      fetchImpl,
+    )
+
+    expect(response.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledWith(
+      new URL('https://trend-engine.example/health'),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+  })
+
+  it('requires a same-origin authenticated owner for protected engine routes', async () => {
+    const fetchImpl = vi.fn()
+    const response = await handleTrendEngineProxy(
+      trendRequest('/v1/trends'),
+      { TREND_ENGINE_URL: 'https://trend-engine.example', TREND_ENGINE_ADMIN_TOKEN: 'engine-secret', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret' },
+      fetchImpl,
+    )
+
+    expect(response.status).toBe(401)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('uses the server-only engine credential only after owner verification', async () => {
+    const fetchImpl = vi.fn(async (input, init) => {
+      if (String(input).includes('is_app_owner')) return new Response('true')
+      expect(init.headers.get('Authorization')).toBe('Bearer engine-secret')
+      expect(init.headers.get('Origin')).toBeNull()
+      return new Response('{"items":[]}')
+    })
+
+    const response = await handleTrendEngineProxy(
+      trendRequest('/v1/trends', { token: 'member-session' }),
+      { TREND_ENGINE_URL: 'https://trend-engine.example', TREND_ENGINE_ADMIN_TOKEN: 'engine-secret', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret' },
+      fetchImpl,
+    )
+
+    expect(response.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 })
 

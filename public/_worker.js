@@ -6,6 +6,7 @@ const HEALTH_CHECK_HEADER_VALUE = 'pages-origin'
 
 const EARLY_ACCESS_PATH = '/api/early-access'
 const PRODUCT_CLICK_PATH = '/api/product-click'
+const TREND_ENGINE_PROXY_PATH = '/api/trend-engine'
 const SITEMAP_PATH = '/sitemap.xml'
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -352,6 +353,44 @@ async function readJsonWithByteLimit(request, maxBytes) {
     }
     return null
   }
+}
+
+export async function handleTrendEngineProxy(request, env, fetchImpl = fetch) {
+  if (!env.TREND_ENGINE_URL) {
+    return createApiResponse(503, { error: 'unavailable' })
+  }
+  const url = new URL(request.url)
+  if (request.headers.get('Origin') !== url.origin) return createApiResponse(403, { error: 'forbidden' })
+
+  const suffix = url.pathname.slice(TREND_ENGINE_PROXY_PATH.length)
+  if (suffix === '/health' && request.method === 'GET') {
+    const upstream = new URL(`${env.TREND_ENGINE_URL.replace(/\/$/, '')}/health`)
+    const response = await fetchImpl(upstream, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: response.headers })
+  }
+
+  if (!env.TREND_ENGINE_ADMIN_TOKEN || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
+    return createApiResponse(503, { error: 'unavailable' })
+  }
+  const authorization = request.headers.get('Authorization')
+  if (!authorization?.startsWith('Bearer ')) return createApiResponse(401, { error: 'unauthorized' })
+
+  const ownerResponse = await fetchImpl(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/is_app_owner`, {
+    method: 'POST',
+    headers: { apikey: env.SUPABASE_SECRET_KEY, Authorization: authorization, 'Content-Type': 'application/json' },
+    body: '{}',
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  }).catch(() => null)
+  if (!ownerResponse?.ok || (await ownerResponse.text()).trim() !== 'true') return createApiResponse(403, { error: 'forbidden' })
+
+  if (!suffix || !suffix.startsWith('/v1/')) return createApiResponse(404, { error: 'not_found' })
+  const upstream = new URL(`${env.TREND_ENGINE_URL.replace(/\/$/, '')}${suffix}`)
+  upstream.search = url.search
+  const headers = new Headers(request.headers)
+  headers.set('Authorization', `Bearer ${env.TREND_ENGINE_ADMIN_TOKEN}`)
+  headers.delete('Origin')
+  const response = await fetchImpl(upstream, new Request(request, { headers }))
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers: response.headers })
 }
 
 export async function handleProductClick(request, env, fetchImpl = fetch) {
@@ -858,6 +897,10 @@ export default {
 
     if (url.pathname === PRODUCT_CLICK_PATH) {
       return handleProductClick(request, env)
+    }
+
+    if (url.pathname.startsWith(TREND_ENGINE_PROXY_PATH)) {
+      return handleTrendEngineProxy(request, env)
     }
 
     if (url.pathname === SITEMAP_PATH) {
