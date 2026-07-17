@@ -94,53 +94,73 @@ export default function Home() {
         </div>
       ) : (
         <>
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-stone-950">Recent Sightings</h2>
-              <Link to="/sightings" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
-            </div>
-            {sightings.length > 0 ? (
-              <div className="space-y-3">{sightings.map((sighting) => <SightingCard key={sighting.id} sighting={sighting} />)}</div>
-            ) : (
-              <EmptyState
-                title="No sightings reported yet"
-                message={selectedProduct ? 'No recent sightings match this product near you.' : 'Report what you find to help local shoppers avoid wasted trips.'}
-                action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
-              />
-            )}
-          </section>
-
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-stone-950">Open Bounties</h2>
-              <Link to="/bounties" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
-            </div>
-            {bounties.length > 0 ? (
-              <div className="space-y-3">{bounties.map((bounty) => <BountyCard key={bounty.id} bounty={bounty} />)}</div>
-            ) : (
-              <EmptyState
-                title="No open bounties yet"
-                message={selectedProduct ? 'No open bounties match this product near you.' : 'Post a bounty when you need help finding something.'}
-                action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
-              />
-            )}
-          </section>
-
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-stone-950">Recent Leads</h2>
-              <Link to="/sightings" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
-            </div>
-            {leads.length > 0 ? (
-              <div className="space-y-3">{leads.map((lead) => <LeadCard key={lead.id} lead={lead} />)}</div>
-            ) : (
-              <EmptyState
-                title="No leads shared yet"
-                message={selectedProduct ? 'No recent leads match this product near you.' : 'Share a restock lead to help fellow shoppers find products.'}
-                action={<Link to="/leads/new" className="btn-primary">Share a Lead</Link>}
-              />
-            )}
-          </section>
+          {([
+            {
+              key: 'sightings' as const,
+              hasItems: sightings.length > 0,
+              render: () => (
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-black text-stone-950">Recent Sightings</h2>
+                    <Link to="/sightings" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
+                  </div>
+                  {sightings.length > 0 ? (
+                    <div className="space-y-3">{sightings.map((sighting) => <SightingCard key={sighting.id} sighting={sighting} />)}</div>
+                  ) : (
+                    <EmptyState
+                      title="No sightings reported yet"
+                      message={selectedProduct ? 'No recent sightings match this product near you.' : 'Report what you find to help local shoppers avoid wasted trips.'}
+                      action={<Link to="/sightings/new" className="btn-secondary">Report a Sighting</Link>}
+                    />
+                  )}
+                </section>
+              ),
+            },
+            {
+              key: 'bounties' as const,
+              hasItems: bounties.length > 0,
+              render: () => (
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-black text-stone-950">Open Bounties</h2>
+                    <Link to="/bounties" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
+                  </div>
+                  {bounties.length > 0 ? (
+                    <div className="space-y-3">{bounties.map((bounty) => <BountyCard key={bounty.id} bounty={bounty} />)}</div>
+                  ) : (
+                    <EmptyState
+                      title="No open bounties yet"
+                      message={selectedProduct ? 'No open bounties match this product near you.' : 'Post a bounty when you need help finding something.'}
+                      action={<Link to="/bounties/new" className="btn-primary">Post a Bounty</Link>}
+                    />
+                  )}
+                </section>
+              ),
+            },
+            {
+              key: 'leads' as const,
+              hasItems: leads.length > 0,
+              render: () => (
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-black text-stone-950">Recent Leads</h2>
+                    <Link to="/sightings" className="text-sm font-bold text-brand-700 hover:text-brand-800">View all →</Link>
+                  </div>
+                  {leads.length > 0 ? (
+                    <div className="space-y-3">{leads.map((lead) => <LeadCard key={lead.id} lead={lead} />)}</div>
+                  ) : (
+                    <EmptyState
+                      title="No leads shared yet"
+                      message={selectedProduct ? 'No recent leads match this product near you.' : 'Share a restock lead to help fellow shoppers find products.'}
+                      action={<Link to="/leads/new" className="btn-primary">Share a Lead</Link>}
+                    />
+                  )}
+                </section>
+              ),
+            },
+          ])
+            .sort((a, b) => Number(b.hasItems) - Number(a.hasItems))
+            .map((s) => <div key={s.key} className="space-y-8">{s.render()}</div>)}
         </>
       )}
     </div>

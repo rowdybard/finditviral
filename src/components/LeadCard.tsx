@@ -65,7 +65,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
           <div className="grid min-w-0 gap-4 p-3 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:p-4">
             <div className="rounded-lg border border-stone-300 bg-white px-3 py-3 text-center shadow-[2px_2px_0_0_#d6d3d1]">
               <p className="text-[11px] font-black uppercase tracking-[0.1em] text-stone-700">Status</p>
-              <p className={`mt-2 font-black leading-none tracking-tight text-lg sm:text-xl ${statusColor}`}>
+              <p className={`mt-2 break-words font-black leading-none tracking-tight text-sm sm:text-base ${statusColor}`}>
                 {statusLabel}
               </p>
               <div className="mt-4 flex flex-col items-center gap-1.5" aria-hidden="true">
