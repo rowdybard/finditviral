@@ -28,6 +28,8 @@ import { mapContributionError } from '../lib/errorMap'
 import { useMascotToast } from '../contexts/MascotToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useFormDraft } from '../hooks/useFormDraft'
+import UseMyZipButton from '../components/UseMyZipButton'
+import { getSavedRadius, saveRadius } from '../lib/localPreferences'
 import { createDraftSubmissionId } from '../lib/formDraftStore'
 import type { ContributionDraft, RetailerSearchResult, StoreSearchResult } from '../types/database'
 
@@ -148,7 +150,7 @@ export default function NewBounty() {
   const [retailerResults, setRetailerResults] = useState<RetailerSearchResult[]>([])
   const [storeResults, setStoreResults] = useState<StoreSearchResult[]>([])
   const [zipCode, setZipCode] = useState(activeMarket.defaultZip)
-  const [radiusMiles, setRadiusMiles] = useState('50')
+  const [radiusMiles, setRadiusMiles] = useState(getSavedRadius)
   const [rewardAmount, setRewardAmount] = useState('')
   const [deadline, setDeadline] = useState(() => localDateTime(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)))
   const [requirements, setRequirements] = useState('')
@@ -568,6 +570,7 @@ export default function NewBounty() {
               <div>
                 <label className="label" htmlFor="zip">City, State or ZIP *</label>
                 <input id="zip" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ''))} placeholder="Enter ZIP code" required />
+                <UseMyZipButton onUse={setZipCode} />
                 <label className="label mt-3 text-xs">Desired Radius</label>
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Desired search radius">
                   {radiusOptions.map((miles) => (
@@ -575,7 +578,7 @@ export default function NewBounty() {
                       key={miles}
                       type="button"
                       className={`fiv-radius-btn ${radiusMiles === String(miles) ? 'fiv-radius-btn-active' : 'fiv-radius-btn-inactive'}`}
-                      onClick={() => setRadiusMiles(String(miles))}
+                      onClick={() => { const next = String(miles); setRadiusMiles(next); saveRadius(next) }}
                     >
                       {miles} mi
                     </button>

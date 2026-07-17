@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Bounty, Product, Trend } from '../types/database'
 import BountyCard from '../components/BountyCard'
@@ -7,8 +7,12 @@ import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
 import { listPublicBounties } from '../lib/launchApi'
 import { useViewerLocation } from '../contexts/ViewerLocationContext'
+import UseMyZipButton from '../components/UseMyZipButton'
+import { getSavedRadius, saveRadius } from '../lib/localPreferences'
+import { focusFeedCard, restoreFeedContext } from '../lib/feedContext'
 
 export default function Bounties() {
+  const location = useLocation()
   const viewerLocation = useViewerLocation()
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -18,9 +22,10 @@ export default function Bounties() {
   const [productFilter, setProductFilter] = useState('')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const zipEditedRef = useRef(false)
-  const [radiusFilter, setRadiusFilter] = useState('50')
+  const [radiusFilter, setRadiusFilter] = useState(getSavedRadius)
   const [sortBy, setSortBy] = useState<'newest' | 'reward'>('newest')
   const [error, setError] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   useEffect(() => {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
@@ -74,6 +79,8 @@ export default function Bounties() {
     load()
   }, [productFilter, trendFilter, effectiveZip, radiusFilter, sortBy, products, viewerLocation.loading])
 
+  useEffect(() => { const context = restoreFeedContext(location.state); if (context) focusFeedCard(context.anchor, context.scrollY) }, [location.state, bounties.length])
+
   return (
     <div className="space-y-4">
       {error && (
@@ -86,7 +93,8 @@ export default function Bounties() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      <button type="button" className="rounded-lg border border-stone-300 px-3 py-2 text-left text-sm font-bold text-stone-700 sm:hidden" onClick={() => setFiltersOpen((open) => !open)}>{zipFilter ? `Within ${radiusFilter} mi · ${bounties.length} bounties` : `${bounties.length} bounties`} · Filters</button>
+      <div className={`${filtersOpen ? 'flex' : 'hidden'} flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap`}>
         <select
           className="input sm:w-auto"
           value={trendFilter}
@@ -125,10 +133,11 @@ export default function Bounties() {
           value={zipFilter}
           onChange={(e) => { zipEditedRef.current = true; setZipFilter(e.target.value.replace(/\D/g, '')) }}
         />
+        <UseMyZipButton onUse={(zip) => { zipEditedRef.current = true; setZipFilter(zip) }} />
         <select
           className="input sm:w-32"
           value={radiusFilter}
-          onChange={(e) => setRadiusFilter(e.target.value)}
+          onChange={(e) => { setRadiusFilter(e.target.value); saveRadius(e.target.value) }}
           disabled={!zipFilter}
         >
           <option value="10">10 mi</option>

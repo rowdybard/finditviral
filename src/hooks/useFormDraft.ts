@@ -165,6 +165,32 @@ export function useFormDraft<T>({
   }, [enabled, persist, scopeKey])
 
   useEffect(() => {
+    if (!enabled || !scopeKey || typeof window === 'undefined') return
+    const confirmUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', confirmUnload)
+    return () => window.removeEventListener('beforeunload', confirmUnload)
+  }, [enabled, scopeKey])
+
+  useEffect(() => {
+    if (!enabled || !scopeKey || typeof document === 'undefined') return
+    const confirmNavigation = (event: MouseEvent) => {
+      const eventTarget = event.target
+      const target = eventTarget instanceof Element ? eventTarget.closest('a[href]') : null
+      if (!target || (target as HTMLAnchorElement).target || event.defaultPrevented || !dirtyRef.current) return
+      if (!window.confirm('You have unsaved changes. Leave this page?')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+    document.addEventListener('click', confirmNavigation, true)
+    return () => document.removeEventListener('click', confirmNavigation, true)
+  }, [enabled, scopeKey])
+
+  useEffect(() => {
     if (!enabled || !scope || typeof window === 'undefined') return
     const currentScope = scope
     const handleStorage = (event: StorageEvent) => {

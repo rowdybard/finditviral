@@ -126,6 +126,7 @@ export type Bounty = {
   store_names?: string[] | null
   deadline?: string | null
   moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden'
+  is_owner?: boolean
   status: 'open' | 'claimed' | 'closed'
   created_at: string
   product?: Product

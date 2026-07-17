@@ -65,6 +65,7 @@ export default function SightingVerificationControls({ sighting }: { sighting: S
   const [summary, setSummary] = useState(() => summaryCache.get(key) ?? summaryFromSighting(sighting))
   const [pending, setPending] = useState<SightingVerificationResponse | 'remove' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState<string | null>(null)
 
   useEffect(() => {
     const next = summaryCache.get(key) ?? summaryFromSighting(sighting)
@@ -138,6 +139,7 @@ export default function SightingVerificationControls({ sighting }: { sighting: S
     }
 
     setSummary(result.data)
+    if (!removing && response === 'not_found') setConfirmation('Marked as not found. Thanks for keeping this current.')
     dispatchSummary(key, result.data)
     trackEvent('sighting_response', {
       action: removing ? 'remove' : summary.viewer_response ? 'change' : 'set',
@@ -178,12 +180,13 @@ export default function SightingVerificationControls({ sighting }: { sighting: S
             onClick={() => void respond('not_found')}
           >
             <MagnifyingGlass size={20} weight={summary.viewer_response === 'not_found' ? 'fill' : 'bold'} aria-hidden="true" />
-            {pending === 'not_found' || (pending === 'remove' && summary.viewer_response === 'not_found') ? 'Saving…' : 'Not found'}
+            {pending === 'not_found' || (pending === 'remove' && summary.viewer_response === 'not_found') ? 'Saving…' : 'No longer there'}
           </button>
         </div>
       )}
 
       {error && <p className="mt-2 text-sm font-semibold text-red-700" role="alert">{error}</p>}
+      {confirmation && <p className="mt-2 text-sm font-semibold text-green-700" role="status">{confirmation}</p>}
       <span className="sr-only" aria-live="polite">
         {pending ? 'Saving community response' : error ?? ''}
       </span>

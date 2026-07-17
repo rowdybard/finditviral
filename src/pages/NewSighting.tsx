@@ -542,15 +542,15 @@ export default function NewSighting() {
 
       {submitted && (
         <div className="card space-y-3 border-2 border-green-500 bg-green-50">
-          <h2 className="text-lg font-bold text-green-800">{lead ? 'Confirmation submitted' : 'Sighting published'}</h2>
+          <h2 className="text-lg font-bold text-green-800">{lead ? 'Confirmation submitted' : `Sighting posted${selectedStores.length === 1 ? ` at ${selectedStores[0]?.label}` : ''}`}</h2>
           <p className="text-sm text-green-700">
             {lead
               ? 'An automated safety check is running. Clean confirmations publish and confirm the lead within a few minutes; flagged reports stay private for owner review.'
               : 'Your sighting is now visible to local shoppers.'}
           </p>
           <div className="flex gap-2">
-            <Link to="/sightings" className="btn-secondary">View sightings</Link>
-            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setSelectedStores([]); setQuantity(''); setNotes(''); setPhotoUrls([]); setDraft(null) }}>Report another</button>
+            <Link to="/sightings" className="btn-secondary">View post</Link>
+            <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setSelectedStores([]); setQuantity(''); setNotes(''); setPhotoUrls([]); setDraft(null) }}>Add another store</button>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Megaphone, MapPin, CalendarBlank, Link as LinkIcon, ArrowLeft, PencilSimple, Trash } from '@phosphor-icons/react'
 import LeadVoteButtons from '../components/LeadVoteButtons'
 import ShareButton from '../components/ShareButton'
@@ -9,6 +9,7 @@ import { applyPageMetadata, getPageMetadataForLead } from '../lib/pageMetadata'
 import { timeAgo } from '../lib/utils'
 import type { LeadDetailView } from '../types/database'
 import { useMascotToast } from '../contexts/MascotToastContext'
+import { restoreFeedContext } from '../lib/feedContext'
 
 const sourceTypeLabels: Record<string, string> = {
   employee_tip: 'Employee tip',
@@ -19,8 +20,10 @@ const sourceTypeLabels: Record<string, string> = {
 }
 
 export default function LeadDetail() {
+  const location = useLocation()
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const feedReturn = restoreFeedContext(location.state)
   const toast = useMascotToast()
   const [lead, setLead] = useState<LeadDetailView | null>(null)
   const [loading, setLoading] = useState(true)
@@ -105,7 +108,7 @@ export default function LeadDetail() {
     setSaving(true)
     const { error: rpcError } = await deleteLead(lead!.id)
     if (rpcError) { setActionError(rpcError.message); setSaving(false); return }
-    navigate('/sightings', { replace: true })
+    navigate(feedReturn?.path ?? '/sightings', { replace: true, state: feedReturn ? { feedReturn } : undefined })
   }
 
   const scopeText = lead.scope_type === 'stores'

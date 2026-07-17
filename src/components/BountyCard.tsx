@@ -14,6 +14,8 @@ import { timeAgo, statusLabel } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
 import { activeMarket } from '../lib/market'
 import ShareButton from './ShareButton'
+import StatusExplanation from './StatusExplanation'
+import { feedReturnState } from '../lib/feedContext'
 
 function cardReward(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -43,6 +45,7 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
 
   return (
     <article
+      id={`bounty-${bounty.id}`}
       className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#1c1917] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#1c1917]"
       data-testid="bounty-card"
     >
@@ -56,6 +59,7 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
       <div className="min-w-0">
         <Link
           to={`/bounties/${bounty.id}`}
+          state={feedReturnState(`bounty-${bounty.id}`)}
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
           aria-label={`View bounty for ${productName}`}
         >
@@ -148,11 +152,12 @@ export default function BountyCard({ bounty, onDelete }: { bounty: Bounty; onDel
             <ShareButton
               title={`Bounty: ${productName}`}
               text={shareText}
-              path={`/bounties/${bounty.id}`}
+              path={`/bounties/${bounty.id}#bounty-${bounty.id}`}
               accent="brand"
             />
           </div>
         </footer>
+        <div className="px-3 pb-2 sm:px-4"><StatusExplanation status={bounty.status} isOwner={bounty.is_owner} /></div>
       </div>
     </article>
   )

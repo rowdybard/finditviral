@@ -13,6 +13,8 @@ import type { Lead } from '../types/database'
 import { timeAgo } from '../lib/utils'
 import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
+import StatusExplanation from './StatusExplanation'
+import { feedReturnState } from '../lib/feedContext'
 
 const sourceTypeLabels: Record<string, string> = {
   employee_tip: 'Employee tip',
@@ -37,6 +39,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
 
   return (
     <article
+      id={`lead-${lead.id}`}
       className="group mb-1.5 mr-1.5 grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border-2 border-stone-950 bg-[#fffdf7] shadow-[6px_6px_0_0_#1c1917] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[3px_3px_0_0_#1c1917]"
       data-testid="lead-card"
     >
@@ -50,6 +53,7 @@ export default function LeadCard({ lead }: { lead: Lead }) {
       <div className="min-w-0">
         <Link
           to={`/leads/${lead.slug}`}
+          state={feedReturnState(`lead-${lead.id}`)}
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
           aria-label={`View lead: ${lead.headline}`}
         >
@@ -156,11 +160,12 @@ export default function LeadCard({ lead }: { lead: Lead }) {
             <ShareButton
               title={`Lead: ${lead.headline}`}
               text={shareText}
-              path={`/leads/${lead.slug}`}
+              path={`/leads/${lead.slug}#lead-${lead.id}`}
               accent="yellow"
             />
           </div>
         </footer>
+        <div className="px-3 pb-2 sm:px-4"><StatusExplanation status={isExpired ? 'expired' : lead.status} isOwner={lead.is_owner} /></div>
       </div>
     </article>
   )

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CalendarBlank } from '@phosphor-icons/react'
 import CatalogSearchSelect, { type CatalogSelection } from '../components/CatalogSearchSelect'
 import EmptyState from '../components/EmptyState'
@@ -13,6 +13,7 @@ import { deleteBounty, getBountyDetail, listMyBountyClaims, submitBountyClaim, u
 import { supabase } from '../lib/supabase'
 import type { BountyClaimView, BountyDetailView } from '../types/database'
 import { formatReward, statusColor, statusLabel, timeAgo } from '../lib/utils'
+import { restoreFeedContext } from '../lib/feedContext'
 
 function localDateTime(date: Date): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
@@ -70,6 +71,7 @@ function isEmptyClaimDraft(value: ClaimLocalDraft): boolean {
 }
 
 export default function BountyDetail() {
+  const location = useLocation()
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const [submissionId, setSubmissionId] = useState(createDraftSubmissionId)
@@ -96,6 +98,7 @@ export default function BountyDetail() {
   const [editVariantRequirements, setEditVariantRequirements] = useState('')
   const [editAcceptEquivalent, setEditAcceptEquivalent] = useState(false)
   const navigate = useNavigate()
+  const feedReturn = restoreFeedContext(location.state)
 
   const localDraft = useFormDraft({
     scope: user && id ? { userId: user.id, formType: 'bounty-claim', entityId: id } : null,
@@ -323,7 +326,7 @@ export default function BountyDetail() {
       return
     }
     trackEvent('delete_bounty')
-    navigate('/bounties')
+    navigate(feedReturn?.path ?? '/bounties', { replace: true, state: feedReturn ? { feedReturn } : undefined })
   }
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-500" /></div>
@@ -338,7 +341,7 @@ export default function BountyDetail() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/bounties" className="text-sm text-stone-500 hover:text-stone-700">← Bounties</Link>
+        <Link to={feedReturn?.path ?? '/bounties'} state={feedReturn ? { feedReturn } : undefined} className="text-sm text-stone-500 hover:text-stone-700">← Bounties</Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <div><h1 className="text-2xl font-black text-stone-900">{bounty.product_name}</h1><p className="mt-1 text-sm text-stone-500">Posted by @{bounty.owner_username} · {timeAgo(bounty.created_at)}</p></div>
           <span className={`badge ${statusColor(bounty.status)}`}>{statusLabel(bounty.status)}</span>

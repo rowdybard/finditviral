@@ -299,11 +299,13 @@ export async function getPublicProduct(slug: string): RpcResult<PublicProduct | 
   return { data: firstRow(result.data), error: result.error }
 }
 
-export async function listPublicStores(query = '', limit = 50, offset = 0): RpcResult<Store[]> {
+export async function listPublicStores(query = '', limit = 50, offset = 0, zipCode: string | null = null, radiusMiles = 50): RpcResult<Store[]> {
   return callRpc<Store[]>('list_public_stores', {
     p_query: query.trim() || null,
     p_limit: limit,
     p_offset: offset,
+    p_zip_code: zipCode,
+    p_radius_miles: radiusMiles,
   })
 }
 

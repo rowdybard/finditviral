@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Sighting, Product, Trend, Lead } from '../types/database'
 import SightingCard from '../components/SightingCard'
@@ -8,6 +8,9 @@ import EmptyState from '../components/EmptyState'
 import { activeMarket } from '../lib/market'
 import { listPublicSightings, listPublicLeads } from '../lib/launchApi'
 import { useViewerLocation } from '../contexts/ViewerLocationContext'
+import UseMyZipButton from '../components/UseMyZipButton'
+import { getSavedRadius, saveRadius } from '../lib/localPreferences'
+import { focusFeedCard, restoreFeedContext } from '../lib/feedContext'
 
 type Tab = 'all' | 'sightings' | 'leads'
 
@@ -16,6 +19,7 @@ type FeedItem =
   | { kind: 'lead'; data: Lead; sortKey: string }
 
 export default function Sightings() {
+  const location = useLocation()
   const viewerLocation = useViewerLocation()
   const [searchParams] = useSearchParams()
   const [sightings, setSightings] = useState<Sighting[]>([])
@@ -27,9 +31,10 @@ export default function Sightings() {
   const [productFilter, setProductFilter] = useState(searchParams.get('product') ?? '')
   const [zipFilter, setZipFilter] = useState(activeMarket.defaultZip)
   const zipEditedRef = useRef(false)
-  const [radiusFilter, setRadiusFilter] = useState('50')
+  const [radiusFilter, setRadiusFilter] = useState(getSavedRadius)
   const [tab, setTab] = useState<Tab>('all')
   const [error, setError] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   useEffect(() => {
     supabase.from('trends').select('*').eq('is_active', true).order('name').then(({ data }) => {
@@ -114,6 +119,8 @@ export default function Sightings() {
   }
   feedItems.sort((a, b) => b.sortKey.localeCompare(a.sortKey))
 
+  useEffect(() => { const context = restoreFeedContext(location.state); if (context) focusFeedCard(context.anchor, context.scrollY) }, [location.state, feedItems.length])
+
   return (
     <div className="space-y-4">
       {error && (
@@ -138,7 +145,8 @@ export default function Sightings() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      <button type="button" className="rounded-lg border border-stone-300 px-3 py-2 text-left text-sm font-bold text-stone-700 sm:hidden" onClick={() => setFiltersOpen((open) => !open)}>{zipFilter ? `Within ${radiusFilter} mi · ${tab} · ${feedItems.length} results` : `${tab} · ${feedItems.length} results`} · Filters</button>
+      <div className={`${filtersOpen ? 'flex' : 'hidden'} flex-col gap-3 sm:flex sm:flex-row sm:flex-wrap`}>
         <select
           className="input sm:w-auto"
           value={trendFilter}
@@ -169,10 +177,11 @@ export default function Sightings() {
           value={zipFilter}
           onChange={(e) => { zipEditedRef.current = true; setZipFilter(e.target.value.replace(/\D/g, '')) }}
         />
+        <UseMyZipButton onUse={(zip) => { zipEditedRef.current = true; setZipFilter(zip) }} />
         <select
           className="input sm:w-32"
           value={radiusFilter}
-          onChange={(e) => setRadiusFilter(e.target.value)}
+          onChange={(e) => { setRadiusFilter(e.target.value); saveRadius(e.target.value) }}
           disabled={!zipFilter}
         >
           <option value="10">10 mi</option>

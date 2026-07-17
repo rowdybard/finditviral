@@ -1,7 +1,9 @@
 import { MagnifyingGlass, MapPin, Package, X } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { searchProducts, searchStores } from '../lib/launchApi'
+import { listPublicStores, searchProducts, searchStores } from '../lib/launchApi'
 import type { ProductSearchResult, StoreSearchResult } from '../types/database'
+import { getRecentStores, rememberStore } from '../lib/localPreferences'
+import { useViewerLocation } from '../contexts/ViewerLocationContext'
 
 export type CatalogSelection = {
   id: string
@@ -57,6 +59,17 @@ export default function CatalogSearchSelect({
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(-1)
+  const [recentStores, setRecentStores] = useState<CatalogSelection[]>([])
+  const [nearestStores, setNearestStores] = useState<CatalogSelection[]>([])
+  const { zipCode } = useViewerLocation()
+
+  useEffect(() => {
+    if (kind !== 'store' || value) return
+    setRecentStores(getRecentStores())
+    void listPublicStores('', 6, 0, zipCode, 50).then((response) => {
+      setNearestStores((response.data ?? []).map((store) => toStoreSelection(store as unknown as StoreSearchResult)))
+    })
+  }, [kind, value, zipCode])
 
   useEffect(() => {
     if (value || query.trim().length < 2) {
@@ -94,6 +107,10 @@ export default function CatalogSearchSelect({
   }, [kind, query, value])
 
   function select(result: CatalogSelection) {
+    if (kind === 'store') {
+      rememberStore(result)
+      setRecentStores(getRecentStores())
+    }
     onChange(result)
     setQuery('')
     setOpen(false)
@@ -192,15 +209,23 @@ export default function CatalogSearchSelect({
             <p className="mt-1 text-xs text-stone-500">Type at least 2 characters.</p>
           )}
 
-          {open && query.trim().length >= 2 && (
+          {open && (query.trim().length >= 2 || kind === 'store') && (
             <div
               id={`${inputId}-results`}
               role="listbox"
               className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-stone-200 bg-white p-1 shadow-xl"
             >
+              {query.trim().length === 0 && kind === 'store' && (
+                <>
+                  {recentStores.length > 0 && <p className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-wide text-stone-500">Recent</p>}
+                  {recentStores.map((store) => <button key={`recent-${store.id}`} type="button" className="block w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50" onMouseDown={(event) => event.preventDefault()} onClick={() => select(store)}><span className="block truncate text-sm font-semibold text-stone-900">{store.label}</span><span className="block truncate text-xs text-stone-500">{store.detail}</span></button>)}
+                  <p className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-wide text-stone-500">Nearest to {zipCode}</p>
+                  {nearestStores.filter((store) => !recentStores.some((recent) => recent.id === store.id)).slice(0, 3).map((store) => <button key={`near-${store.id}`} type="button" className="block w-full rounded-lg px-3 py-2 text-left hover:bg-brand-50" onMouseDown={(event) => event.preventDefault()} onClick={() => select(store)}><span className="block truncate text-sm font-semibold text-stone-900">{store.label}</span><span className="block truncate text-xs text-stone-500">{store.detail}</span></button>)}
+                </>
+              )}
               {loading && <p className="px-3 py-3 text-sm text-stone-500">Searching…</p>}
               {!loading && error && <p className="px-3 py-3 text-sm text-red-600">{error}</p>}
-              {!loading && !error && results.map((result, index) => (
+              {query.trim().length >= 2 && !loading && !error && results.map((result, index) => (
                 <button
                   key={result.id}
                   id={`${inputId}-opt-${index}`}
@@ -222,10 +247,10 @@ export default function CatalogSearchSelect({
                   </span>
                 </button>
               ))}
-              {!loading && !error && results.length === 0 && (
+              {query.trim().length >= 2 && !loading && !error && results.length === 0 && (
                 <p className="px-3 py-3 text-sm text-stone-500">No matches found.</p>
               )}
-              {!loading && !error && onSuggest && (
+              {query.trim().length >= 2 && !loading && !error && onSuggest && (
                 <button
                   type="button"
                   className="mt-1 block w-full rounded-lg border-t border-stone-100 px-3 py-2.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50"

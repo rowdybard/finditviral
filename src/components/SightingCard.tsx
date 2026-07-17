@@ -19,6 +19,7 @@ import SightingVerificationControls from './SightingVerificationControls'
 import { useViewerLocation } from '../contexts/ViewerLocationContext'
 import { updateSighting } from '../lib/launchApi'
 import { useMascotToast } from '../contexts/MascotToastContext'
+import StatusExplanation from './StatusExplanation'
 
 const stockThemes = {
   in_stock: {
@@ -201,6 +202,7 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
         )}
 
         <SightingVerificationControls sighting={sighting} />
+        <div className="px-3 pb-2 sm:px-4"><StatusExplanation status={sighting.freshness_status === 'possibly_outdated' ? 'possibly_gone' : sighting.moderation_status} isOwner={sighting.is_owner} /></div>
 
         <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-stone-300 px-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-stone-900">
@@ -240,7 +242,7 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
             <ShareButton
               title={`Sighting: ${productName}`}
               text={shareText}
-              path={productPath}
+              path={`${productPath}#sighting-${sighting.id}`}
               accent={theme.accent}
             />
           </div>

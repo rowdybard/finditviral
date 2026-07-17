@@ -10,6 +10,8 @@ import { createDraftSubmissionId } from '../lib/formDraftStore'
 import { activeMarket } from '../lib/market'
 import { trackEvent } from '../lib/analytics'
 import { mapContributionError } from '../lib/errorMap'
+import UseMyZipButton from '../components/UseMyZipButton'
+import { getSavedRadius, saveRadius } from '../lib/localPreferences'
 
 const sourceTypeOptions = [
   { value: 'employee_tip', label: 'Employee tip' },
@@ -90,7 +92,7 @@ export default function NewLead() {
   const [scope, setScope] = useState<'region' | 'stores'>('region')
   const [store, setStore] = useState<CatalogSelection | null>(null)
   const [zipCode, setZipCode] = useState(activeMarket.defaultZip)
-  const [radiusMiles, setRadiusMiles] = useState('50')
+  const [radiusMiles, setRadiusMiles] = useState(getSavedRadius)
   const [sourceType, setSourceType] = useState<typeof sourceTypeOptions[number]['value']>('employee_tip')
   const [sourceUrl, setSourceUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -203,12 +205,12 @@ export default function NewLead() {
 
       {submitted && (
         <div className="card space-y-3 border-2 border-green-500 bg-green-50">
-          <h2 className="text-lg font-bold text-green-800">Submitted for review</h2>
+          <h2 className="text-lg font-bold text-green-800">Lead submitted for review</h2>
           <p className="text-sm text-green-700">
-            Your lead has been submitted and will be visible once approved by a moderator.
+            You can track it from your profile while automated or owner review completes.
           </p>
           <div className="flex gap-2">
-            <Link to="/sightings" className="btn-secondary">Back to sightings</Link>
+            <Link to="/profile/me" className="btn-secondary">View profile</Link>
             <button type="button" className="btn-primary" onClick={() => { setSubmitted(false); setSubmissionId(createDraftSubmissionId()); setProduct(null); setHeadline(''); setDetails(''); setExpectedDate(''); setStore(null); setError(null) }}>Share another</button>
           </div>
         </div>
@@ -319,7 +321,7 @@ export default function NewLead() {
                         key={miles}
                         type="button"
                         className={`fiv-radius-btn ${radiusMiles === String(miles) ? 'fiv-radius-btn-active' : 'fiv-radius-btn-inactive'}`}
-                        onClick={() => setRadiusMiles(String(miles))}
+                        onClick={() => { const next = String(miles); setRadiusMiles(next); saveRadius(next) }}
                       >
                         {miles} mi
                       </button>
@@ -343,13 +345,14 @@ export default function NewLead() {
             <div className="space-y-3">
               <h2 className="fiv-section-heading"><span className="fiv-step-badge">4</span> Expected date <span className="text-xs font-normal text-stone-400">(Optional)</span></h2>
               <p className="text-xs text-stone-500">When do you expect the restock to happen?</p>
-              <input
+                  <input
                 id="expected-date"
                 className="input"
                 type="date"
                 value={expectedDate}
                 onChange={(e) => setExpectedDate(e.target.value)}
-              />
+                  />
+                  <UseMyZipButton onUse={setZipCode} />
             </div>
 
             {/* Step 5: Source */}
