@@ -39,10 +39,20 @@ describe('OpenAI research', () => {
     vi.stubGlobal('fetch', fetchMock)
     await executeResearchRun(env, queued.run.id, now)
 
-    expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toMatchObject({
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as {
+      model: string
+      max_output_tokens: number
+      text: { format: { schema: { properties: { candidates: { items: { properties: Record<string, unknown>; required: string[] } } } } } }
+    }
+    expect(requestBody).toMatchObject({
       model: 'gpt-5.6-luna',
       max_output_tokens: 8_000,
     })
+    const candidateSchema = requestBody.text.format.schema.properties.candidates.items
+    expect(candidateSchema.required).toEqual(Object.keys(candidateSchema.properties))
+    const nestedProperties = candidateSchema.properties as Record<string, { properties?: Record<string, unknown>; required?: string[] }>
+    expect(nestedProperties.topic!.required).toEqual(Object.keys(nestedProperties.topic!.properties!))
+    expect(nestedProperties.signal!.required).toEqual(Object.keys(nestedProperties.signal!.properties!))
 
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run).toMatchObject({ status: 'succeeded', accepted_count: 1, rejected_count: 0 })

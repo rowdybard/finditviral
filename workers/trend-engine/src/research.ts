@@ -196,12 +196,12 @@ function responseSchema(): JsonRecord {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['name', 'product_url', 'topic', 'signal', 'confidence', 'evidence_urls'],
+          required: ['name', 'brand', 'category', 'product_url', 'image_url', 'availability_status', 'topic', 'signal', 'confidence', 'evidence_urls'],
           properties: {
-            name: { type: 'string' }, brand: { type: 'string' }, category: { type: 'string' },
-            product_url: { type: 'string' }, image_url: { type: 'string' }, availability_status: { type: 'string' },
-            topic: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' } } },
-            signal: { type: 'object', additionalProperties: false, required: ['type', 'value'], properties: { type: { type: 'string', enum: ['search_interest', 'social_velocity', 'marketplace_rank', 'editorial_mentions'] }, value: { type: 'number' }, velocity: { type: 'number' } } },
+            name: { type: 'string' }, brand: { type: ['string', 'null'] }, category: { type: ['string', 'null'] },
+            product_url: { type: 'string' }, image_url: { type: ['string', 'null'] }, availability_status: { type: ['string', 'null'] },
+            topic: { type: 'object', additionalProperties: false, required: ['name', 'slug', 'description'], properties: { name: { type: 'string' }, slug: { type: ['string', 'null'] }, description: { type: ['string', 'null'] } } },
+            signal: { type: 'object', additionalProperties: false, required: ['type', 'value', 'velocity'], properties: { type: { type: 'string', enum: ['search_interest', 'social_velocity', 'marketplace_rank', 'editorial_mentions'] }, value: { type: 'number' }, velocity: { type: ['number', 'null'] } } },
             confidence: { type: 'number' }, evidence_urls: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string' } },
           },
         },
