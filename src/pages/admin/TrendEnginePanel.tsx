@@ -500,7 +500,7 @@ function PatchesTab() {
     try {
       const result = await generatePatch()
       setPatch(result.patch)
-      if (!result.patch) setError(result.reason ?? 'No eligible candidates for a patch in the current mode.')
+      if (!result.patch) setError(result.reason ?? 'No patch generated. Approval does not promote a candidate: it must be trending with current evidence. Shadow mode would create a draft for an eligible candidate; it never publishes one.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate patch')
     } finally {
