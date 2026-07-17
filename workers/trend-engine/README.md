@@ -41,6 +41,10 @@ Connectors normalize their source-specific metrics to a documented `0..100` sign
 
 Each registered source has an `independence_key`. Mirrors or connectors derived from the same upstream must share that key. Scoring first aggregates and caps each independence group, and zero-trust evidence does not count toward the three-source autopilot gate. `catalog_host_allowlist` separately records which product domains that connector may vouch for. A human approval can verify/replace a catalog URL; an unreviewed autopilot candidate cannot.
 
+## OpenAI research limits
+
+OpenAI research uses `gpt-5.6-luna` with web search and strict structured output. Each run is capped at 8,000 output tokens and 12 candidates; every accepted candidate still requires two distinct current web-search citations before entering the normal review queue.
+
 Identity is intentionally conservative:
 
 1. exact GTIN;
@@ -107,6 +111,7 @@ The `checksum` is SHA-256 over canonical JSON after replacing the manifest's che
 - every five minutes: claim due normalized feeds and enqueue one poll per source;
 - every ten minutes: recompute the ten stalest candidate scores, while new signals recompute immediately;
 - minute 8 hourly: generate the current-mode patch;
+- minute 17 every four hours: queue one OpenAI research run;
 - 03:37 UTC daily: remove expired evidence/score/run/job records after 90 days, cursor change-log entries after 30 days, and unlinked/unpatched dormant candidates after 180 days.
 
 The small batches and Queue consumer size of one keep every path below D1's 50-query free-plan invocation limit. Stale scores older than two hours are categorically ineligible for a patch, so a large backlog fails closed instead of publishing old trends.

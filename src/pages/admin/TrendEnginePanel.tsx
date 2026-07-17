@@ -10,6 +10,7 @@ import {
   listSources,
   recomputeCandidates,
   reviewCandidate,
+  researchRunErrorMessage,
   startResearchRun,
   type CandidateState,
   type EngineCandidate,
@@ -159,7 +160,7 @@ function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
       {runs.map((run) => <article key={run.id} className="card space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold text-stone-900">{run.trigger_type === 'manual' ? 'Manual' : 'Scheduled'} research</p><p className="text-xs text-stone-500">{new Date(run.created_at).toLocaleString()} · {run.model}</p></div><span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{run.status}</span></div>
         {run.status === 'succeeded' && <p className="text-sm text-stone-700">{run.accepted_count} accepted · {run.duplicate_count} duplicate · {run.rejected_count} rejected</p>}
-        {run.error_code && <p className="text-sm text-red-700">Research failed: {run.error_code}</p>}
+        {run.error_code && <p className="text-sm text-red-700">{researchRunErrorMessage(run.error_code)}</p>}
         {run.evidence.map((item) => <p key={item.candidate_id} className="break-words text-xs text-stone-600">Evidence: {item.urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">{index ? ' · ' : ''}{new URL(url).hostname}</a>)}</p>)}
         {run.candidateIds.length > 0 && <button type="button" className="btn-secondary text-xs" onClick={onCandidates}>Review {run.candidateIds.length} candidate{run.candidateIds.length === 1 ? '' : 's'}</button>}
       </article>)}

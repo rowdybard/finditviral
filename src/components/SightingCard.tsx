@@ -2,7 +2,6 @@ import {
   Clock,
   Eye,
   MapPin,
-  NavigationArrow,
   Storefront,
   Trash,
   PencilSimple,
@@ -12,11 +11,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Sighting } from '../types/database'
 import { timeAgo } from '../lib/utils'
-import { formatDistance } from '../lib/distance'
 import ShareButton from './ShareButton'
 import SightingPhoto from './SightingPhoto'
 import SightingVerificationControls from './SightingVerificationControls'
-import { useViewerLocation } from '../contexts/ViewerLocationContext'
 import { updateSighting } from '../lib/launchApi'
 import { useMascotToast } from '../contexts/MascotToastContext'
 import StatusExplanation from './StatusExplanation'
@@ -65,7 +62,6 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
   const [notes, setNotes] = useState(sighting.notes ?? '')
   const [quantity, setQuantity] = useState(sighting.quantity?.toString() ?? '')
   const [availabilityValue, setAvailabilityValue] = useState(sighting.availability ?? 'unknown')
-  const viewerLocation = useViewerLocation()
   const toast = useMascotToast()
   const productName = sighting.product?.name ?? sighting.product_name ?? 'Unknown product'
   const productPath = `/products/${sighting.product?.slug ?? sighting.product_slug ?? ''}`
@@ -76,7 +72,6 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
   const location = [sighting.city, sighting.state].filter(Boolean).join(', ')
   const photoUrl = photoFailed ? undefined : sighting.photo_urls?.[0]
   const shareText = `${availabilityLabel} availability spotted for ${productName} at ${sighting.store_name}${location ? ` in ${location}` : ''}.`
-  const distanceOrigin = viewerLocation.source === 'profile' ? 'Approx. from your ZIP' : 'Approx. from Greater Lansing'
 
   async function saveEdit() {
     setSaving(true)
@@ -171,16 +166,6 @@ export default function SightingCard({ sighting, onDelete }: { sighting: Sightin
               <MapPin aria-hidden="true" size={14} weight="fill" className={theme.text} />
               <span className="truncate">{sighting.store_name}{location ? `, ${location}` : ''}</span>
             </span>
-            {sighting.distance_miles !== undefined && (
-              <>
-                <span className="text-stone-300" aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1">
-                  <NavigationArrow aria-hidden="true" size={14} weight="fill" className={theme.text} />
-                  {formatDistance(sighting.distance_miles)}
-                </span>
-                <span className="text-stone-500">{distanceOrigin}</span>
-              </>
-            )}
             <span className="text-stone-300" aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1">
               <Clock aria-hidden="true" size={14} weight="bold" className={theme.text} />

@@ -126,6 +126,18 @@ export interface EngineResearchRun {
   error_code: string | null
 }
 
+export function researchRunErrorMessage(errorCode: string): string {
+  switch (errorCode) {
+    case 'OPENAI_RESEARCH_AUTH_FAILED': return 'OpenAI authentication failed. Update the Worker API key.'
+    case 'OPENAI_RESEARCH_ACCESS_DENIED': return 'OpenAI denied access. Check the API project, billing, and model access.'
+    case 'OPENAI_RESEARCH_MODEL_UNAVAILABLE': return 'The configured OpenAI model is not available to this API project.'
+    case 'OPENAI_RESEARCH_RATE_LIMITED': return 'OpenAI rate-limited this run. It will retry automatically.'
+    case 'OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE': return 'OpenAI is temporarily unavailable. The run will retry automatically.'
+    case 'OPENAI_RESEARCH_REQUEST_REJECTED': return 'OpenAI rejected the request. Review the Worker logs using the run time.'
+    default: return `Research failed: ${errorCode}`
+  }
+}
+
 export interface SourceCreateInput {
   id: string
   name: string

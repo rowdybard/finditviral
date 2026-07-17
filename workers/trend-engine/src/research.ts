@@ -14,6 +14,7 @@ import { parseViralSignalBatch } from './validation'
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v1'
 const MAX_CANDIDATES = 12
+const MAX_OUTPUT_TOKENS = 8_000
 
 type JsonRecord = Record<string, unknown>
 
@@ -24,6 +25,27 @@ export interface ResearchEnqueueResult {
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function openAiHttpFailure(response: Response): EngineError {
+  const requestId = response.headers.get('x-request-id')
+  const requestSuffix = requestId ? ` OpenAI request ID: ${requestId}.` : ''
+  if (response.status === 401) {
+    return new EngineError('OPENAI_RESEARCH_AUTH_FAILED', `OpenAI authentication failed. Update the Worker OPENAI_API_KEY.${requestSuffix}`, 502, false)
+  }
+  if (response.status === 403) {
+    return new EngineError('OPENAI_RESEARCH_ACCESS_DENIED', `OpenAI denied access to this research request. Check the API project, billing, and model access.${requestSuffix}`, 502, false)
+  }
+  if (response.status === 404) {
+    return new EngineError('OPENAI_RESEARCH_MODEL_UNAVAILABLE', `The configured OpenAI research model is unavailable to this API project.${requestSuffix}`, 502, false)
+  }
+  if (response.status === 429) {
+    return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${requestSuffix}`, 502, true)
+  }
+  if (response.status >= 500 || response.status === 408) {
+    return new EngineError('OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE', `OpenAI research is temporarily unavailable (HTTP ${response.status}).${requestSuffix}`, 502, true)
+  }
+  return new EngineError('OPENAI_RESEARCH_REQUEST_REJECTED', `OpenAI rejected the research request (HTTP ${response.status}).${requestSuffix}`, 502, false)
 }
 
 function configuredModel(env: Env): string {
@@ -197,6 +219,7 @@ async function callOpenAi(env: Env): Promise<JsonRecord> {
     headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: configuredModel(env),
+      max_output_tokens: MAX_OUTPUT_TOKENS,
       tools: [{ type: 'web_search' }],
       tool_choice: 'required',
       input: `Research newly viral consumer products in the United States. Find product-specific trends across collectibles, food, beauty, technology, and retail launches. Return only candidates with a real product URL and exactly two distinct current HTTPS citations from your web research. Do not invent metrics, citations, or availability. Keep confidence conservative and return at most ${MAX_CANDIDATES} candidates.`,
@@ -204,9 +227,8 @@ async function callOpenAi(env: Env): Promise<JsonRecord> {
     }),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok || !isRecord(body)) {
-    throw new EngineError('OPENAI_RESEARCH_UPSTREAM_ERROR', `OpenAI research request failed with ${response.status}.`, 502, response.status >= 500 || response.status === 429)
-  }
+  if (!response.ok) throw openAiHttpFailure(response)
+  if (!isRecord(body)) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response was not a JSON object.', 502, false)
   return body
 }
 
