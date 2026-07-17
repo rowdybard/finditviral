@@ -37,6 +37,16 @@ function LeadSlugRoute() {
   return <CatalogLayout><LeadDetail /></CatalogLayout>
 }
 
+export function RootRoute() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <div className="min-h-screen bg-stone-50" aria-label="Loading" />
+  }
+
+  return user ? <Navigate to="/home" replace /> : <EarlyAccess />
+}
+
 export default function App() {
   const { pathname, search, hash } = useLocation()
   const { passwordRecovery } = useAuth()
@@ -56,7 +66,7 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<EarlyAccess />} />
+      <Route path="/" element={<RootRoute />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/products" element={<CatalogLayout><Products /></CatalogLayout>} />
       <Route path="/products/:slug" element={<CatalogLayout><ProductPage /></CatalogLayout>} />
