@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RootRoute } from './App'
 
 const auth = vi.hoisted(() => ({
-  value: { user: null, loading: false },
+  value: { user: null as { id: string } | null, loading: false },
 }))
 
 vi.mock('./contexts/AuthContext', () => ({
