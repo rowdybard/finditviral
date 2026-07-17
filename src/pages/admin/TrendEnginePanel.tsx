@@ -132,14 +132,14 @@ function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try { setRuns(await listResearchRuns()) } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load research runs') } finally { setLoading(false) }
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true)
+    try { setRuns(await listResearchRuns()) } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load research runs') } finally { if (!background) setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     if (!runs.some((run) => run.status === 'queued' || run.status === 'running')) return
-    const timer = window.setInterval(() => { void load() }, 3000)
+    const timer = window.setInterval(() => { void load(true) }, 3000)
     return () => window.clearInterval(timer)
   }, [load, runs])
 
@@ -160,8 +160,15 @@ function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
       {runs.map((run) => <article key={run.id} className="card space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold text-stone-900">{run.trigger_type === 'manual' ? 'Manual' : 'Scheduled'} research</p><p className="text-xs text-stone-500">{new Date(run.created_at).toLocaleString()} · {run.model}</p></div><span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{run.status}</span></div>
         {run.status === 'succeeded' && <p className="text-sm text-stone-700">{run.accepted_count} accepted · {run.duplicate_count} duplicate · {run.rejected_count} rejected</p>}
+        {run.status === 'succeeded' && run.accepted_count === 0 && <p className="text-sm text-amber-800">{run.diagnostics.summary ?? 'No candidates passed validation. Open the research log for the reason.'}</p>}
         {run.error_code && <p className="text-sm text-red-700">{researchRunErrorMessage(run.error_code)}</p>}
         {run.evidence.map((item) => <p key={item.candidate_id} className="break-words text-xs text-stone-600">Evidence: {item.urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">{index ? ' · ' : ''}{new URL(url).hostname}</a>)}</p>)}
+        {(run.diagnostics.source_urls.length > 0 || run.diagnostics.candidates.length > 0 || run.diagnostics.summary) && <details className="rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-700" open={run.accepted_count === 0 || run.status === 'failed'}>
+          <summary className="cursor-pointer font-bold text-stone-800">Research log</summary>
+          {run.diagnostics.summary && <p className="mt-2">{run.diagnostics.summary}</p>}
+          {run.diagnostics.source_urls.length > 0 && <p className="mt-2 break-words">Web sources: {run.diagnostics.source_urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">{index ? ' · ' : ''}{new URL(url).hostname}</a>)}</p>}
+          {run.diagnostics.candidates.filter((candidate) => candidate.rejection_reasons.length > 0).map((candidate, index) => <p key={`${candidate.name ?? 'candidate'}-${index}`} className="mt-1 break-words">{candidate.name ?? 'Unnamed candidate'}: {candidate.rejection_reasons.join(', ')} ({candidate.matched_evidence_count}/2 returned sources matched)</p>)}
+        </details>}
         {run.candidateIds.length > 0 && <button type="button" className="btn-secondary text-xs" onClick={onCandidates}>Review {run.candidateIds.length} candidate{run.candidateIds.length === 1 ? '' : 's'}</button>}
       </article>)}
     </div>}

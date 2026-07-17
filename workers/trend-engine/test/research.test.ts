@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { claimResearchRun, getResearchRun } from '../src/repository'
+import { claimResearchRun, getResearchRun, researchRunView } from '../src/repository'
 import { enqueueResearchRun, executeResearchRun, recordResearchFailure } from '../src/research'
 import worker from '../src/index'
 
@@ -8,17 +8,20 @@ afterEach(() => vi.unstubAllGlobals())
 
 function response(citations: string[], candidateUrls = citations): Response {
   return new Response(JSON.stringify({
-    output: [{ content: [{
-      type: 'output_text',
-      text: JSON.stringify({ candidates: [{
-        name: 'Galaxy Glow Mini Printer', brand: 'Nova Toys', category: 'Tech toys',
-        product_url: 'https://products.example.com/galaxy-glow-mini-printer',
-        availability_status: 'available', topic: { name: 'Pocket Creativity' },
-        signal: { type: 'social_velocity', value: 82, velocity: 0.5 }, confidence: 0.7,
-        evidence_urls: candidateUrls,
-      }] }),
-      annotations: citations.map((url) => ({ type: 'url_citation', url })),
-    }] }],
+    output: [
+      { type: 'web_search_call', action: { sources: citations.map((url) => ({ type: 'url', url })) } },
+      { content: [{
+        type: 'output_text',
+        text: JSON.stringify({ candidates: [{
+          name: 'Galaxy Glow Mini Printer', brand: 'Nova Toys', category: 'Tech toys',
+          product_url: 'https://products.example.com/galaxy-glow-mini-printer',
+          availability_status: 'available', topic: { name: 'Pocket Creativity' },
+          signal: { type: 'social_velocity', value: 82, velocity: 0.5 }, confidence: 0.7,
+          evidence_urls: candidateUrls,
+        }] }),
+        annotations: [],
+      }] },
+    ],
   }), { headers: { 'Content-Type': 'application/json' } })
 }
 
@@ -47,6 +50,7 @@ describe('OpenAI research', () => {
     expect(requestBody).toMatchObject({
       model: 'gpt-5.6-luna',
       max_output_tokens: 8_000,
+      include: ['web_search_call.action.sources'],
     })
     const candidateSchema = requestBody.text.format.schema.properties.candidates.items
     expect(candidateSchema.required).toEqual(Object.keys(candidateSchema.properties))
@@ -74,6 +78,11 @@ describe('OpenAI research', () => {
     await executeResearchRun(env, queued.run.id, now)
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run).toMatchObject({ status: 'succeeded', accepted_count: 0, rejected_count: 1 })
+    expect(researchRunView(run!).diagnostics).toMatchObject({
+      source_urls: ['https://evidence.example.com/article-one', 'https://evidence.example.com/article-two'],
+      summary: 'No candidates passed validation.',
+      candidates: [{ name: 'Galaxy Glow Mini Printer', matched_evidence_count: 1, rejection_reasons: ['requires_two_returned_web_sources'] }],
+    })
   })
 
   it('records an actionable non-retryable error when OpenAI authentication fails', async () => {

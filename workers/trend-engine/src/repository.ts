@@ -6,6 +6,7 @@ import type {
   ScoreSignalInput,
   ScoreSnapshot,
   ResearchRunRow,
+  ResearchRunDiagnostics,
   ResearchTrigger,
   SignalType,
   SourceRow,
@@ -534,6 +535,7 @@ export async function releaseSourcePollJob(db: D1Database, jobKey: string, now: 
 export interface ResearchRunView extends ResearchRunRow {
   candidateIds: string[]
   evidence: Array<{ candidate_id: string; urls: string[] }>
+  diagnostics: ResearchRunDiagnostics
 }
 
 function parseJsonArray(value: string): unknown[] {
@@ -542,6 +544,37 @@ function parseJsonArray(value: string): unknown[] {
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
+  }
+}
+
+function parseResearchDiagnostics(value: string): ResearchRunDiagnostics {
+  const empty: ResearchRunDiagnostics = { source_urls: [], candidates: [], summary: null }
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return empty
+    const record = parsed as Record<string, unknown>
+    const sourceUrls = Array.isArray(record.source_urls)
+      ? record.source_urls.filter((url): url is string => typeof url === 'string').slice(0, 40)
+      : []
+    const candidates = Array.isArray(record.candidates) ? record.candidates.flatMap((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+      const candidate = value as Record<string, unknown>
+      const name = typeof candidate.name === 'string' ? candidate.name : null
+      const productUrl = typeof candidate.product_url === 'string' ? candidate.product_url : null
+      const evidenceUrls = Array.isArray(candidate.evidence_urls)
+        ? candidate.evidence_urls.filter((url): url is string => typeof url === 'string').slice(0, 2)
+        : []
+      const matched = typeof candidate.matched_evidence_count === 'number' && Number.isInteger(candidate.matched_evidence_count)
+        ? Math.max(0, Math.min(2, candidate.matched_evidence_count))
+        : 0
+      const reasons = Array.isArray(candidate.rejection_reasons)
+        ? candidate.rejection_reasons.filter((reason): reason is string => typeof reason === 'string').slice(0, 8)
+        : []
+      return [{ name, product_url: productUrl, evidence_urls: evidenceUrls, matched_evidence_count: matched, rejection_reasons: reasons }]
+    }).slice(0, 12) : []
+    return { source_urls: sourceUrls, candidates, summary: typeof record.summary === 'string' ? record.summary : null }
+  } catch {
+    return empty
   }
 }
 
@@ -556,6 +589,7 @@ export function researchRunView(row: ResearchRunRow): ResearchRunView {
       const urls = item.urls.filter((url): url is string => typeof url === 'string')
       return urls.length > 0 ? [{ candidate_id: item.candidate_id, urls }] : []
     }),
+    diagnostics: parseResearchDiagnostics(row.diagnostics_json),
   }
 }
 
@@ -626,13 +660,14 @@ export async function completeResearchRun(
     rejected: number
     candidateIds: string[]
     evidence: Array<{ candidate_id: string; urls: string[] }>
+    diagnostics: ResearchRunDiagnostics
   },
 ): Promise<void> {
   await db.prepare(`
     UPDATE research_runs
     SET status = 'succeeded', completed_at = ?, lease_until = NULL,
         received_count = ?, accepted_count = ?, duplicate_count = ?, rejected_count = ?,
-        candidate_ids_json = ?, evidence_json = ?, error_code = NULL
+        candidate_ids_json = ?, evidence_json = ?, diagnostics_json = ?, error_code = NULL
     WHERE id = ? AND status = 'running'
   `).bind(
     input.now,
@@ -642,6 +677,7 @@ export async function completeResearchRun(
     input.rejected,
     JSON.stringify(input.candidateIds),
     JSON.stringify(input.evidence),
+    JSON.stringify(input.diagnostics),
     id,
   ).run()
 }

@@ -123,6 +123,17 @@ export interface EngineResearchRun {
   rejected_count: number
   candidateIds: string[]
   evidence: Array<{ candidate_id: string; urls: string[] }>
+  diagnostics: {
+    source_urls: string[]
+    candidates: Array<{
+      name: string | null
+      product_url: string | null
+      evidence_urls: string[]
+      matched_evidence_count: number
+      rejection_reasons: string[]
+    }>
+    summary: string | null
+  }
   error_code: string | null
 }
 

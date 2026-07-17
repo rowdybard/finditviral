@@ -1,4 +1,4 @@
-import type { ResearchRunRow, ViralSignalV1 } from './domain'
+import type { ResearchCandidateDiagnostic, ResearchRunDiagnostics, ResearchRunRow, ViralSignalV1 } from './domain'
 import { EngineError, errorCode } from './errors'
 import { stableId } from './identity'
 import { ingestSignalBatch } from './ingest'
@@ -67,6 +67,19 @@ function parseUrls(value: unknown, allowedUrls: Set<string>): string[] {
   return Array.from(new Set(urls)).slice(0, 2)
 }
 
+function suppliedHttpsUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.flatMap((entry) => {
+    if (typeof entry !== 'string') return []
+    try {
+      const url = new URL(entry)
+      return url.protocol === 'https:' ? [url.toString()] : []
+    } catch {
+      return []
+    }
+  }))).slice(0, 2)
+}
+
 function optionalString(value: unknown, max: number): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max ? value.trim() : undefined
 }
@@ -76,17 +89,30 @@ function allowedCitationUrls(response: JsonRecord): Set<string> {
   const output = response.output
   if (!Array.isArray(output)) return allowed
   for (const item of output) {
-    if (!isRecord(item) || !Array.isArray(item.content)) continue
-    for (const content of item.content) {
-      if (!isRecord(content) || !Array.isArray(content.annotations)) continue
-      for (const annotation of content.annotations) {
-        if (!isRecord(annotation) || annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue
-        try {
-          const url = new URL(annotation.url)
-          if (url.protocol === 'https:') allowed.add(url.toString())
-        } catch {
-          // Ignore malformed citations returned by a provider response.
+    if (!isRecord(item)) continue
+    if (Array.isArray(item.content)) {
+      for (const content of item.content) {
+        if (!isRecord(content) || !Array.isArray(content.annotations)) continue
+        for (const annotation of content.annotations) {
+          if (!isRecord(annotation) || annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue
+          try {
+            const url = new URL(annotation.url)
+            if (url.protocol === 'https:') allowed.add(url.toString())
+          } catch {
+            // Ignore malformed citations returned by a provider response.
+          }
         }
+      }
+    }
+    const action = isRecord(item.action) ? item.action : null
+    if (!action || !Array.isArray(action.sources)) continue
+    for (const source of action.sources) {
+      if (!isRecord(source) || typeof source.url !== 'string') continue
+      try {
+        const url = new URL(source.url)
+        if (url.protocol === 'https:') allowed.add(url.toString())
+      } catch {
+        // Ignore malformed provider source URLs.
       }
     }
   }
@@ -106,7 +132,7 @@ function outputText(response: JsonRecord): string | null {
   return null
 }
 
-async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, now: Date): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }> }> {
+async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, now: Date): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }>; diagnostics: ResearchRunDiagnostics }> {
   const text = outputText(response)
   if (!text) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response did not contain structured output.', 502, false)
   let parsed: unknown
@@ -119,30 +145,50 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
   const allowed = allowedCitationUrls(response)
   const records: ViralSignalV1[] = []
   const evidence: Array<{ candidate_id: string; urls: string[] }> = []
+  const diagnostics: ResearchCandidateDiagnostic[] = []
   let rejected = 0
 
   for (const candidate of candidates) {
-    if (!isRecord(candidate)) { rejected += 1; continue }
+    if (!isRecord(candidate)) {
+      rejected += 1
+      diagnostics.push({ name: null, product_url: null, evidence_urls: [], matched_evidence_count: 0, rejection_reasons: ['invalid_candidate_object'] })
+      continue
+    }
     const name = optionalString(candidate.name, 160)
     const productUrl = optionalString(candidate.product_url, 2048)
     const topic = isRecord(candidate.topic) ? candidate.topic : null
     const topicName = topic ? optionalString(topic.name, 100) : undefined
     const urls = parseUrls(candidate.evidence_urls, allowed)
+    const suppliedUrls = suppliedHttpsUrls(candidate.evidence_urls)
     const signal = isRecord(candidate.signal) ? candidate.signal : null
     const type = signal ? optionalString(signal.type, 40) : undefined
     const value = signal?.value
     const confidence = candidate.confidence
-    if (!name || !productUrl || !topicName || urls.length < 2 || !signal ||
+    const rejectionReasons: string[] = []
+    if (!name) rejectionReasons.push('missing_name')
+    if (!productUrl) rejectionReasons.push('missing_product_url')
+    if (!topicName) rejectionReasons.push('missing_topic_name')
+    if (urls.length < 2) rejectionReasons.push('requires_two_returned_web_sources')
+    if (!signal) rejectionReasons.push('missing_signal')
+    if (type && type !== 'search_interest' && type !== 'social_velocity' && type !== 'marketplace_rank' && type !== 'editorial_mentions') rejectionReasons.push('invalid_signal_type')
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) rejectionReasons.push('invalid_signal_value')
+    if (typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) rejectionReasons.push('invalid_confidence')
+    if (rejectionReasons.length > 0 || !signal ||
       (type !== 'search_interest' && type !== 'social_velocity' && type !== 'marketplace_rank' && type !== 'editorial_mentions') ||
       typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100 ||
       typeof confidence !== 'number' || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
       rejected += 1
+      diagnostics.push({ name: name ?? null, product_url: productUrl ?? null, evidence_urls: suppliedUrls, matched_evidence_count: urls.length, rejection_reasons: rejectionReasons })
       continue
     }
-    const externalId = await stableId('research_candidate', `${name}\u0000${optionalString(candidate.brand, 100) ?? ''}\u0000${productUrl}`)
+    // The branch above rejects every malformed field. Repeat the guard in a form
+    // TypeScript can narrow before constructing the canonical signal.
+    if (!name || !productUrl || !topicName || !signal || !type || typeof value !== 'number' || typeof confidence !== 'number') continue
+    const brand = optionalString(candidate.brand, 100)
+    const externalId = await stableId('research_candidate', `${name}\u0000${brand ?? ''}\u0000${productUrl}`)
     const observationId = await stableId('research_observation', `${run.id}\u0000${externalId}`)
-    const candidateId = await stableId('candidate', optionalString(candidate.brand, 100)
-      ? `brand-name:${optionalString(candidate.brand, 100)!.toLocaleLowerCase('en-US')}\u0000${name.toLocaleLowerCase('en-US')}`
+    const candidateId = await stableId('candidate', brand
+      ? `brand-name:${brand.toLocaleLowerCase('en-US')}\u0000${name.toLocaleLowerCase('en-US')}`
       : `source:${OPENAI_RESEARCH_SOURCE}\u0000${externalId}`)
     const availability = optionalString(candidate.availability_status, 20)
     const availabilityStatus = availability === 'available' || availability === 'backorder' || availability === 'preorder' || availability === 'announced' || availability === 'limited'
@@ -159,7 +205,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
       candidate: {
         external_id: externalId,
         name,
-        ...(optionalString(candidate.brand, 100) ? { brand: optionalString(candidate.brand, 100) } : {}),
+        ...(brand ? { brand } : {}),
         ...(optionalString(candidate.category, 100) ? { category: optionalString(candidate.category, 100) } : {}),
         topic: {
           name: topicName,
@@ -168,7 +214,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
         },
         product_url: productUrl,
         ...(optionalString(candidate.image_url, 2048) ? { image_url: optionalString(candidate.image_url, 2048) } : {}),
-        search_terms: [name, ...(optionalString(candidate.brand, 100) ? [optionalString(candidate.brand, 100)!] : [])],
+        search_terms: [name, ...(brand ? [brand] : [])],
         availability_status: availabilityStatus,
       },
       signal: {
@@ -180,8 +226,18 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
       evidence_url: urls[0]!,
     })
     evidence.push({ candidate_id: candidateId, urls })
+    diagnostics.push({ name, product_url: productUrl, evidence_urls: urls, matched_evidence_count: urls.length, rejection_reasons: [] })
   }
-  return { records, rejected, evidence }
+  return {
+    records,
+    rejected,
+    evidence,
+    diagnostics: {
+      source_urls: Array.from(allowed).slice(0, 40),
+      candidates: diagnostics,
+      summary: candidates.length === 0 ? 'OpenAI returned no candidate objects.' : records.length === 0 ? 'No candidates passed validation.' : null,
+    },
+  }
 }
 
 function responseSchema(): JsonRecord {
@@ -222,6 +278,7 @@ async function callOpenAi(env: Env): Promise<JsonRecord> {
       max_output_tokens: MAX_OUTPUT_TOKENS,
       tools: [{ type: 'web_search' }],
       tool_choice: 'required',
+      include: ['web_search_call.action.sources'],
       input: `Research newly viral consumer products in the United States. Find product-specific trends across collectibles, food, beauty, technology, and retail launches. Return only candidates with a real product URL and exactly two distinct current HTTPS citations from your web research. Do not invent metrics, citations, or availability. Keep confidence conservative and return at most ${MAX_CANDIDATES} candidates.`,
       text: { format: { type: 'json_schema', name: 'viral_research_candidates', strict: true, schema: responseSchema() } },
     }),
@@ -272,6 +329,7 @@ export async function executeResearchRun(env: Env, runId: string, now = new Date
     rejected: research.rejected,
     candidateIds: ingestion.candidateIds,
     evidence: research.evidence,
+    diagnostics: research.diagnostics,
   })
 }
 

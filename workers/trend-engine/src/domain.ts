@@ -265,7 +265,23 @@ export interface ResearchRunRow {
   rejected_count: number
   candidate_ids_json: string
   evidence_json: string
+  diagnostics_json: string
   error_code: string | null
+}
+
+export interface ResearchCandidateDiagnostic {
+  name: string | null
+  product_url: string | null
+  evidence_urls: string[]
+  matched_evidence_count: number
+  rejection_reasons: string[]
+}
+
+/** Safe, bounded audit information for an OpenAI research run. Never contains a raw provider response. */
+export interface ResearchRunDiagnostics {
+  source_urls: string[]
+  candidates: ResearchCandidateDiagnostic[]
+  summary: string | null
 }
 
 export interface PatchPolicyDecision {
