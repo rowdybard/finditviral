@@ -35,10 +35,18 @@ import {
 } from './validation'
 
 const MAX_BODY_BYTES = 512 * 1024
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+}
+
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
+  ...CORS_HEADERS,
 }
 
 function json(value: unknown, status = 200, headers: HeadersInit = {}): Response {
@@ -332,6 +340,9 @@ async function handleRecompute(request: Request, env: Env): Promise<Response> {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
   if (request.method === 'GET' && url.pathname === '/health') {
     return json({ service: ENGINE_SERVICE, status: 'ok', mode: configuredMode(env), time: new Date().toISOString() })
   }
