@@ -22,6 +22,7 @@ import {
   listCandidates,
   listChanges,
   getResearchRun,
+  cancelResearchRun,
   listResearchRuns,
   researchRunView,
   listSources,
@@ -359,6 +360,11 @@ async function handleResearchRuns(request: Request, env: Env, url: URL): Promise
 
 async function handleResearchRunDetail(request: Request, env: Env, runId: string): Promise<Response> {
   await authorize(request, env, 'admin')
+  if (request.method === 'POST' && new URL(request.url).pathname.endsWith('/cancel')) {
+    const run = await cancelResearchRun(env.DB, runId, new Date().toISOString())
+    if (!run) throw new EngineError('RESEARCH_RUN_NOT_ACTIVE', 'Only queued or running research runs can be cancelled.', 409)
+    return json({ run: researchRunView(run) })
+  }
   if (request.method !== 'GET') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'The research run does not exist.', 404)
@@ -394,6 +400,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (patchMatch?.[1] && request.method === 'GET') return handlePatchDetail(request, env, decodeURIComponent(patchMatch[1]))
   const researchRunMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)$/)
   if (researchRunMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchRunMatch[1]))
+  const researchCancelMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)\/cancel$/)
+  if (researchCancelMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchCancelMatch[1]))
 
   throw new EngineError('NOT_FOUND', 'Not found.', 404)
 }

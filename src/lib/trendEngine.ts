@@ -145,6 +145,7 @@ export function researchRunErrorMessage(errorCode: string): string {
     case 'OPENAI_RESEARCH_RATE_LIMITED': return 'OpenAI rate-limited this run. It will retry automatically.'
     case 'OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE': return 'OpenAI is temporarily unavailable. The run will retry automatically.'
     case 'OPENAI_RESEARCH_REQUEST_REJECTED': return 'OpenAI rejected the request. Review the Worker logs using the run time.'
+    case 'RESEARCH_RUN_CANCELLED': return 'This run was force-cancelled by an admin.'
     default: return `Research failed: ${errorCode}`
   }
 }
@@ -264,6 +265,11 @@ export async function startResearchRun(): Promise<{ run: EngineResearchRun; crea
 export async function listResearchRuns(limit = 12): Promise<EngineResearchRun[]> {
   const data = await engineFetch<{ runs: EngineResearchRun[] }>(`/v1/research/runs?limit=${limit}`)
   return data.runs
+}
+
+export async function cancelResearchRun(id: string): Promise<EngineResearchRun> {
+  const data = await engineFetch<{ run: EngineResearchRun }>(`/v1/research/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: JSON.stringify({}) })
+  return data.run
 }
 
 export async function listChanges(after?: number, limit?: number): Promise<{ changes: EngineChange[]; next_cursor: number }> {

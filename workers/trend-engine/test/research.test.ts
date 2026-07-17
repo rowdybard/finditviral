@@ -115,4 +115,19 @@ describe('OpenAI research', () => {
     }), env)
     expect((await listed.json() as { runs: unknown[] }).runs.length).toBeGreaterThan(0)
   })
+
+  it('allows an admin to force-cancel an active research run', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `manual-cancel-${crypto.randomUUID()}` })
+    const response = await worker.fetch(new Request(`https://trend-engine.test/v1/research/runs/${queued.run.id}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.ENGINE_ADMIN_TOKEN}` },
+    }), env)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ run: { id: queued.run.id, status: 'failed', error_code: 'RESEARCH_RUN_CANCELLED' } })
+    const repeat = await worker.fetch(new Request(`https://trend-engine.test/v1/research/runs/${queued.run.id}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.ENGINE_ADMIN_TOKEN}` },
+    }), env)
+    expect(repeat.status).toBe(409)
+  })
 })

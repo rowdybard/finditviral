@@ -314,6 +314,10 @@ export async function executeResearchRun(env: Env, runId: string, now = new Date
   const research = await recordsFromResponse(response, run, now)
   const ingestion = { received: 0, accepted: 0, duplicates: 0, candidateIds: [] as string[] }
   for (let index = 0; index < research.records.length; index += 4) {
+    // A force-cancel can arrive while OpenAI is responding. Do not create any
+    // further candidates after that terminal state has been requested.
+    const current = await getResearchRun(env.DB, runId)
+    if (current?.status !== 'running') return
     const batch = parseViralSignalBatch({ schema_version: 1, records: research.records.slice(index, index + 4) }, now)
     const result = await ingestSignalBatch(env.DB, batch, 'scheduled', now)
     ingestion.received += result.received

@@ -1,6 +1,7 @@
 import { ArrowsCounterClockwise, Check, Lightning, Plus, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  cancelResearchRun,
   createSource,
   generatePatch,
   getEngineHealth,
@@ -17,6 +18,7 @@ import {
   type EngineChange,
   type EngineHealth,
   type EnginePatch,
+  type EngineResearchRun,
   type EngineSource,
   type ReviewStatus,
   type SourceCreateInput,
@@ -127,9 +129,10 @@ export default function TrendEnginePanel() {
 }
 
 function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
-  const [runs, setRuns] = useState<import('../../lib/trendEngine').EngineResearchRun[]>([])
+  const [runs, setRuns] = useState<EngineResearchRun[]>([])
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (background = false) => {
@@ -148,16 +151,25 @@ function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
     try { await startResearchRun(); await load() } catch (err) { setError(err instanceof Error ? err.message : 'Research could not be started') } finally { setStarting(false) }
   }
 
+  async function cancel(run: EngineResearchRun) {
+    if (!window.confirm(`Force-cancel this ${run.status} research run? Any OpenAI request already in flight will finish, but no further candidates will be ingested.`)) return
+    setCancellingId(run.id); setError(null)
+    try { await cancelResearchRun(run.id); await load() } catch (err) { setError(err instanceof Error ? err.message : 'Research run could not be cancelled') } finally { setCancellingId(null) }
+  }
+
+  const activeRuns = runs.filter((run) => run.status === 'queued' || run.status === 'running')
+  const completedRuns = runs.filter((run) => run.status === 'succeeded' || run.status === 'failed')
+
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><h3 className="text-lg font-bold text-stone-900">OpenAI research</h3><p className="text-sm text-stone-600">Evidence-backed discoveries enter the normal review queue; nothing publishes automatically.</p></div>
-      <button type="button" className="btn-primary" disabled={starting || runs.some((run) => run.status === 'queued' || run.status === 'running')} onClick={() => void start()}>
+      <button type="button" className="btn-primary" disabled={starting || activeRuns.length > 0} onClick={() => void start()}>
         <Lightning size={17} aria-hidden="true" /> {starting ? 'Queueing…' : 'Research now'}
       </button>
     </div>
     {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
     {loading ? <div className="flex justify-center py-8"><Spinner /></div> : runs.length === 0 ? <p className="card text-sm text-stone-600">No research runs yet. Scheduled research runs every four hours.</p> : <div className="space-y-2">
-      {runs.map((run) => <article key={run.id} className="card space-y-2">
+      {activeRuns.map((run) => <article key={run.id} className="card space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold text-stone-900">{run.trigger_type === 'manual' ? 'Manual' : 'Scheduled'} research</p><p className="text-xs text-stone-500">{new Date(run.created_at).toLocaleString()} · {run.model}</p></div><span className="rounded bg-stone-100 px-2 py-0.5 text-xs font-bold text-stone-700">{run.status}</span></div>
         {run.status === 'succeeded' && <p className="text-sm text-stone-700">{run.accepted_count} accepted · {run.duplicate_count} duplicate · {run.rejected_count} rejected</p>}
         {run.status === 'succeeded' && run.accepted_count === 0 && <p className="text-sm text-amber-800">{run.diagnostics.summary ?? 'No candidates passed validation. Open the research log for the reason.'}</p>}
@@ -170,7 +182,13 @@ function ResearchTab({ onCandidates }: { onCandidates: () => void }) {
           {run.diagnostics.candidates.filter((candidate) => candidate.rejection_reasons.length > 0).map((candidate, index) => <p key={`${candidate.name ?? 'candidate'}-${index}`} className="mt-1 break-words">{candidate.name ?? 'Unnamed candidate'}: {candidate.rejection_reasons.join(', ')} ({candidate.matched_evidence_count}/2 returned sources matched)</p>)}
         </details>}
         {run.candidateIds.length > 0 && <button type="button" className="btn-secondary text-xs" onClick={onCandidates}>Review {run.candidateIds.length} candidate{run.candidateIds.length === 1 ? '' : 's'}</button>}
+        <button type="button" className="btn-secondary text-xs text-red-700" disabled={cancellingId === run.id} onClick={() => void cancel(run)}>{cancellingId === run.id ? 'Cancelling…' : 'Force cancel run'}</button>
       </article>)}
+      {completedRuns.length > 0 && <section className="space-y-2"><div className="flex items-center justify-between"><h4 className="text-sm font-bold text-stone-800">Completed research</h4><span className="text-xs text-stone-500">Open a run for details</span></div>
+        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white divide-y divide-stone-100">{completedRuns.map((run) => <details key={run.id} className="group px-3 py-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-3"><span className="min-w-0"><span className="block font-semibold text-stone-900">{run.trigger_type === 'manual' ? 'Manual' : 'Scheduled'} research</span><span className="block truncate text-xs text-stone-500">{new Date(run.completed_at ?? run.created_at).toLocaleString()} · {run.model}</span></span><span className={`shrink-0 rounded px-2 py-0.5 text-xs font-bold ${run.status === 'succeeded' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-700'}`}>{run.status === 'succeeded' ? `${run.accepted_count} accepted` : 'Needs attention'}</span></summary>
+          <div className="mt-3 space-y-2 border-t border-stone-100 pt-2 text-sm text-stone-700">{run.status === 'succeeded' && <p>{run.accepted_count} accepted · {run.duplicate_count} duplicate · {run.rejected_count} rejected</p>}{run.error_code && <p className="text-red-700">{researchRunErrorMessage(run.error_code)}</p>}{run.diagnostics.summary && <p className="text-amber-800">{run.diagnostics.summary}</p>}{run.diagnostics.source_urls.length > 0 && <p className="break-words text-xs">Web sources: {run.diagnostics.source_urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-brand-700 underline">{index ? ' · ' : ''}{new URL(url).hostname}</a>)}</p>}{run.diagnostics.candidates.filter((candidate) => candidate.rejection_reasons.length > 0).map((candidate, index) => <p key={`${candidate.name ?? 'candidate'}-${index}`} className="text-xs">{candidate.name ?? 'Unnamed candidate'}: {candidate.rejection_reasons.join(', ')} ({candidate.matched_evidence_count}/2 sources matched)</p>)}{run.diagnostics.source_urls.length === 0 && run.diagnostics.candidates.length === 0 && !run.diagnostics.summary && <p className="text-xs text-stone-500">Detailed audit logs are available for research runs completed after this update.</p>}{run.candidateIds.length > 0 && <button type="button" className="btn-secondary text-xs" onClick={onCandidates}>Review {run.candidateIds.length} candidate{run.candidateIds.length === 1 ? '' : 's'}</button>}</div>
+        </details>)}</div>
+      </section>}
     </div>}
   </div>
 }

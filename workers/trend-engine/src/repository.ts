@@ -691,6 +691,17 @@ export async function failResearchRun(db: D1Database, id: string, errorCode: str
   `).bind(retryable ? 'queued' : 'failed', retryable ? 1 : 0, now, retryable ? 1 : 0, retryable ? null : null, errorCode, id).run()
 }
 
+/** Marks an active run terminal. A queue delivery already in flight will observe this before ingestion. */
+export async function cancelResearchRun(db: D1Database, id: string, now: string): Promise<ResearchRunRow | null> {
+  const cancelled = await db.prepare(`
+    UPDATE research_runs
+    SET status = 'failed', completed_at = ?, lease_until = NULL, error_code = 'RESEARCH_RUN_CANCELLED'
+    WHERE id = ? AND status IN ('queued', 'running')
+    RETURNING *
+  `).bind(now, id).first<ResearchRunRow>()
+  return cancelled ?? null
+}
+
 export async function deleteQueuedResearchRun(db: D1Database, id: string): Promise<void> {
   await db.prepare("DELETE FROM research_runs WHERE id = ? AND status = 'queued'").bind(id).run()
 }
