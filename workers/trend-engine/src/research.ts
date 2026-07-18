@@ -28,7 +28,7 @@ export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
 
 const DEFAULT_SETTINGS: EngineSettingsRow = {
-  max_output_tokens: 2000,
+  max_output_tokens: 3000,
   max_candidates_per_lane: 2,
   search_context_size: 'low',
   reasoning_effort: 'medium',

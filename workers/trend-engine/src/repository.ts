@@ -1058,7 +1058,7 @@ export interface EngineSettingsRow {
 export async function getEngineSettings(db: D1Database): Promise<EngineSettingsRow> {
   const row = await db.prepare('SELECT max_output_tokens, max_candidates_per_lane, search_context_size, reasoning_effort, updated_at FROM engine_settings WHERE id = 1').first<EngineSettingsRow>()
   if (!row) {
-    return { max_output_tokens: 2000, max_candidates_per_lane: 2, search_context_size: 'low', reasoning_effort: 'medium', updated_at: '1970-01-01T00:00:00.000Z' }
+    return { max_output_tokens: 3000, max_candidates_per_lane: 2, search_context_size: 'low', reasoning_effort: 'medium', updated_at: '1970-01-01T00:00:00.000Z' }
   }
   return row
 }
