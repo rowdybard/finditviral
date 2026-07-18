@@ -222,6 +222,25 @@ revoke all on function public.list_my_bounties(integer)
 grant execute on function public.list_my_bounties(integer)
   to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 3. Revoke column-level SELECT grants from 20260714015817
+-- ---------------------------------------------------------------------------
+-- Migration B (20260803000002) revoked table-level SELECT on profiles and
+-- bounties from authenticated. However, column-level grants from
+-- 20260714015817_greater_lansing_open_beta_launch.sql remain. PostgreSQL's
+-- has_table_privilege() returns true if the role has SELECT on any single
+-- column, so the column-level grants must also be revoked.
+
+revoke select (
+  id, user_id, product_id, reward_amount, reward_cents, store_id, zip_code,
+  radius_miles, notes, requirements, deadline, status, moderation_status,
+  created_at
+) on public.bounties from authenticated;
+
+revoke select (
+  id, username, karma, is_pro, created_at
+) on public.profiles from authenticated;
+
 notify pgrst, 'reload schema';
 
 commit;
