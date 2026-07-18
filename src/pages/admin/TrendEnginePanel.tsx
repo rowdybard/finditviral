@@ -680,22 +680,41 @@ function SettingsTab() {
       {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
       <div className="card space-y-4">
         <div>
-          <label className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-stone-700">Max output tokens</span>
-              <span className="text-sm font-mono text-stone-500">{settings.max_output_tokens}</span>
-            </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-stone-700">Max output tokens</span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.max_output_tokens === 0}
+                onChange={(e) => setSettings((s) => s ? { ...s, max_output_tokens: e.target.checked ? 0 : 3000 } : s)}
+                className="accent-brand-600"
+              />
+              <span className="text-xs text-stone-600">No limit</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
             <input
               type="range"
               min={800}
-              max={4000}
+              max={50000}
+              step={100}
+              value={settings.max_output_tokens === 0 ? 50000 : settings.max_output_tokens}
+              disabled={settings.max_output_tokens === 0}
+              onChange={(e) => setSettings((s) => s ? { ...s, max_output_tokens: Number(e.target.value) } : s)}
+              className="w-full accent-brand-600 disabled:opacity-40"
+            />
+            <input
+              type="number"
+              min={0}
+              max={50000}
               step={100}
               value={settings.max_output_tokens}
-              onChange={(e) => setSettings((s) => s ? { ...s, max_output_tokens: Number(e.target.value) } : s)}
-              className="w-full accent-brand-600"
+              disabled={settings.max_output_tokens === 0}
+              onChange={(e) => setSettings((s) => s ? { ...s, max_output_tokens: Math.min(50000, Math.max(0, Number(e.target.value) || 0)) } : s)}
+              className="w-24 rounded-lg border border-stone-300 px-2 py-1 text-sm font-mono text-stone-700 disabled:opacity-40"
             />
-            <p className="text-xs text-stone-500">Token budget for each OpenAI response. Too low and the model runs out before producing structured JSON output.</p>
-          </label>
+          </div>
+          <p className="text-xs text-stone-500">Token budget for each OpenAI response. 0 = no limit (let the model decide). Too low and the model runs out before producing structured JSON output.</p>
         </div>
         <div>
           <label className="space-y-1">

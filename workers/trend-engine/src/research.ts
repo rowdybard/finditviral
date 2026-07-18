@@ -493,19 +493,22 @@ async function callOpenAiLane(env: Env, lane: ResearchLane, settings: EngineSett
   if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY.length < 20) {
     throw new EngineError('OPENAI_RESEARCH_NOT_CONFIGURED', 'OPENAI_API_KEY is missing or invalid.', 500, false)
   }
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const requestBody: Record<string, unknown> = {
       model: settings.model,
-      max_output_tokens: settings.max_output_tokens,
       reasoning: { effort: settings.reasoning_effort as 'low' | 'medium' | 'high' },
       tools: [{ type: 'web_search', search_context_size: settings.search_context_size as 'low' | 'medium' | 'high' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
       input: lanePrompt(lane, settings.max_candidates_per_lane),
       text: { format: { type: 'json_schema', name: 'viral_research_candidates', strict: true, schema: responseSchema() } },
-    }),
+    }
+    if (settings.max_output_tokens > 0) {
+      requestBody.max_output_tokens = settings.max_output_tokens
+    }
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
   })
   const rateLimits = readOpenAiRateLimits(response)
   const body = await response.json().catch(() => null)

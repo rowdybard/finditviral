@@ -412,7 +412,7 @@ async function handleEngineSettings(request: Request, env: Env): Promise<Respons
   if (request.method === 'PUT') {
     const body = await readJson(request)
     if (!isRecord(body)) throw new EngineError('JSON_INVALID', 'Request body must be a JSON object.', 400)
-    const maxOutputTokens = boundedInteger(String(body.max_output_tokens ?? ''), 2000, 800, 4000)
+    const maxOutputTokens = boundedInteger(String(body.max_output_tokens ?? ''), 3000, 0, 50000)
     const maxCandidatesPerLane = boundedInteger(String(body.max_candidates_per_lane ?? ''), 2, 1, 5)
     const searchContextSize = body.search_context_size
     if (searchContextSize !== 'low' && searchContextSize !== 'medium' && searchContextSize !== 'high') {
