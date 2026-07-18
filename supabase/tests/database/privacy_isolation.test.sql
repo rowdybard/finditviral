@@ -139,6 +139,12 @@ begin
 end;
 $$;
 
+-- Temporary grants for RLS tests: profile_contacts RLS policy joins bounties,
+-- and bounty RLS tests need direct SELECT. These are inside begin; ... rollback;
+-- so they do not persist outside the test transaction.
+grant select on public.bounties to authenticated;
+grant select on public.profiles to authenticated;
+
 -- Helper: set JWT claims for Alice
 create or replace function pg_temp.set_alice_ctx()
 returns void language plpgsql as $$

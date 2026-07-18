@@ -90,7 +90,7 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'admin_search_members'
-      and pg_get_function_identity_arguments(p.oid) = 'text, integer'
+      and pg_get_function_identity_arguments(p.oid) = 'p_query text, p_limit integer'
   ),
   'admin_search_members(text, integer) calls assert_app_owner'
 );
