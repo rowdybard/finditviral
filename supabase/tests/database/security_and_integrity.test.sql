@@ -6,7 +6,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(10);
+select plan(14);
 
 -- 1. list_my_bounties is SECURITY DEFINER and calls assert_permanent_member
 select ok(
@@ -16,12 +16,12 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'list_my_bounties'
-      and pg_get_function_identity_arguments(p.oid) = 'integer'
+      and pg_get_function_identity_arguments(p.oid) = 'p_limit integer'
   ),
-  'list_my_bounties(integer) calls assert_permanent_member'
+  'list_my_bounties(p_limit integer) calls assert_permanent_member'
 );
 
--- 2. list_my_bounties filters by the caller's user_id (check function body contains user_id = v_user_id)
+-- 2. list_my_bounties filters by the caller's user_id
 select ok(
   (
     select pg_get_functiondef(p.oid) ~ 'b\.user_id = v_user_id'
@@ -41,9 +41,9 @@ select ok(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'list_my_claims'
-      and pg_get_function_identity_arguments(p.oid) = 'integer'
+      and pg_get_function_identity_arguments(p.oid) = 'p_limit integer'
   ),
-  'list_my_claims(integer) calls assert_permanent_member'
+  'list_my_claims(p_limit integer) calls assert_permanent_member'
 );
 
 -- 4. list_my_claims filters by the caller's finder_id
@@ -59,7 +59,6 @@ select ok(
 );
 
 -- 5. get_bounty_detail gates moderation_status for non-owners
--- The function body should contain a CASE expression that checks ownership
 select ok(
   (
     select pg_get_functiondef(p.oid) ~ 'v_is_owner'
@@ -147,6 +146,52 @@ select ok(
       )
   )::integer = 6,
   'All 6 missing FK indexes have been created'
+);
+
+-- 11. authenticated cannot directly select profiles
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.profiles',
+    'SELECT'
+  ),
+  'authenticated cannot directly select profiles'
+);
+
+-- 12. authenticated cannot directly select bounties
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.bounties',
+    'SELECT'
+  ),
+  'authenticated cannot directly select bounties'
+);
+
+-- 13. get_bounty_detail permits app-owner visibility
+select ok(
+  (
+    select pg_get_functiondef(p.oid) ~ 'or v_is_app_owner'
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'get_bounty_detail'
+      and pg_get_function_identity_arguments(p.oid) = 'p_bounty_id uuid'
+  ),
+  'get_bounty_detail permits app-owner visibility'
+);
+
+-- 14. list_my_bounties returns notes
+select ok(
+  (
+    select pg_get_function_result(p.oid) ~ 'notes text'
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'list_my_bounties'
+      and pg_get_function_identity_arguments(p.oid) = 'p_limit integer'
+  ),
+  'list_my_bounties returns notes'
 );
 
 select * from finish();

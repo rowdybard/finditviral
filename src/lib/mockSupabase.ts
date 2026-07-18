@@ -789,14 +789,38 @@ export const mockSupabase = {
       const product = store.products.find(item => item.id === bounty.product_id)
       const location = store.stores.find(item => item.id === bounty.store_id)
       const profile = store.profiles.find(item => item.id === bounty.user_id)
-      const callerClaim = store.bounty_claims.find(item => item.bounty_id === bounty.id && item.finder_id === currentUserId)
       const isOwner = bounty.user_id === currentUserId
       const isAppOwner = currentUserId === 'u1'
-      const realModStatus = bounty.moderation_status ?? 'approved'
-      const gatedModStatus = (isOwner || isAppOwner) ? realModStatus : (realModStatus === 'approved' ? 'approved' : null)
+      const callerClaim = store.bounty_claims.find(
+        claim =>
+          claim.bounty_id === bounty.id &&
+          claim.finder_id === currentUserId,
+      )
+
+      const isApprovedAndActive =
+        bounty.moderation_status === 'approved' &&
+        new Date(bounty.deadline).getTime() > Date.now()
+
+      const canView =
+        isApprovedAndActive ||
+        isOwner ||
+        isAppOwner ||
+        Boolean(callerClaim)
+
+      if (!canView) {
+        return Promise.resolve({ data: [], error: null })
+      }
+
+      const moderationStatus =
+        isOwner || isAppOwner
+          ? bounty.moderation_status
+          : bounty.moderation_status === 'approved'
+            ? 'approved'
+            : null
+
       return Promise.resolve({ data: [{
         ...bounty,
-        moderation_status: gatedModStatus,
+        moderation_status: moderationStatus,
         product_name: product?.name ?? 'Unknown product',
         product_slug: product?.slug ?? '',
         store_name: location?.store_name ?? null,
@@ -827,18 +851,40 @@ export const mockSupabase = {
 
 
     if (name === 'list_my_bounties') {
-      const limit = args?.p_limit ?? 20
+      const limit = Math.min(50, Math.max(1, args?.p_limit ?? 20))
       const rows = store.bounties
-        .filter(b => b.user_id === currentUserId)
+        .filter(bounty => bounty.user_id === currentUserId)
+        .sort((a, b) =>
+          b.created_at.localeCompare(a.created_at) ||
+          b.id.localeCompare(a.id),
+        )
         .slice(0, limit)
-        .map(b => {
-          const product = store.products.find(p => p.id === b.product_id)
-          const location = store.stores.find(s => s.id === b.store_id)
+        .map(bounty => {
+          const product = store.products.find(p => p.id === bounty.product_id)
+          const location = store.stores.find(s => s.id === bounty.store_id)
           return {
-            ...b,
+            id: bounty.id,
+            product_id: bounty.product_id,
             product_name: product?.name ?? 'Unknown product',
             product_slug: product?.slug ?? '',
+            reward_amount: bounty.reward_amount,
+            reward_cents: bounty.reward_cents,
+            scope_type: bounty.scope_type ?? 'region',
+            store_id: bounty.store_id ?? null,
             store_name: location?.store_name ?? null,
+            zip_code: bounty.zip_code,
+            radius_miles: bounty.radius_miles,
+            notes: bounty.notes,
+            requirements: bounty.requirements ?? null,
+            quantity_needed: bounty.quantity_needed ?? null,
+            variant_requirements: bounty.variant_requirements ?? null,
+            accept_equivalent: bounty.accept_equivalent ?? false,
+            retailer_names: bounty.retailer_names ?? null,
+            store_names: bounty.store_names ?? null,
+            deadline: bounty.deadline,
+            status: bounty.status,
+            moderation_status: bounty.moderation_status ?? 'approved',
+            created_at: bounty.created_at,
             is_owner: true,
           }
         })
@@ -846,18 +892,22 @@ export const mockSupabase = {
     }
 
     if (name === 'list_my_claims') {
-      const limit = args?.p_limit ?? 20
+      const limit = Math.min(50, Math.max(1, args?.p_limit ?? 20))
       const rows = store.bounty_claims
-        .filter(c2 => c2.finder_id === currentUserId)
+        .filter(claim => claim.finder_id === currentUserId)
+        .sort((a, b) =>
+          b.created_at.localeCompare(a.created_at) ||
+          b.id.localeCompare(a.id),
+        )
         .slice(0, limit)
-        .map(c2 => {
-          const bounty = store.bounties.find(b => b.id === c2.bounty_id)
+        .map(claim => {
+          const bounty = store.bounties.find(b => b.id === claim.bounty_id)
           const product = store.products.find(p => p.id === bounty?.product_id)
           return {
-            id: c2.id,
-            bounty_id: c2.bounty_id,
-            status: c2.status,
-            created_at: c2.created_at,
+            id: claim.id,
+            bounty_id: claim.bounty_id,
+            status: claim.status,
+            created_at: claim.created_at,
             product_name: product?.name ?? 'Unknown product',
             product_slug: product?.slug ?? '',
           }

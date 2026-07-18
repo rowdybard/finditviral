@@ -64,7 +64,7 @@ export default function ProfilePage() {
         getMyContributionDrafts(),
       ])
 
-      const bountyRows = (bountiesRes.data ?? []) as unknown as Bounty[]
+      const bountyRows = bountiesRes.data ?? []
       const sightingRows = (sightingsRes.data ?? []).map((row) => ({
         ...row,
         is_owner: true,
@@ -72,7 +72,7 @@ export default function ProfilePage() {
       }))
       setBounties(bountyRows)
       setSightings(sightingRows as unknown as Sighting[])
-      setClaims((claimsRes.data ?? []) as MyClaimView[])
+      setClaims(claimsRes.data ?? [])
       const serverDraftIds = new Set((contributionDraftsRes.data ?? []).map((draft) => draft.id))
       const unlinkedLocalCount = listUserFormDrafts(profileData.id)
         .filter((draft) => draft.formType !== 'onboarding' && (!draft.metadata.serverDraftId || !serverDraftIds.has(draft.metadata.serverDraftId)))
