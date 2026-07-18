@@ -4,14 +4,17 @@ export class EngineError extends Error {
   readonly retryable: boolean
   /** Provider-recommended pause before the next attempt, when available. */
   readonly retryAfterSeconds?: number
+  /** Additional structured context (e.g. rate-limit headers, provider body). */
+  readonly details?: Record<string, unknown>
 
-  constructor(code: string, message: string, status = 500, retryable = false, retryAfterSeconds?: number) {
+  constructor(code: string, message: string, status = 500, retryable = false, retryAfterSeconds?: number, details?: Record<string, unknown>) {
     super(message)
     this.name = 'EngineError'
     this.code = code
     this.status = status
     this.retryable = retryable
     this.retryAfterSeconds = retryAfterSeconds
+    this.details = details
   }
 }
 

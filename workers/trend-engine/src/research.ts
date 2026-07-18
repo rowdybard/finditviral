@@ -25,7 +25,7 @@ import { parseViralSignalBatch } from './validation'
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
 const MAX_CANDIDATES_PER_LANE = 3
-const MAX_OUTPUT_TOKENS = 2_000
+const MAX_OUTPUT_TOKENS = 1_200
 
 type JsonRecord = Record<string, unknown>
 type ResearchDiscoveryLane = 'social' | 'search demand' | 'commerce' | 'trend media'
@@ -101,12 +101,13 @@ function openAiHttpFailure(response: Response, body: unknown): EngineError {
     return new EngineError('OPENAI_RESEARCH_MODEL_UNAVAILABLE', `The configured OpenAI research model is unavailable to this API project.${requestSuffix}`, 502, false)
   }
   if (response.status === 429) {
+    const rateLimits = readOpenAiRateLimits(response)
     if (isBillingOrQuotaError(body)) {
-      return new EngineError('OPENAI_RESEARCH_QUOTA_EXHAUSTED', `OpenAI billing quota exhausted. Check the API project billing configuration.${requestSuffix}`, 502, false)
+      return new EngineError('OPENAI_RESEARCH_QUOTA_EXHAUSTED', `OpenAI billing quota exhausted. Check the API project billing configuration.${requestSuffix}`, 502, false, undefined, { provider_status: response.status, provider_error: body, rate_limits: rateLimits })
     }
     const retryAfterSeconds = providerRetryAfterSeconds(response)
     const retrySuffix = retryAfterSeconds ? ` Retrying after the provider reset window (about ${retryAfterSeconds}s).` : ''
-    return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${retrySuffix}${requestSuffix}`, 502, true, retryAfterSeconds)
+    return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${retrySuffix}${requestSuffix}`, 502, true, retryAfterSeconds, { provider_status: response.status, provider_error: body, rate_limits: rateLimits })
   }
   if (response.status >= 500 || response.status === 408) {
     return new EngineError('OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE', `OpenAI research is temporarily unavailable (HTTP ${response.status}).${requestSuffix}`, 502, true)
@@ -431,7 +432,56 @@ Search consumer trend publications, deal/community sites, trade coverage, and lo
 Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
 }
 
-async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<JsonRecord> {
+type OpenAiRateLimits = {
+  requestId: string | null
+  limitRequests: number | null
+  remainingRequests: number | null
+  resetRequestsSeconds: number | null
+  limitTokens: number | null
+  remainingTokens: number | null
+  resetTokensSeconds: number | null
+}
+
+function numericHeader(
+  response: Response,
+  name: string,
+): number | null {
+  const value = response.headers.get(name)
+  if (!value) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function resetHeaderSeconds(
+  response: Response,
+  name: string,
+): number | null {
+  const value = response.headers.get(name)
+  if (!value) return null
+  const seconds = rateLimitResetSeconds(value)
+  return seconds ?? null
+}
+
+function readOpenAiRateLimits(
+  response: Response,
+): OpenAiRateLimits {
+  return {
+    requestId: response.headers.get('x-request-id'),
+    limitRequests: numericHeader(response, 'x-ratelimit-limit-requests'),
+    remainingRequests: numericHeader(response, 'x-ratelimit-remaining-requests'),
+    resetRequestsSeconds: resetHeaderSeconds(response, 'x-ratelimit-reset-requests'),
+    limitTokens: numericHeader(response, 'x-ratelimit-limit-tokens'),
+    remainingTokens: numericHeader(response, 'x-ratelimit-remaining-tokens'),
+    resetTokensSeconds: resetHeaderSeconds(response, 'x-ratelimit-reset-tokens'),
+  }
+}
+
+type OpenAiLaneResult = {
+  body: JsonRecord
+  rateLimits: OpenAiRateLimits
+}
+
+async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<OpenAiLaneResult> {
   if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY.length < 20) {
     throw new EngineError('OPENAI_RESEARCH_NOT_CONFIGURED', 'OPENAI_API_KEY is missing or invalid.', 500, false)
   }
@@ -441,18 +491,19 @@ async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<JsonRecord>
     body: JSON.stringify({
       model: configuredModel(env),
       max_output_tokens: MAX_OUTPUT_TOKENS,
-      reasoning: { effort: 'high' },
-      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }],
+      reasoning: { effort: 'medium' },
+      tools: [{ type: 'web_search', search_context_size: 'medium', return_token_budget: 'default' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
       input: LANE_PROMPTS[lane],
       text: { format: { type: 'json_schema', name: 'viral_research_candidates', strict: true, schema: responseSchema() } },
     }),
   })
+  const rateLimits = readOpenAiRateLimits(response)
   const body = await response.json().catch(() => null)
   if (!response.ok) throw openAiHttpFailure(response, body)
   if (!isRecord(body)) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response was not a JSON object.', 502, false)
-  return body
+  return { body, rateLimits }
 }
 
 export function computeRetryDelay(retryAfterSeconds: number | undefined, attempts: number): number {
@@ -481,17 +532,54 @@ export async function enqueueResearchRun(env: Env, input: { trigger: 'scheduled'
   return result
 }
 
-export async function enqueueNextLane(env: Env, runId: string, now = new Date()): Promise<void> {
+export function computeNextLaneDelay(
+  rateLimits?: OpenAiRateLimits,
+): number {
+  const jitter = Math.floor(Math.random() * 31)
+
+  if (!rateLimits) {
+    return 300 + jitter
+  }
+
+  const requestExhausted =
+    rateLimits.remainingRequests !== null &&
+    rateLimits.remainingRequests <= 1
+
+  const tokenLimit = rateLimits.limitTokens
+  const remainingTokens = rateLimits.remainingTokens
+
+  const tokenCapacityLow =
+    tokenLimit !== null &&
+    remainingTokens !== null &&
+    remainingTokens < Math.max(4_000, tokenLimit * 0.25)
+
+  const resetSeconds = Math.max(
+    requestExhausted ? rateLimits.resetRequestsSeconds ?? 0 : 0,
+    tokenCapacityLow ? rateLimits.resetTokensSeconds ?? 0 : 0,
+  )
+
+  if (resetSeconds > 0) {
+    return Math.min(Math.max(resetSeconds + jitter, 60), 3_600)
+  }
+
+  return 300 + jitter
+}
+
+export async function enqueueNextLane(
+  env: Env,
+  runId: string,
+  rateLimits?: OpenAiRateLimits,
+): Promise<void> {
+  const now = new Date()
   const nextLane = await getNextLaneToRun(env.DB, runId, now.toISOString())
   if (nextLane) {
-    const delaySeconds = 45 + Math.floor(Math.random() * 46)
     await env.RESEARCH_QUEUE.send(
       { kind: 'research_lane', run_id: runId, lane: nextLane },
-      { delaySeconds },
+      { delaySeconds: computeNextLaneDelay(rateLimits) },
     )
-  } else {
-    await env.RESEARCH_QUEUE.send({ kind: 'research_finalize', run_id: runId })
+    return
   }
+  await env.RESEARCH_QUEUE.send({ kind: 'research_finalize', run_id: runId })
 }
 
 export type LaneExecutionResult =
@@ -507,7 +595,7 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
   const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
   const claim = await claimLaneCheckpoint(env.DB, runId, lane, now.toISOString(), leaseUntil)
   if (claim === 'completed') {
-    await enqueueNextLane(env, runId, now)
+    await enqueueNextLane(env, runId)
     return { outcome: 'completed' }
   }
   if (claim === 'busy') return { outcome: 'busy' }
@@ -519,7 +607,8 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
   const attempts = checkpoint?.attempts ?? 0
 
   try {
-    const response = await callOpenAiLane(env, lane)
+    const openAiResult = await callOpenAiLane(env, lane)
+    const response = openAiResult.body
     const research = await recordsFromResponse(response, run, lane, now)
     const requestId = response.id as string | undefined ?? null
     const usage = response.usage as Record<string, unknown> | undefined ?? {}
@@ -529,20 +618,23 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
       diagnosticsJson: JSON.stringify(research.diagnostics),
       requestId: typeof requestId === 'string' ? requestId : null,
       usageJson: JSON.stringify(usage),
-      rateLimitDiagnosticsJson: '{}',
+      rateLimitDiagnosticsJson: JSON.stringify(openAiResult.rateLimits),
       now: now.toISOString(),
     })
-    await enqueueNextLane(env, runId, now)
+    await enqueueNextLane(env, runId, openAiResult.rateLimits)
     return { outcome: 'completed' }
   } catch (error) {
     if (error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED') {
-      const delay = computeRetryDelay(error.retryAfterSeconds, attempts + 1)
+      const rateLimits = error.details?.['rate_limits'] as OpenAiRateLimits | undefined
+      const resetSeconds = Math.max(
+        rateLimits?.resetRequestsSeconds ?? 0,
+        rateLimits?.resetTokensSeconds ?? 0,
+        error.retryAfterSeconds ?? 0,
+      )
+      const baseDelay = computeRetryDelay(resetSeconds || undefined, attempts + 1)
+      const delay = Math.min(baseDelay + 30 + Math.floor(Math.random() * 31), 3_600)
       const nextRetryAt = new Date(now.getTime() + delay * 1000).toISOString()
-      const rateLimitDiag = JSON.stringify({
-        retry_after_seconds: error.retryAfterSeconds,
-        delay_seconds: delay,
-        reset_headers: {},
-      })
+      const rateLimitDiag = JSON.stringify(error.details ?? {})
       await setLaneRetryWait(env.DB, runId, lane, nextRetryAt, rateLimitDiag, now.toISOString())
       await pauseResearchRun(env.DB, runId)
       await env.RESEARCH_QUEUE.send(
@@ -631,8 +723,8 @@ export async function finalizeResearchRun(env: Env, runId: string, now = new Dat
 export async function executeResearchRun(env: Env, runId: string, now = new Date()): Promise<void> {
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'Research run does not exist.', 404, false)
-  const response = await callOpenAiLane(env, 'social')
-  const research = await recordsFromResponse(response, run, 'social', now)
+  const openAiResult = await callOpenAiLane(env, 'social')
+  const research = await recordsFromResponse(openAiResult.body, run, 'social', now)
   const ingestion = { received: 0, accepted: 0, duplicates: 0, candidateIds: [] as string[] }
   for (let index = 0; index < research.records.length; index += 4) {
     const current = await getResearchRun(env.DB, runId)

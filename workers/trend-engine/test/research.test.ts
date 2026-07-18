@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers'
 import { createExecutionContext, createMessageBatch, getQueueResult } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { claimResearchRun, cancelResearchRun, getResearchRun, researchRunView, getLaneCheckpoints, createLaneCheckpoints, claimLaneCheckpoint, completeLaneCheckpoint, getLaneCheckpoint, reconcileStaleResearchRuns, releaseStaleLaneLeases, pauseResearchRun, resumeResearchRun, claimFinalize } from '../src/repository'
-import { enqueueResearchRun, executeResearchRun, executeResearchLane, finalizeResearchRun, recordResearchFailure, computeRetryDelay } from '../src/research'
+import { enqueueResearchRun, executeResearchRun, executeResearchLane, finalizeResearchRun, recordResearchFailure, computeRetryDelay, computeNextLaneDelay } from '../src/research'
 import { researchRetryDelay } from '../src/queue'
 import worker from '../src/index'
 import type { OpenAiResearchMessage, ResearchLaneMessage, TrendEngineQueueMessage } from '../src/domain'
@@ -69,10 +69,10 @@ describe('OpenAI research', () => {
     }
     expect(requestBody).toMatchObject({
       model: 'gpt-5.6-luna',
-      max_output_tokens: 2_000,
+      max_output_tokens: 1_200,
       include: ['web_search_call.action.sources'],
-      reasoning: { effort: 'high' },
-      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }],
+      reasoning: { effort: 'medium' },
+      tools: [{ type: 'web_search', search_context_size: 'medium', return_token_budget: 'default' }],
     })
     const candidateSchema = requestBody.text.format.schema.properties.candidates.items
     expect(candidateSchema.required).toEqual(Object.keys(candidateSchema.properties))
@@ -160,9 +160,9 @@ describe('OpenAI research', () => {
 
     await executeResearchRun(env, queued.run.id, now)
     const requestBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)
-    expect(requestBody.tools).toEqual([{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }])
-    expect(requestBody.max_output_tokens).toBe(2_000)
-    expect(requestBody.reasoning).toEqual({ effort: 'high' })
+    expect(requestBody.tools).toEqual([{ type: 'web_search', search_context_size: 'medium', return_token_budget: 'default' }])
+    expect(requestBody.max_output_tokens).toBe(1_200)
+    expect(requestBody.reasoning).toEqual({ effort: 'medium' })
     await cancelIfActive(queued.run.id)
   })
 
@@ -578,7 +578,7 @@ describe('429 recovery to finalization (end-to-end)', () => {
     expect(socialCp?.status).toBe('retry_wait')
 
     // Replacement message arrives — social lane succeeds
-    const now2 = new Date('2026-07-17T19:02:00.000Z')
+    const now2 = new Date('2026-07-17T19:05:00.000Z')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
       'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
       'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
@@ -590,7 +590,7 @@ describe('429 recovery to finalization (end-to-end)', () => {
     expect(runAfterResume?.status).not.toBe('paused_rate_limit')
 
     // Complete remaining lanes
-    const now3 = new Date('2026-07-17T19:04:00.000Z')
+    const now3 = new Date('2026-07-17T19:07:00.000Z')
     for (const lane of ['search_demand', 'commerce', 'trend_media'] as const) {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
         'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
@@ -601,7 +601,7 @@ describe('429 recovery to finalization (end-to-end)', () => {
     }
 
     // Finalize
-    const now4 = new Date('2026-07-17T19:06:00.000Z')
+    const now4 = new Date('2026-07-17T19:09:00.000Z')
     await finalizeResearchRun(env, queued.run.id, now4)
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run?.status).toBe('succeeded')
@@ -740,5 +740,230 @@ describe('research_lane queue delivery', () => {
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run?.status).toBe('failed')
     expect(run?.error_code).toBe('OPENAI_RESEARCH_AUTH_FAILED')
+  })
+})
+
+describe('computeNextLaneDelay', () => {
+  it('uses a five-minute fallback when headers are missing', () => {
+    const delay = computeNextLaneDelay()
+    expect(delay).toBeGreaterThanOrEqual(300)
+    expect(delay).toBeLessThanOrEqual(330)
+  })
+
+  it('uses a five-minute fallback when all headers are null', () => {
+    const delay = computeNextLaneDelay({
+      requestId: null,
+      limitRequests: null,
+      remainingRequests: null,
+      resetRequestsSeconds: null,
+      limitTokens: null,
+      remainingTokens: null,
+      resetTokensSeconds: null,
+    })
+    expect(delay).toBeGreaterThanOrEqual(300)
+    expect(delay).toBeLessThanOrEqual(330)
+  })
+
+  it('delays until after token reset when remaining tokens are low', () => {
+    const delay = computeNextLaneDelay({
+      requestId: 'req_1',
+      limitRequests: 100,
+      remainingRequests: 50,
+      resetRequestsSeconds: 10,
+      limitTokens: 10_000,
+      remainingTokens: 1_000,
+      resetTokensSeconds: 600,
+    })
+    expect(delay).toBeGreaterThanOrEqual(600)
+    expect(delay).toBeLessThanOrEqual(630)
+  })
+
+  it('delays until after request reset when request capacity is exhausted', () => {
+    const delay = computeNextLaneDelay({
+      requestId: 'req_2',
+      limitRequests: 100,
+      remainingRequests: 0,
+      resetRequestsSeconds: 1200,
+      limitTokens: 100_000,
+      remainingTokens: 80_000,
+      resetTokensSeconds: 5,
+    })
+    expect(delay).toBeGreaterThanOrEqual(1200)
+    expect(delay).toBeLessThanOrEqual(1230)
+  })
+
+  it('uses five-minute fallback when capacity is healthy', () => {
+    const delay = computeNextLaneDelay({
+      requestId: 'req_3',
+      limitRequests: 100,
+      remainingRequests: 50,
+      resetRequestsSeconds: 10,
+      limitTokens: 100_000,
+      remainingTokens: 80_000,
+      resetTokensSeconds: 5,
+    })
+    expect(delay).toBeGreaterThanOrEqual(300)
+    expect(delay).toBeLessThanOrEqual(330)
+  })
+
+  it('caps delay at 3600 seconds', () => {
+    const delay = computeNextLaneDelay({
+      requestId: 'req_4',
+      limitRequests: 100,
+      remainingRequests: 0,
+      resetRequestsSeconds: 7200,
+      limitTokens: 100_000,
+      remainingTokens: 80_000,
+      resetTokensSeconds: 0,
+    })
+    expect(delay).toBe(3600)
+  })
+})
+
+describe('429 rate-limit diagnostics and retry', () => {
+  it('stores provider body and rate-limit diagnostics on a 429', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `diag-429-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T21:00:00.000Z')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { type: 'rate_limit_exceeded', code: 'rate_limit', message: 'Too many requests' },
+    }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-request-id': 'req_diag_429',
+        'x-ratelimit-limit-requests': '100',
+        'x-ratelimit-remaining-requests': '0',
+        'x-ratelimit-reset-requests': '10m0s',
+        'x-ratelimit-limit-tokens': '50000',
+        'x-ratelimit-remaining-tokens': '5000',
+        'x-ratelimit-reset-tokens': '6m0s',
+      },
+    })))
+
+    const result = await executeResearchLane(env, queued.run.id, 'social', now)
+    expect(result.outcome).toBe('replacement_scheduled')
+
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('retry_wait')
+    const diag = JSON.parse(cp!.rate_limit_diagnostics_json) as {
+      provider_status: number
+      provider_error: { error: { type: string; code: string; message: string } }
+      rate_limits: {
+        requestId: string
+        limitRequests: number
+        remainingRequests: number
+        resetRequestsSeconds: number
+        limitTokens: number
+        remainingTokens: number
+        resetTokensSeconds: number
+      }
+    }
+    expect(diag.provider_status).toBe(429)
+    expect(diag.provider_error.error.type).toBe('rate_limit_exceeded')
+    expect(diag.provider_error.error.code).toBe('rate_limit')
+    expect(diag.rate_limits.requestId).toBe('req_diag_429')
+    expect(diag.rate_limits.limitRequests).toBe(100)
+    expect(diag.rate_limits.remainingRequests).toBe(0)
+    expect(diag.rate_limits.resetRequestsSeconds).toBe(600)
+    expect(diag.rate_limits.limitTokens).toBe(50000)
+    expect(diag.rate_limits.remainingTokens).toBe(5000)
+    expect(diag.rate_limits.resetTokensSeconds).toBe(360)
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('uses the longest provider reset for 429 retry delay', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `longest-reset-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T21:10:00.000Z')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { message: 'Rate limit exceeded' },
+    }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-ratelimit-reset-requests': '2m0s',
+        'x-ratelimit-reset-tokens': '8m0s',
+        'retry-after': '60',
+      },
+    })))
+
+    const result = await executeResearchLane(env, queued.run.id, 'social', now)
+    expect(result.outcome).toBe('replacement_scheduled')
+
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    const nextRetryAt = new Date(cp!.next_retry_at!)
+    const delaySeconds = Math.round((nextRetryAt.getTime() - now.getTime()) / 1000)
+    // Longest reset is 480s (8m from tokens), plus at least 30s jitter
+    expect(delaySeconds).toBeGreaterThanOrEqual(480)
+    expect(delaySeconds).toBeLessThanOrEqual(3600)
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('keeps billing/quota 429 terminal', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `quota-429-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T21:20:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { type: 'insufficient_quota', message: 'You have insufficient quota' },
+    }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'x-request-id': 'req_quota' },
+    })))
+
+    const failure = await executeResearchRun(env, queued.run.id, now).catch((error: unknown) => error)
+    expect(failure).toMatchObject({
+      code: 'OPENAI_RESEARCH_QUOTA_EXHAUSTED',
+      retryable: false,
+    })
+    await recordResearchFailure(env, queued.run.id, failure, false)
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('captures rate-limit headers on successful responses', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `success-headers-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T21:30:00.000Z')
+
+    const successResponse = response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ])
+    const responseWithHeaders = new Response(successResponse.body, {
+      status: successResponse.status,
+      headers: {
+        ...successResponse.headers,
+        'x-request-id': 'req_success_123',
+        'x-ratelimit-limit-requests': '200',
+        'x-ratelimit-remaining-requests': '150',
+        'x-ratelimit-reset-requests': '5m0s',
+        'x-ratelimit-limit-tokens': '100000',
+        'x-ratelimit-remaining-tokens': '90000',
+        'x-ratelimit-reset-tokens': '1m0s',
+      },
+    })
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(responseWithHeaders))
+    await executeResearchLane(env, queued.run.id, 'social', now)
+
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('succeeded')
+    const diag = JSON.parse(cp!.rate_limit_diagnostics_json) as {
+      requestId: string
+      limitRequests: number
+      remainingRequests: number
+      resetRequestsSeconds: number
+      limitTokens: number
+      remainingTokens: number
+      resetTokensSeconds: number
+    }
+    expect(diag.requestId).toBe('req_success_123')
+    expect(diag.limitRequests).toBe(200)
+    expect(diag.remainingRequests).toBe(150)
+    expect(diag.resetRequestsSeconds).toBe(300)
+    expect(diag.limitTokens).toBe(100000)
+    expect(diag.remainingTokens).toBe(90000)
+    expect(diag.resetTokensSeconds).toBe(60)
+    await cancelIfActive(queued.run.id)
   })
 })
