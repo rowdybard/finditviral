@@ -2,13 +2,13 @@ import type { TrendEngineQueueMessage } from './domain'
 import { handleHttpRequest } from './http'
 import { errorCode, errorMessage } from './errors'
 import { logError, logEvent } from './logging'
-import { processSourceQueue } from './queue'
+import { processSourceQueue, processResearchDlq } from './queue'
 import { processScheduledRun } from './scheduler'
 
 export { computeScore } from './scoring'
 export { evaluatePatchPolicy } from './policy'
 export { parseViralSignalBatch } from './validation'
-export type { PollSourceMessage, OpenAiResearchMessage, TrendEngineQueueMessage, ViralSignalV1, CatalogPatchV1 } from './domain'
+export type { PollSourceMessage, OpenAiResearchMessage, ResearchLaneMessage, ResearchFinalizeMessage, ResearchQueueMessage, TrendEngineQueueMessage, ViralSignalV1, CatalogPatchV1, ResearchLane, ResearchLaneStatus, ResearchLaneCheckpointRow, LaneProgressView } from './domain'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -39,6 +39,10 @@ export default {
   },
 
   async queue(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
+    if (batch.queue === 'finditviral-trend-research-dlq') {
+      await processResearchDlq(batch, env)
+      return
+    }
     await processSourceQueue(batch, env)
   },
 } satisfies ExportedHandler<Env, TrendEngineQueueMessage>

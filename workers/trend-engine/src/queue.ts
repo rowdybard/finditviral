@@ -1,16 +1,18 @@
-import type { OpenAiResearchMessage, PollSourceMessage, TrendEngineQueueMessage } from './domain'
+import type { OpenAiResearchMessage, PollSourceMessage, ResearchFinalizeMessage, ResearchLane, ResearchLaneMessage, TrendEngineQueueMessage } from './domain'
 import { EngineError, errorCode } from './errors'
 import { pollSource } from './collector'
 import { stableId } from './identity'
 import { logError, logEvent } from './logging'
 import {
-  claimSourcePollJob,
   claimResearchRun,
+  claimSourcePollJob,
   completeSourcePollJob,
+  failLaneCheckpoint,
+  failResearchRun,
   recordSourceFailure,
   releaseSourcePollJob,
 } from './repository'
-import { executeResearchRun, recordResearchFailure } from './research'
+import { executeResearchLane, executeResearchRun, finalizeResearchRun, recordResearchFailure } from './research'
 
 function isPollSourceMessage(value: unknown): value is PollSourceMessage {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
@@ -27,6 +29,21 @@ function isResearchMessage(value: unknown): value is OpenAiResearchMessage {
   return record.kind === 'openai_research' && typeof record.run_id === 'string'
 }
 
+function isResearchLaneMessage(value: unknown): value is ResearchLaneMessage {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return record.kind === 'research_lane'
+    && typeof record.run_id === 'string'
+    && typeof record.lane === 'string'
+    && ['social', 'search_demand', 'commerce', 'trend_media'].includes(record.lane)
+}
+
+function isResearchFinalizeMessage(value: unknown): value is ResearchFinalizeMessage {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return record.kind === 'research_finalize' && typeof record.run_id === 'string'
+}
+
 function retryDelay(attempts: number): number {
   return Math.min(30 * (2 ** Math.max(0, attempts - 1)), 3600)
 }
@@ -41,15 +58,52 @@ export function researchRetryDelay(error: unknown, attempts: number): number {
 
 export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
   for (const message of batch.messages) {
+    if (isResearchLaneMessage(message.body)) {
+      const now = new Date()
+      const lane = message.body.lane as ResearchLane
+      try {
+        await executeResearchLane(env, message.body.run_id, lane, now)
+        logEvent('info', 'research_lane_completed', { message_id: message.id, run_id: message.body.run_id, lane })
+        message.ack()
+      } catch (error) {
+ const retryable = !(error instanceof EngineError) || error.retryable
+        if (error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED') {
+          logEvent('info', 'research_lane_rate_limited', { message_id: message.id, run_id: message.body.run_id, lane, retry_after_seconds: error.retryAfterSeconds ?? null })
+        } else {
+          logError('research_lane_failed', error, { message_id: message.id, run_id: message.body.run_id, lane, retryable })
+        }
+        // Application-managed replacement messages handle 429s and retryable errors.
+        // message.retry() is only for infra failures (non-EngineError).
+        if (retryable && !(error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED')) {
+          message.retry({ delaySeconds: 30 })
+        } else {
+          message.ack()
+        }
+      }
+      continue
+    }
+    if (isResearchFinalizeMessage(message.body)) {
+      const now = new Date()
+      try {
+        await finalizeResearchRun(env, message.body.run_id, now)
+        logEvent('info', 'research_finalized', { message_id: message.id, run_id: message.body.run_id })
+        message.ack()
+      } catch (error) {
+        const retryable = !(error instanceof EngineError) || error.retryable
+        logError('research_finalize_failed', error, { message_id: message.id, run_id: message.body.run_id, retryable })
+        if (retryable) message.retry({ delaySeconds: 60 })
+        else message.ack()
+      }
+      continue
+    }
     if (isResearchMessage(message.body)) {
       const now = new Date()
       const claim = await claimResearchRun(env.DB, message.body.run_id, now.toISOString(), new Date(now.getTime() + 10 * 60 * 1000).toISOString())
       if (claim === 'completed') { message.ack(); continue }
       if (claim === 'busy') { message.retry({ delaySeconds: 60 }); continue }
       try {
-        const useDefaultWebResultBudget = message.attempts > 1
-        await executeResearchRun(env, message.body.run_id, now, { useDefaultWebResultBudget })
-        logEvent('info', 'openai_research_completed', { message_id: message.id, run_id: message.body.run_id, web_result_budget: useDefaultWebResultBudget ? 'default' : 'unlimited' })
+        await executeResearchRun(env, message.body.run_id, now)
+        logEvent('info', 'openai_research_completed', { message_id: message.id, run_id: message.body.run_id })
         message.ack()
       } catch (error) {
         const retryable = !(error instanceof EngineError) || error.retryable
@@ -126,5 +180,26 @@ export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMes
       if (retryable) message.retry({ delaySeconds: delay })
       else message.ack()
     }
+  }
+}
+
+export async function processResearchDlq(batch: MessageBatch<TrendEngineQueueMessage>, env: Env): Promise<void> {
+  for (const message of batch.messages) {
+    const now = new Date()
+    const body = message.body as unknown as Record<string, unknown>
+    const runId = typeof body.run_id === 'string' ? body.run_id : null
+    const lane = typeof body.lane === 'string' ? body.lane : null
+
+    if (runId && lane && ['social', 'search_demand', 'commerce', 'trend_media'].includes(lane)) {
+      await failLaneCheckpoint(env.DB, runId, lane as ResearchLane, 'DLQ_EXHAUSTED', now.toISOString())
+      await failResearchRun(env.DB, runId, 'DLQ_EXHAUSTED', now.toISOString(), false)
+      logEvent('warn', 'research_dlq_lane_failed', { message_id: message.id, run_id: runId, lane })
+    } else if (runId) {
+      await failResearchRun(env.DB, runId, 'DLQ_EXHAUSTED', now.toISOString(), false)
+      logEvent('warn', 'research_dlq_run_failed', { message_id: message.id, run_id: runId })
+    } else {
+      logEvent('warn', 'research_dlq_unknown_message', { message_id: message.id })
+    }
+    message.ack()
   }
 }

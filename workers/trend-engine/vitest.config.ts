@@ -26,7 +26,6 @@ export default defineConfig(async () => {
           },
           queueConsumers: {
             'finditviral-trend-source-polls': { maxBatchSize: 1, maxBatchTimeout: 0.05 },
-            'finditviral-trend-research': { maxBatchSize: 1, maxBatchTimeout: 0.05 },
           },
         },
       }),

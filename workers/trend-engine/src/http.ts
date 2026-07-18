@@ -25,8 +25,10 @@ import {
   listChanges,
   getResearchRun,
   cancelResearchRun,
+  getLaneCheckpoints,
   listResearchRuns,
   researchRunView,
+  resumeResearchRun,
   listSources,
   saveReviewDecision,
   upsertSource,
@@ -365,7 +367,7 @@ async function handleResearchRuns(request: Request, env: Env, url: URL): Promise
   await authorize(request, env, 'admin')
   if (request.method === 'GET') {
     const limit = boundedInteger(url.searchParams.get('limit'), 20, 1, 50)
-    return json({ runs: (await listResearchRuns(env.DB, limit)).map(researchRunView) })
+    return json({ runs: (await listResearchRuns(env.DB, limit)).map((r) => researchRunView(r)) })
   }
   if (request.method === 'POST') {
     const result = await enqueueResearchRun(env, {
@@ -377,17 +379,26 @@ async function handleResearchRuns(request: Request, env: Env, url: URL): Promise
   throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
 }
 
-async function handleResearchRunDetail(request: Request, env: Env, runId: string): Promise<Response> {
+async function handleResearchRunDetail(request: Request, env: Env, runId: string, action?: string): Promise<Response> {
   await authorize(request, env, 'admin')
-  if (request.method === 'POST' && new URL(request.url).pathname.endsWith('/cancel')) {
+  if (action === 'cancel') {
+    if (request.method !== 'POST') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
     const run = await cancelResearchRun(env.DB, runId, new Date().toISOString())
-    if (!run) throw new EngineError('RESEARCH_RUN_NOT_ACTIVE', 'Only queued or running research runs can be cancelled.', 409)
+    if (!run) throw new EngineError('RESEARCH_RUN_NOT_ACTIVE', 'Only active research runs can be cancelled.', 409)
+    return json({ run: researchRunView(run) })
+  }
+  if (action === 'resume') {
+    if (request.method !== 'POST') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
+    const run = await resumeResearchRun(env.DB, runId)
+    if (!run) throw new EngineError('RESEARCH_RUN_NOT_PAUSED', 'Only paused research runs can be resumed.', 409)
+    await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: runId, lane: 'social' })
     return json({ run: researchRunView(run) })
   }
   if (request.method !== 'GET') throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'The research run does not exist.', 404)
-  return json({ run: researchRunView(run) })
+  const checkpoints = await getLaneCheckpoints(env.DB, runId)
+  return json({ run: researchRunView(run, checkpoints) })
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -420,7 +431,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   const researchRunMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)$/)
   if (researchRunMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchRunMatch[1]))
   const researchCancelMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)\/cancel$/)
-  if (researchCancelMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchCancelMatch[1]))
+  if (researchCancelMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchCancelMatch[1]), 'cancel')
+  const researchResumeMatch = url.pathname.match(/^\/v1\/research\/runs\/([^/]+)\/resume$/)
+  if (researchResumeMatch?.[1]) return handleResearchRunDetail(request, env, decodeURIComponent(researchResumeMatch[1]), 'resume')
 
   throw new EngineError('NOT_FOUND', 'Not found.', 404)
 }

@@ -49,6 +49,8 @@ const CONTRIBUTION_ERROR_PATTERNS: { pattern: RegExp; message: string }[] = [
   { pattern: /product.*unavailable/i, message: 'That product is no longer available.' },
   { pattern: /store.*unavailable/i, message: 'That store is no longer available.' },
   { pattern: /invalid.*availability/i, message: 'Please choose a valid availability option.' },
+  { pattern: /only in-stock sightings can confirm a lead/i, message: 'Choose In Stock or Low Stock to confirm this lead.' },
+  { pattern: /outside the lead scope/i, message: 'Choose a store within this lead’s location scope.' },
   { pattern: /quantity.*between/i, message: 'Quantity must be between 1 and 999.' },
   { pattern: /future/i, message: 'The sighting time cannot be in the future.' },
   { pattern: /notes.*too long/i, message: 'Notes are too long. Please shorten them.' },
@@ -64,6 +66,7 @@ const CONTRIBUTION_ERROR_PATTERNS: { pattern: RegExp; message: string }[] = [
   { pattern: /rate limit/i, message: 'You are submitting too quickly. Please wait and try again.' },
   { pattern: /owner only|app_owner/i, message: 'Only the app owner can perform this action.' },
   { pattern: /cannot claim your own/i, message: 'You cannot claim your own bounty.' },
+  { pattern: /lead is not active|lead has expired/i, message: 'This lead is no longer available for confirmation.' },
   { pattern: /not open/i, message: 'This bounty is no longer accepting claims.' },
 ]
 
@@ -79,13 +82,13 @@ export function mapContributionError(error: PostgrestError | null): string {
   const hint = error.hint ?? ''
   if (hint && hint in HINT_TO_MESSAGE) return HINT_TO_MESSAGE[hint]
 
-  const code = error.code ?? ''
-  if (ERROR_CODE_MESSAGES[code]) return ERROR_CODE_MESSAGES[code]
-
   const message = error.message ?? ''
   for (const { pattern, message: mapped } of CONTRIBUTION_ERROR_PATTERNS) {
     if (pattern.test(message)) return mapped
   }
+
+  const code = error.code ?? ''
+  if (ERROR_CODE_MESSAGES[code]) return ERROR_CODE_MESSAGES[code]
 
   console.error('[errorMap] Unmapped contribution error:', { code, message: error.message, details: error.details })
   return 'Something went wrong. Please try again.'

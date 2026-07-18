@@ -253,14 +253,29 @@ export interface PollSourceMessage {
   execution_key: string
 }
 
+export type ResearchLane = 'social' | 'search_demand' | 'commerce' | 'trend_media'
+export type ResearchLaneStatus = 'pending' | 'running' | 'retry_wait' | 'succeeded' | 'failed'
+
+export interface ResearchLaneMessage {
+  kind: 'research_lane'
+  run_id: string
+  lane: ResearchLane
+}
+
+export interface ResearchFinalizeMessage {
+  kind: 'research_finalize'
+  run_id: string
+}
+
 export interface OpenAiResearchMessage {
   kind: 'openai_research'
   run_id: string
 }
 
-export type TrendEngineQueueMessage = PollSourceMessage | OpenAiResearchMessage
+export type ResearchQueueMessage = ResearchLaneMessage | ResearchFinalizeMessage | OpenAiResearchMessage
+export type TrendEngineQueueMessage = PollSourceMessage | ResearchQueueMessage
 export type ResearchTrigger = 'scheduled' | 'manual'
-export type ResearchRunStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+export type ResearchRunStatus = 'queued' | 'running' | 'paused_rate_limit' | 'finalizing' | 'succeeded' | 'failed'
 
 export interface ResearchRunRow {
   id: string
@@ -281,6 +296,32 @@ export interface ResearchRunRow {
   evidence_json: string
   diagnostics_json: string
   error_code: string | null
+}
+
+export interface ResearchLaneCheckpointRow {
+  run_id: string
+  lane: ResearchLane
+  status: ResearchLaneStatus
+  attempts: number
+  lease_until: string | null
+  next_retry_at: string | null
+  candidates_json: string
+  evidence_json: string
+  diagnostics_json: string
+  request_id: string | null
+  usage_json: string
+  rate_limit_diagnostics_json: string
+  completed_at: string | null
+  updated_at: string
+}
+
+export interface LaneProgressView {
+  lane: ResearchLane
+  status: ResearchLaneStatus
+  attempts: number
+  next_retry_at: string | null
+  request_id: string | null
+  rate_limit_diagnostics: Record<string, unknown>
 }
 
 export interface ResearchCandidateDiagnostic {

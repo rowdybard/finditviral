@@ -9,8 +9,12 @@ import {
   claimDueSources,
   cleanupCronRuns,
   cleanupRetention,
+  getPausedRunForResume,
+  reconcileStaleResearchRuns,
   releaseCronRun,
   releaseSourceClaims,
+  releaseStaleLaneLeases,
+  resumeResearchRun,
 } from './repository'
 
 export const SOURCE_POLL_CRON = '*/5 * * * *'
@@ -110,6 +114,21 @@ export async function processScheduledRun(
     }
 
     if (controller.cron === OPENAI_RESEARCH_CRON) {
+      // Release stale lane leases and reconcile stale runs before enqueuing new work.
+      await releaseStaleLaneLeases(env.DB, now.toISOString())
+      const reEnqueued = await reconcileStaleResearchRuns(env.DB, now.toISOString())
+      for (const runId of reEnqueued) {
+        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: runId, lane: 'social' })
+      }
+
+      // Resume a paused run if any retry_wait lanes are ready.
+      const pausedRun = await getPausedRunForResume(env.DB, now.toISOString())
+      if (pausedRun) {
+        await resumeResearchRun(env.DB, pausedRun.id)
+        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: pausedRun.id, lane: 'social' })
+        return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: pausedRun.id }
+      }
+
       const research = await enqueueResearchRun(env, { trigger: 'scheduled', requestKey: `cron:${executionKey}`, now })
       return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: research.run.id }
     }

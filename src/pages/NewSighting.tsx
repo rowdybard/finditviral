@@ -324,6 +324,9 @@ export default function NewSighting() {
         return
       }
       setLead(data)
+      // A lead can only be confirmed by an available product.  A restored
+      // regular-sighting draft may carry one of the other availability values.
+      setAvailability((current) => current === 'sold_out' || current === 'unknown' ? 'in_stock' : current)
       setProduct({ id: data.product_id, slug: data.product_slug, label: data.product_name, detail: '' })
       if (data.store_id && data.store_name) {
         setSelectedStores([{ id: data.store_id, slug: data.store_slug ?? '', label: data.store_name, detail: [data.store_city, data.store_state].filter(Boolean).join(', ') }])
@@ -510,6 +513,9 @@ export default function NewSighting() {
     { value: 'sold_out', label: 'Sold Out', activeClass: 'border-red-500 bg-red-50 text-red-700' },
     { value: 'unknown', label: 'Unknown', activeClass: 'border-stone-400 bg-stone-50 text-stone-600' },
   ] as const
+  const confirmationAvailabilityOptions = availabilityOptions.filter(
+    (option) => option.value === 'in_stock' || option.value === 'low_stock',
+  )
 
   return (
     <div className="space-y-6">
@@ -740,7 +746,7 @@ export default function NewSighting() {
             <fieldset>
               <legend className="sr-only">Availability</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {availabilityOptions.map((opt) => (
+                {(lead ? confirmationAvailabilityOptions : availabilityOptions).map((opt) => (
                   <label key={opt.value} className={`fiv-availability-btn ${availability === opt.value ? opt.activeClass : 'fiv-availability-btn-inactive'}`}>
                     <input className="sr-only" type="radio" name="availability" value={opt.value} checked={availability === opt.value} onChange={() => setAvailability(opt.value)} />
                     {opt.label}

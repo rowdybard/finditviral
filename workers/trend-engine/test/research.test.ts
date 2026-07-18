@@ -1,11 +1,26 @@
 import { env } from 'cloudflare:workers'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { claimResearchRun, getResearchRun, researchRunView } from '../src/repository'
-import { enqueueResearchRun, executeResearchRun, recordResearchFailure } from '../src/research'
+import { createExecutionContext, createMessageBatch, getQueueResult } from 'cloudflare:test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { claimResearchRun, cancelResearchRun, getResearchRun, researchRunView, getLaneCheckpoints, createLaneCheckpoints, claimLaneCheckpoint, completeLaneCheckpoint, getLaneCheckpoint, reconcileStaleResearchRuns, releaseStaleLaneLeases, pauseResearchRun, resumeResearchRun, claimFinalize } from '../src/repository'
+import { enqueueResearchRun, executeResearchRun, finalizeResearchRun, recordResearchFailure, computeRetryDelay } from '../src/research'
 import { researchRetryDelay } from '../src/queue'
 import worker from '../src/index'
+import type { OpenAiResearchMessage, TrendEngineQueueMessage } from '../src/domain'
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+    new Error('Unexpected outbound OpenAI request in test'),
+  ))
+})
 
 afterEach(() => vi.unstubAllGlobals())
+
+async function cancelIfActive(runId: string): Promise<void> {
+  const run = await getResearchRun(env.DB, runId)
+  if (run && ['queued', 'running', 'paused_rate_limit', 'finalizing'].includes(run.status)) {
+    await cancelResearchRun(env.DB, runId, new Date().toISOString())
+  }
+}
 
 function response(citations: string[], candidateUrls = citations, reviewMetrics: Record<string, unknown> = { rating_count: null, question_count: null, count_confidence: null, supporting_quote: null }): Response {
   return new Response(JSON.stringify({
@@ -54,10 +69,10 @@ describe('OpenAI research', () => {
     }
     expect(requestBody).toMatchObject({
       model: 'gpt-5.6-luna',
-      max_output_tokens: 8_000,
+      max_output_tokens: 2_000,
       include: ['web_search_call.action.sources'],
       reasoning: { effort: 'high' },
-      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'unlimited' }],
+      tools: [{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }],
     })
     const candidateSchema = requestBody.text.format.schema.properties.candidates.items
     expect(candidateSchema.required).toEqual(Object.keys(candidateSchema.properties))
@@ -70,6 +85,7 @@ describe('OpenAI research', () => {
     expect(researchRunView(run!).diagnostics.discovery_lanes).toEqual(['social', 'commerce'])
     const signal = await env.DB.prepare("SELECT source_id FROM viral_signals WHERE source_id = 'openai-research'").first<{ source_id: string }>()
     expect(signal?.source_id).toBe('openai-research')
+    await cancelIfActive(queued.run.id)
   })
 
   it('rejects candidate URLs that were not returned as OpenAI web citations', async () => {
@@ -91,6 +107,7 @@ describe('OpenAI research', () => {
       summary: 'No candidates passed validation.',
       candidates: [{ name: 'Galaxy Glow Mini Printer', matched_evidence_count: 1, rejection_reasons: ['requires_two_returned_web_sources', 'missing_labeled_evidence_profiles'] }],
     })
+    await cancelIfActive(queued.run.id)
   })
 
   it('rejects implausibly concatenated review counts instead of treating them as velocity', async () => {
@@ -110,6 +127,7 @@ describe('OpenAI research', () => {
       count_flag: 'possible_concatenated_count',
       rejection_reasons: expect.arrayContaining(['possible_concatenated_count']),
     })
+    await cancelIfActive(queued.run.id)
   })
 
   it('records an actionable non-retryable error when OpenAI authentication fails', async () => {
@@ -127,6 +145,7 @@ describe('OpenAI research', () => {
       retryable: false,
     })
     await recordResearchFailure(env, queued.run.id, failure, false)
+    await cancelIfActive(queued.run.id)
   })
 
   it('uses the default web result budget only after a rate-limited attempt, while preserving high search context', async () => {
@@ -139,11 +158,12 @@ describe('OpenAI research', () => {
     ]))
     vi.stubGlobal('fetch', fetchMock)
 
-    await executeResearchRun(env, queued.run.id, now, { useDefaultWebResultBudget: true })
+    await executeResearchRun(env, queued.run.id, now)
     const requestBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)
     expect(requestBody.tools).toEqual([{ type: 'web_search', search_context_size: 'high', return_token_budget: 'default' }])
-    expect(requestBody.max_output_tokens).toBe(8_000)
+    expect(requestBody.max_output_tokens).toBe(2_000)
     expect(requestBody.reasoning).toEqual({ effort: 'high' })
+    await cancelIfActive(queued.run.id)
   })
 
   it('honors the provider token reset window after a 429 response', async () => {
@@ -161,6 +181,7 @@ describe('OpenAI research', () => {
     // The queue records this before retrying. Clean up the focused direct-call
     // fixture so it does not occupy the single active-run slot for later tests.
     await recordResearchFailure(env, queued.run.id, failure, false)
+    await cancelIfActive(queued.run.id)
   })
 
   it('exposes research-run controls only to admins', async () => {
@@ -175,6 +196,8 @@ describe('OpenAI research', () => {
       headers: { Authorization: `Bearer ${env.ENGINE_ADMIN_TOKEN}` },
     }), env)
     expect((await listed.json() as { runs: unknown[] }).runs.length).toBeGreaterThan(0)
+    const runs = await env.DB.prepare('SELECT id FROM research_runs WHERE status IN (\'queued\', \'running\')').all<{ id: string }>()
+    for (const r of runs.results) await cancelIfActive(r.id)
   })
 
   it('allows an admin to force-cancel an active research run', async () => {
@@ -190,5 +213,346 @@ describe('OpenAI research', () => {
       headers: { Authorization: `Bearer ${env.ENGINE_ADMIN_TOKEN}` },
     }), env)
     expect(repeat.status).toBe(409)
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('research queue delivery', () => {
+  it('acknowledges a successful research run delivered via queue', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `queue-success-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T15:00:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ])))
+
+    const batch = createMessageBatch<OpenAiResearchMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-success', timestamp: now, attempts: 1, body: { kind: 'openai_research', run_id: queued.run.id } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-success')
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('succeeded')
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('retries a message when the run is already claimed by another consumer', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `queue-busy-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T15:05:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 10 * 60 * 1000).toISOString())
+
+    const batch = createMessageBatch<OpenAiResearchMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-busy', timestamp: now, attempts: 1, body: { kind: 'openai_research', run_id: queued.run.id } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.retryMessages).toEqual(
+      expect.arrayContaining([expect.objectContaining({ msgId: 'msg-busy' })]),
+    )
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('acks a completed run without re-executing OpenAI', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `queue-dup-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T15:10:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    const fetchMock = vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+    await executeResearchRun(env, queued.run.id, now)
+
+    const batch = createMessageBatch<OpenAiResearchMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-dup', timestamp: now, attempts: 1, body: { kind: 'openai_research', run_id: queued.run.id } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-dup')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('acks and fails the run on a non-retryable OpenAI error', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `queue-auth-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T15:15:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'x-request-id': 'req_test' },
+    })))
+
+    const batch = createMessageBatch<OpenAiResearchMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-auth', timestamp: now, attempts: 1, body: { kind: 'openai_research', run_id: queued.run.id } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-auth')
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('failed')
+    expect(run?.error_code).toBe('OPENAI_RESEARCH_AUTH_FAILED')
+  })
+
+  it('retries with delay on a 429 rate-limit response', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `queue-429-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T15:20:00.000Z')
+    await claimResearchRun(env.DB, queued.run.id, now.toISOString(), new Date(now.getTime() + 60000).toISOString())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'x-ratelimit-reset-tokens': '6m0s' },
+    })))
+
+    const batch = createMessageBatch<OpenAiResearchMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-429', timestamp: now, attempts: 1, body: { kind: 'openai_research', run_id: queued.run.id } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.retryMessages).toEqual(
+      expect.arrayContaining([expect.objectContaining({ msgId: 'msg-429' })]),
+    )
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('computeRetryDelay', () => {
+  it('returns exponential delay with jitter when no retryAfterSeconds', () => {
+    const delay = computeRetryDelay(undefined, 1)
+    expect(delay).toBeGreaterThanOrEqual(30)
+    expect(delay).toBeLessThanOrEqual(45)
+  })
+
+  it('uses provider reset window when larger than exponential', () => {
+    const delay = computeRetryDelay(360, 1)
+    expect(delay).toBeGreaterThanOrEqual(360)
+    expect(delay).toBeLessThanOrEqual(375)
+  })
+
+  it('caps at 3600 seconds', () => {
+    const delay = computeRetryDelay(7200, 5)
+    expect(delay).toBe(3600)
+  })
+})
+
+describe('lane checkpoint idempotency', () => {
+  it('does not re-execute a completed lane', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-idempotent-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T16:00:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+    await createLaneCheckpoints(env.DB, queued.run.id, nowIso)
+
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
+    expect(await claimLaneCheckpoint(env.DB, queued.run.id, 'social', nowIso, leaseUntil)).toBe('claimed')
+
+    await completeLaneCheckpoint(env.DB, queued.run.id, 'social', {
+      candidatesJson: '[]',
+      evidenceJson: '[]',
+      diagnosticsJson: '{"source_urls":[],"discovery_lanes":[],"candidates":[],"summary":null}',
+      requestId: 'req_test',
+      usageJson: '{}',
+      rateLimitDiagnosticsJson: '{}',
+      now: nowIso,
+    })
+
+    expect(await claimLaneCheckpoint(env.DB, queued.run.id, 'social', nowIso, leaseUntil)).toBe('completed')
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('succeeded')
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('creates four lane checkpoints for a new run', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-create-${crypto.randomUUID()}` })
+    const checkpoints = await getLaneCheckpoints(env.DB, queued.run.id)
+    expect(checkpoints).toHaveLength(4)
+    expect(checkpoints.map((c) => c.lane).sort()).toEqual(['commerce', 'search_demand', 'social', 'trend_media'])
+    expect(checkpoints.every((c) => c.status === 'pending')).toBe(true)
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('research finalize', () => {
+  it('finalizes a run only once (idempotent)', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `finalize-idempotent-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T16:30:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
+    for (const lane of ['social', 'search_demand', 'commerce', 'trend_media'] as const) {
+      await claimLaneCheckpoint(env.DB, queued.run.id, lane, nowIso, leaseUntil)
+      await completeLaneCheckpoint(env.DB, queued.run.id, lane, {
+        candidatesJson: '[]',
+        evidenceJson: '[]',
+        diagnosticsJson: '{"source_urls":[],"discovery_lanes":[],"candidates":[],"summary":null}',
+        requestId: null,
+        usageJson: '{}',
+        rateLimitDiagnosticsJson: '{}',
+        now: nowIso,
+      })
+    }
+
+    expect(await claimFinalize(env.DB, queued.run.id)).toBe(true)
+    expect(await claimFinalize(env.DB, queued.run.id)).toBe(false)
+
+    await finalizeResearchRun(env, queued.run.id, now)
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('succeeded')
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('research DLQ consumer', () => {
+  it('marks a lane and run as failed on DLQ delivery', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `dlq-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T17:00:00.000Z')
+
+    const batch = createMessageBatch<TrendEngineQueueMessage>(
+      'finditviral-trend-research-dlq',
+      [{ id: 'msg-dlq', timestamp: now, attempts: 4, body: { kind: 'research_lane', run_id: queued.run.id, lane: 'social' } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-dlq')
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('failed')
+    expect(run?.error_code).toBe('DLQ_EXHAUSTED')
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('failed')
+  })
+})
+
+describe('stale-run reconciliation', () => {
+  it('re-enqueues a stale run with an expired lease', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `stale-${crypto.randomUUID()}` })
+    const past = new Date('2026-07-17T10:00:00.000Z')
+    const pastIso = past.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, pastIso, pastIso)
+
+    const now = new Date('2026-07-17T18:00:00.000Z')
+    const reEnqueued = await reconcileStaleResearchRuns(env.DB, now.toISOString())
+    expect(reEnqueued).toContain(queued.run.id)
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('queued')
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('fails a run that exceeds the 6-hour deadline', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `deadline-${crypto.randomUUID()}` })
+    const past = new Date('2026-07-17T10:00:00.000Z')
+    const pastIso = past.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, pastIso, pastIso)
+
+    await env.DB.prepare('UPDATE research_runs SET created_at = ? WHERE id = ?')
+      .bind(new Date('2026-07-17T10:00:00.000Z').toISOString(), queued.run.id).run()
+
+    const now = new Date('2026-07-17T18:00:00.000Z')
+    await reconcileStaleResearchRuns(env.DB, now.toISOString())
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('failed')
+    expect(run?.error_code).toBe('RESEARCH_DEADLINE_EXCEEDED')
+  })
+})
+
+describe('stale lane lease release', () => {
+  it('releases a stale lane lease back to pending', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-stale-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T16:00:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
+    await claimLaneCheckpoint(env.DB, queued.run.id, 'social', nowIso, leaseUntil)
+
+    await env.DB.prepare('UPDATE research_lane_checkpoints SET lease_until = ? WHERE run_id = ? AND lane = ?')
+      .bind(new Date('2026-07-17T15:00:00.000Z').toISOString(), queued.run.id, 'social').run()
+
+    await releaseStaleLaneLeases(env.DB, new Date('2026-07-17T16:05:00.000Z').toISOString())
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('pending')
+    expect(cp?.lease_until).toBeNull()
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('paused run resume', () => {
+  it('resumes a paused run back to queued', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `resume-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T16:00:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+    await pauseResearchRun(env.DB, queued.run.id)
+
+    let run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('paused_rate_limit')
+
+    const resumed = await resumeResearchRun(env.DB, queued.run.id)
+    expect(resumed?.status).toBe('queued')
+
+    run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('queued')
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('returns null when resuming a non-paused run', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `resume-non-paused-${crypto.randomUUID()}` })
+    const result = await resumeResearchRun(env.DB, queued.run.id)
+    expect(result).toBeNull()
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('lane progress in views', () => {
+  it('includes lane progress in researchRunView', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-view-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T16:00:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
+    await claimLaneCheckpoint(env.DB, queued.run.id, 'social', nowIso, leaseUntil)
+    await completeLaneCheckpoint(env.DB, queued.run.id, 'social', {
+      candidatesJson: '[]',
+      evidenceJson: '[]',
+      diagnosticsJson: '{"source_urls":[],"discovery_lanes":[],"candidates":[],"summary":null}',
+      requestId: 'req_test_123',
+      usageJson: '{}',
+      rateLimitDiagnosticsJson: '{}',
+      now: nowIso,
+    })
+
+    const run = await getResearchRun(env.DB, queued.run.id)
+    const checkpoints = await getLaneCheckpoints(env.DB, queued.run.id)
+    const view = researchRunView(run!, checkpoints)
+    expect(view.lanes).toHaveLength(4)
+    const socialLane = view.lanes.find((l) => l.lane === 'social')
+    expect(socialLane?.status).toBe('succeeded')
+    expect(socialLane?.request_id).toBe('req_test_123')
+    const pendingLane = view.lanes.find((l) => l.lane === 'search_demand')
+    expect(pendingLane?.status).toBe('pending')
+    await cancelIfActive(queued.run.id)
   })
 })

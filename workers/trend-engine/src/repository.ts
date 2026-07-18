@@ -7,6 +7,9 @@ import type {
   ScoreSnapshot,
   ResearchRunRow,
   ResearchRunDiagnostics,
+  ResearchLane,
+  ResearchLaneCheckpointRow,
+  LaneProgressView,
   EvidenceClassification,
   ResearchTrigger,
   SignalType,
@@ -539,6 +542,7 @@ export interface ResearchRunView extends ResearchRunRow {
   candidateIds: string[]
   evidence: Array<{ candidate_id: string; urls: string[] }>
   diagnostics: ResearchRunDiagnostics
+  lanes: LaneProgressView[]
 }
 
 function parseJsonArray(value: string): unknown[] {
@@ -589,7 +593,7 @@ function parseResearchDiagnostics(value: string): ResearchRunDiagnostics {
   }
 }
 
-export function researchRunView(row: ResearchRunRow): ResearchRunView {
+export function researchRunView(row: ResearchRunRow, laneCheckpoints?: ResearchLaneCheckpointRow[]): ResearchRunView {
   return {
     ...row,
     candidateIds: parseJsonArray(row.candidate_ids_json).filter((value): value is string => typeof value === 'string'),
@@ -601,6 +605,25 @@ export function researchRunView(row: ResearchRunRow): ResearchRunView {
       return urls.length > 0 ? [{ candidate_id: item.candidate_id, urls }] : []
     }),
     diagnostics: parseResearchDiagnostics(row.diagnostics_json),
+    lanes: (laneCheckpoints ?? []).map(laneCheckpointView),
+  }
+}
+
+export function laneCheckpointView(row: ResearchLaneCheckpointRow): LaneProgressView {
+  let rateLimitDiagnostics: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = JSON.parse(row.rate_limit_diagnostics_json)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      rateLimitDiagnostics = parsed as Record<string, unknown>
+    }
+  } catch { /* empty */ }
+  return {
+    lane: row.lane,
+    status: row.status,
+    attempts: row.attempts,
+    next_retry_at: row.next_retry_at,
+    request_id: row.request_id,
+    rate_limit_diagnostics: rateLimitDiagnostics,
   }
 }
 
@@ -621,7 +644,7 @@ export async function createOrGetResearchRun(
 ): Promise<{ run: ResearchRunRow; created: boolean }> {
   const existing = await db.prepare(`
     SELECT * FROM research_runs
-    WHERE status IN ('queued', 'running')
+    WHERE status IN ('queued', 'running', 'paused_rate_limit', 'finalizing')
     ORDER BY created_at DESC LIMIT 1
   `).first<ResearchRunRow>()
   if (existing) return { run: existing, created: false }
@@ -638,7 +661,7 @@ export async function createOrGetResearchRun(
   }
   const fallback = await db.prepare(`
     SELECT * FROM research_runs
-    WHERE request_key = ? OR status IN ('queued', 'running')
+    WHERE request_key = ? OR status IN ('queued', 'running', 'paused_rate_limit', 'finalizing')
     ORDER BY created_at DESC LIMIT 1
   `).bind(input.requestKey).first<ResearchRunRow>()
   if (!fallback) throw new Error('Research run was not persisted')
@@ -652,7 +675,7 @@ export async function claimResearchRun(db: D1Database, id: string, now: string, 
     UPDATE research_runs
     SET status = 'running', started_at = COALESCE(started_at, ?), lease_until = ?
     WHERE id = ?
-      AND (status = 'queued' OR (status = 'running' AND lease_until <= ?))
+      AND (status = 'queued' OR (status = 'running' AND lease_until <= ?) OR status = 'paused_rate_limit')
     RETURNING id
   `).bind(now, leaseUntil, id, now).first<{ id: string }>()
   if (claimed) return 'claimed'
@@ -679,7 +702,7 @@ export async function completeResearchRun(
     SET status = 'succeeded', completed_at = ?, lease_until = NULL,
         received_count = ?, accepted_count = ?, duplicate_count = ?, rejected_count = ?,
         candidate_ids_json = ?, evidence_json = ?, diagnostics_json = ?, error_code = NULL
-    WHERE id = ? AND status = 'running'
+    WHERE id = ? AND status IN ('running', 'finalizing')
   `).bind(
     input.now,
     input.received,
@@ -698,7 +721,7 @@ export async function failResearchRun(db: D1Database, id: string, errorCode: str
     UPDATE research_runs
     SET status = ?, completed_at = CASE WHEN ? THEN completed_at ELSE ? END,
         lease_until = CASE WHEN ? THEN NULL ELSE ? END, error_code = ?
-    WHERE id = ? AND status = 'running'
+    WHERE id = ? AND status IN ('queued', 'running', 'paused_rate_limit', 'finalizing')
   `).bind(retryable ? 'queued' : 'failed', retryable ? 1 : 0, now, retryable ? 1 : 0, retryable ? null : null, errorCode, id).run()
 }
 
@@ -707,7 +730,7 @@ export async function cancelResearchRun(db: D1Database, id: string, now: string)
   const cancelled = await db.prepare(`
     UPDATE research_runs
     SET status = 'failed', completed_at = ?, lease_until = NULL, error_code = 'RESEARCH_RUN_CANCELLED'
-    WHERE id = ? AND status IN ('queued', 'running')
+    WHERE id = ? AND status IN ('queued', 'running', 'paused_rate_limit', 'finalizing')
     RETURNING *
   `).bind(now, id).first<ResearchRunRow>()
   return cancelled ?? null
@@ -757,4 +780,258 @@ export async function listChanges(db: D1Database, after: number, limit: number):
     LIMIT ?
   `).bind(after, limit).all<ChangeLogRow>()
   return result.results
+}
+
+// ---------------------------------------------------------------------------
+// Lane checkpoint APIs
+// ---------------------------------------------------------------------------
+
+const RESEARCH_LANES: ResearchLane[] = ['social', 'search_demand', 'commerce', 'trend_media']
+
+export async function createLaneCheckpoints(db: D1Database, runId: string, now: string): Promise<void> {
+  await db.batch(
+    RESEARCH_LANES.map((lane) =>
+      db.prepare(`
+        INSERT OR IGNORE INTO research_lane_checkpoints (run_id, lane, status, attempts, updated_at)
+        VALUES (?, ?, 'pending', 0, ?)
+      `).bind(runId, lane, now),
+    ),
+  )
+}
+
+export async function getLaneCheckpoint(
+  db: D1Database,
+  runId: string,
+  lane: ResearchLane,
+): Promise<ResearchLaneCheckpointRow | null> {
+  return db.prepare('SELECT * FROM research_lane_checkpoints WHERE run_id = ? AND lane = ?')
+    .bind(runId, lane).first<ResearchLaneCheckpointRow>()
+}
+
+export async function getLaneCheckpoints(db: D1Database, runId: string): Promise<ResearchLaneCheckpointRow[]> {
+  const result = await db.prepare('SELECT * FROM research_lane_checkpoints WHERE run_id = ? ORDER BY lane')
+    .bind(runId).all<ResearchLaneCheckpointRow>()
+  return result.results
+}
+
+export type LaneClaimResult = 'claimed' | 'completed' | 'busy'
+
+export async function claimLaneCheckpoint(
+  db: D1Database,
+  runId: string,
+  lane: ResearchLane,
+  now: string,
+  leaseUntil: string,
+): Promise<LaneClaimResult> {
+  const claimed = await db.prepare(`
+    UPDATE research_lane_checkpoints
+    SET status = 'running', lease_until = ?, updated_at = ?
+    WHERE run_id = ? AND lane = ?
+      AND (status = 'pending' OR (status = 'retry_wait' AND (next_retry_at IS NULL OR next_retry_at <= ?)))
+      AND NOT EXISTS (
+        SELECT 1 FROM research_lane_checkpoints
+        WHERE run_id = ? AND status = 'running'
+      )
+    RETURNING run_id
+  `).bind(leaseUntil, now, runId, lane, now, runId).first<{ run_id: string }>()
+  if (claimed) return 'claimed'
+  const existing = await getLaneCheckpoint(db, runId, lane)
+  return existing?.status === 'succeeded' || existing?.status === 'failed' ? 'completed' : 'busy'
+}
+
+export async function completeLaneCheckpoint(
+  db: D1Database,
+  runId: string,
+  lane: ResearchLane,
+  input: {
+    candidatesJson: string
+    evidenceJson: string
+    diagnosticsJson: string
+    requestId: string | null
+    usageJson: string
+    rateLimitDiagnosticsJson: string
+    now: string
+  },
+): Promise<void> {
+  await db.prepare(`
+    UPDATE research_lane_checkpoints
+    SET status = 'succeeded', candidates_json = ?, evidence_json = ?, diagnostics_json = ?,
+        request_id = ?, usage_json = ?, rate_limit_diagnostics_json = ?,
+        lease_until = NULL, next_retry_at = NULL, completed_at = ?, updated_at = ?
+    WHERE run_id = ? AND lane = ? AND status = 'running'
+  `).bind(
+    input.candidatesJson,
+    input.evidenceJson,
+    input.diagnosticsJson,
+    input.requestId,
+    input.usageJson,
+    input.rateLimitDiagnosticsJson,
+    input.now,
+    input.now,
+    runId,
+    lane,
+  ).run()
+}
+
+export async function setLaneRetryWait(
+  db: D1Database,
+  runId: string,
+  lane: ResearchLane,
+  nextRetryAt: string,
+  rateLimitDiagnosticsJson: string,
+  now: string,
+): Promise<void> {
+  await db.prepare(`
+    UPDATE research_lane_checkpoints
+    SET status = 'retry_wait', next_retry_at = ?, rate_limit_diagnostics_json = ?,
+        lease_until = NULL, attempts = attempts + 1, updated_at = ?
+    WHERE run_id = ? AND lane = ? AND status = 'running'
+  `).bind(nextRetryAt, rateLimitDiagnosticsJson, now, runId, lane).run()
+}
+
+export async function failLaneCheckpoint(
+  db: D1Database,
+  runId: string,
+  lane: ResearchLane,
+  errorCode: string,
+  now: string,
+): Promise<void> {
+  await db.prepare(`
+    UPDATE research_lane_checkpoints
+    SET status = 'failed', lease_until = NULL, next_retry_at = NULL,
+        diagnostics_json = json_set(diagnostics_json, '$.error_code', ?), updated_at = ?
+    WHERE run_id = ? AND lane = ? AND status NOT IN ('succeeded', 'failed')
+  `).bind(errorCode, now, runId, lane).run()
+}
+
+export async function getIncompleteLanes(db: D1Database, runId: string): Promise<ResearchLaneCheckpointRow[]> {
+  const result = await db.prepare(`
+    SELECT * FROM research_lane_checkpoints
+    WHERE run_id = ? AND status != 'succeeded'
+    ORDER BY CASE lane
+      WHEN 'social' THEN 0
+      WHEN 'search_demand' THEN 1
+      WHEN 'commerce' THEN 2
+      WHEN 'trend_media' THEN 3
+    END
+  `).bind(runId).all<ResearchLaneCheckpointRow>()
+  return result.results
+}
+
+export async function getNextLaneToRun(db: D1Database, runId: string, now: string): Promise<ResearchLane | null> {
+  const row = await db.prepare(`
+    SELECT lane FROM research_lane_checkpoints
+    WHERE run_id = ?
+      AND (status = 'pending' OR (status = 'retry_wait' AND (next_retry_at IS NULL OR next_retry_at <= ?)))
+    ORDER BY CASE lane
+      WHEN 'social' THEN 0
+      WHEN 'search_demand' THEN 1
+      WHEN 'commerce' THEN 2
+      WHEN 'trend_media' THEN 3
+    END
+    LIMIT 1
+  `).bind(runId, now).first<{ lane: ResearchLane }>()
+  return row?.lane ?? null
+}
+
+export async function releaseStaleLaneLeases(db: D1Database, now: string): Promise<void> {
+  await db.prepare(`
+    UPDATE research_lane_checkpoints
+    SET status = CASE
+      WHEN next_retry_at IS NOT NULL AND next_retry_at > ? THEN 'retry_wait'
+      ELSE 'pending'
+    END,
+    lease_until = NULL,
+    updated_at = ?
+    WHERE status = 'running' AND lease_until IS NOT NULL AND lease_until < ?
+  `).bind(now, now, now).run()
+}
+
+export async function pauseResearchRun(db: D1Database, runId: string): Promise<void> {
+  await db.prepare(`
+    UPDATE research_runs
+    SET status = 'paused_rate_limit', lease_until = NULL
+    WHERE id = ? AND status IN ('running', 'queued')
+  `).bind(runId).run()
+}
+
+export async function resumeResearchRun(db: D1Database, runId: string): Promise<ResearchRunRow | null> {
+  const resumed = await db.prepare(`
+    UPDATE research_runs
+    SET status = 'queued', lease_until = NULL
+    WHERE id = ? AND status = 'paused_rate_limit'
+    RETURNING *
+  `).bind(runId).first<ResearchRunRow>()
+  return resumed ?? null
+}
+
+export async function claimFinalize(db: D1Database, runId: string): Promise<boolean> {
+  const claimed = await db.prepare(`
+    UPDATE research_runs
+    SET status = 'finalizing'
+    WHERE id = ?
+      AND status IN ('running', 'queued')
+      AND NOT EXISTS (
+        SELECT 1 FROM research_lane_checkpoints
+        WHERE run_id = ? AND status != 'succeeded'
+      )
+    RETURNING id
+  `).bind(runId, runId).first<{ id: string }>()
+  return !!claimed
+}
+
+export async function getPausedRunForResume(db: D1Database, now: string): Promise<ResearchRunRow | null> {
+  return db.prepare(`
+    SELECT r.* FROM research_runs r
+    WHERE r.status = 'paused_rate_limit'
+      AND EXISTS (
+        SELECT 1 FROM research_lane_checkpoints c
+        WHERE c.run_id = r.id
+          AND c.status = 'retry_wait'
+          AND (c.next_retry_at IS NULL OR c.next_retry_at <= ?)
+      )
+      AND r.created_at > datetime(?, '-6 hours')
+    ORDER BY r.created_at ASC
+    LIMIT 1
+  `).bind(now, now).first<ResearchRunRow>()
+}
+
+export async function getOldestPausedRun(db: D1Database): Promise<ResearchRunRow | null> {
+  return db.prepare(`
+    SELECT * FROM research_runs
+    WHERE status = 'paused_rate_limit'
+    ORDER BY created_at ASC
+    LIMIT 1
+  `).first<ResearchRunRow>()
+}
+
+export async function reconcileStaleResearchRuns(db: D1Database, now: string): Promise<string[]> {
+  const stale = await db.prepare(`
+    SELECT * FROM research_runs
+    WHERE status IN ('running', 'paused_rate_limit', 'finalizing')
+      AND lease_until IS NOT NULL AND lease_until < ?
+    ORDER BY created_at ASC
+  `).bind(now).all<ResearchRunRow>()
+
+  const reEnqueued: string[] = []
+  for (const run of stale.results) {
+    const deadline = new Date(run.created_at)
+    deadline.setHours(deadline.getHours() + 6)
+    if (new Date(now) > deadline) {
+      await db.prepare(`
+        UPDATE research_runs
+        SET status = 'failed', completed_at = ?, lease_until = NULL,
+            error_code = 'RESEARCH_DEADLINE_EXCEEDED'
+        WHERE id = ?
+      `).bind(now, run.id).run()
+      continue
+    }
+    await db.prepare(`
+      UPDATE research_runs
+      SET status = 'queued', lease_until = NULL
+      WHERE id = ?
+    `).bind(run.id).run()
+    reEnqueued.push(run.id)
+  }
+  return reEnqueued
 }
