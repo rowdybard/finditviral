@@ -24,8 +24,8 @@ import { parseViralSignalBatch } from './validation'
 
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
-const MAX_CANDIDATES_PER_LANE = 3
-const MAX_OUTPUT_TOKENS = 1_200
+const MAX_CANDIDATES_PER_LANE = 2
+const MAX_OUTPUT_TOKENS = 1_600
 
 type JsonRecord = Record<string, unknown>
 type ResearchDiscoveryLane = 'social' | 'search demand' | 'commerce' | 'trend media'
@@ -491,8 +491,9 @@ async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<OpenAiLaneR
     body: JSON.stringify({
       model: configuredModel(env),
       max_output_tokens: MAX_OUTPUT_TOKENS,
+      max_tool_calls: 3,
       reasoning: { effort: 'medium' },
-      tools: [{ type: 'web_search', search_context_size: 'medium', return_token_budget: 'default' }],
+      tools: [{ type: 'web_search', search_context_size: 'low' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
       input: LANE_PROMPTS[lane],
@@ -503,6 +504,19 @@ async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<OpenAiLaneR
   const body = await response.json().catch(() => null)
   if (!response.ok) throw openAiHttpFailure(response, body)
   if (!isRecord(body)) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response was not a JSON object.', 502, false)
+  const webSearchCalls = Array.isArray(body.output)
+    ? body.output.filter(
+        item => isRecord(item) && item.type === 'web_search_call',
+      ).length
+    : 0
+  console.log(JSON.stringify({
+    event: 'openai_lane_usage',
+    lane,
+    response_id: typeof body.id === 'string' ? body.id : null,
+    web_search_calls: webSearchCalls,
+    input_tokens: isRecord(body.usage) && typeof body.usage.input_tokens === 'number' ? body.usage.input_tokens : null,
+    output_tokens: isRecord(body.usage) && typeof body.usage.output_tokens === 'number' ? body.usage.output_tokens : null,
+  }))
   return { body, rateLimits }
 }
 
