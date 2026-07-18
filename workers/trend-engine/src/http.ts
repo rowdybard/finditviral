@@ -422,11 +422,17 @@ async function handleEngineSettings(request: Request, env: Env): Promise<Respons
     if (reasoningEffort !== 'low' && reasoningEffort !== 'medium' && reasoningEffort !== 'high') {
       throw new EngineError('VALIDATION_ERROR', 'reasoning_effort must be low, medium, or high.', 400)
     }
+    const allowedModels = ['gpt-5-mini', 'gpt-5.6-luna', 'o4-mini']
+    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : 'gpt-5-mini'
+    if (!allowedModels.includes(model)) {
+      throw new EngineError('VALIDATION_ERROR', `model must be one of: ${allowedModels.join(', ')}.`, 400)
+    }
     const settings = await updateEngineSettings(env.DB, {
       max_output_tokens: maxOutputTokens,
       max_candidates_per_lane: maxCandidatesPerLane,
       search_context_size: searchContextSize,
       reasoning_effort: reasoningEffort,
+      model,
     }, new Date().toISOString())
     return json({ settings })
   }

@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: EngineSettingsRow = {
   max_candidates_per_lane: 2,
   search_context_size: 'low',
   reasoning_effort: 'medium',
+  model: 'gpt-5-mini',
   updated_at: '1970-01-01T00:00:00.000Z',
 }
 
@@ -121,11 +122,6 @@ function openAiHttpFailure(response: Response, body: unknown): EngineError {
     return new EngineError('OPENAI_RESEARCH_UPSTREAM_UNAVAILABLE', `OpenAI research is temporarily unavailable (HTTP ${response.status}).${requestSuffix}`, 502, true)
   }
   return new EngineError('OPENAI_RESEARCH_REQUEST_REJECTED', `OpenAI rejected the research request (HTTP ${response.status}).${requestSuffix}`, 502, false)
-}
-
-function configuredModel(env: Env): string {
-  const model: string = env.OPENAI_RESEARCH_MODEL
-  return model.trim() || 'gpt-5.6-luna'
 }
 
 function parseUrls(value: unknown, allowedUrls: Set<string>): string[] {
@@ -501,7 +497,7 @@ async function callOpenAiLane(env: Env, lane: ResearchLane, settings: EngineSett
     method: 'POST',
     headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: configuredModel(env),
+      model: settings.model,
       max_output_tokens: settings.max_output_tokens,
       reasoning: { effort: settings.reasoning_effort as 'low' | 'medium' | 'high' },
       tools: [{ type: 'web_search', search_context_size: settings.search_context_size as 'low' | 'medium' | 'high' }],
@@ -540,10 +536,11 @@ export function computeRetryDelay(retryAfterSeconds: number | undefined, attempt
 
 export async function enqueueResearchRun(env: Env, input: { trigger: 'scheduled' | 'manual'; requestKey: string; now?: Date }): Promise<ResearchEnqueueResult> {
   const now = input.now ?? new Date()
+  const settings = await getEngineSettings(env.DB)
   const result = await createOrGetResearchRun(env.DB, {
     requestKey: input.requestKey,
     trigger: input.trigger,
-    model: configuredModel(env),
+    model: settings.model,
     now: now.toISOString(),
   })
   if (!result.created) return result

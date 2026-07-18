@@ -654,6 +654,7 @@ function SettingsTab() {
         max_candidates_per_lane: settings.max_candidates_per_lane,
         search_context_size: settings.search_context_size,
         reasoning_effort: settings.reasoning_effort,
+        model: settings.model,
       })
       setSettings(updated)
       setSaved(true)
@@ -740,6 +741,19 @@ function SettingsTab() {
               <option value="high">High (deeper reasoning, more tokens)</option>
             </select>
             <p className="text-xs text-stone-500">Controls how much reasoning the model does before producing output. Lower = fewer tokens.</p>
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm font-bold text-stone-700">Model</span>
+            <select
+              className="input min-h-11"
+              value={settings.model}
+              onChange={(e) => setSettings((s) => s ? { ...s, model: e.target.value } : s)}
+            >
+              <option value="gpt-5-mini">GPT-5 Mini</option>
+              <option value="gpt-5.6-luna">GPT-5.6 Luna</option>
+              <option value="o4-mini">o4 Mini</option>
+            </select>
+            <p className="text-xs text-stone-500">OpenAI model used for research. GPT-5 Mini is the fastest and cheapest.</p>
           </label>
         </div>
         <p className="text-xs text-stone-400">Last updated: {new Date(settings.updated_at).toLocaleString()}</p>

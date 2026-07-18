@@ -68,7 +68,7 @@ describe('OpenAI research', () => {
       text: { format: { schema: { properties: { candidates: { items: { properties: Record<string, unknown>; required: string[] } } } } } }
     }
     expect(requestBody).toMatchObject({
-      model: 'gpt-5.6-luna',
+      model: 'gpt-5-mini',
       max_output_tokens: 3_000,
       include: ['web_search_call.action.sources'],
       reasoning: { effort: 'medium' },

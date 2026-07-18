@@ -297,6 +297,7 @@ export interface EngineSettings {
   max_candidates_per_lane: number
   search_context_size: 'low' | 'medium' | 'high'
   reasoning_effort: 'low' | 'medium' | 'high'
+  model: string
   updated_at: string
 }
 
