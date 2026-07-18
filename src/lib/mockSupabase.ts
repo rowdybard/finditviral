@@ -790,8 +790,13 @@ export const mockSupabase = {
       const location = store.stores.find(item => item.id === bounty.store_id)
       const profile = store.profiles.find(item => item.id === bounty.user_id)
       const callerClaim = store.bounty_claims.find(item => item.bounty_id === bounty.id && item.finder_id === currentUserId)
+      const isOwner = bounty.user_id === currentUserId
+      const isAppOwner = currentUserId === 'u1'
+      const realModStatus = bounty.moderation_status ?? 'approved'
+      const gatedModStatus = (isOwner || isAppOwner) ? realModStatus : (realModStatus === 'approved' ? 'approved' : null)
       return Promise.resolve({ data: [{
         ...bounty,
+        moderation_status: gatedModStatus,
         product_name: product?.name ?? 'Unknown product',
         product_slug: product?.slug ?? '',
         store_name: location?.store_name ?? null,
@@ -820,6 +825,45 @@ export const mockSupabase = {
       return Promise.resolve({ data: rows, error: null })
     }
 
+
+    if (name === 'list_my_bounties') {
+      const limit = args?.p_limit ?? 20
+      const rows = store.bounties
+        .filter(b => b.user_id === currentUserId)
+        .slice(0, limit)
+        .map(b => {
+          const product = store.products.find(p => p.id === b.product_id)
+          const location = store.stores.find(s => s.id === b.store_id)
+          return {
+            ...b,
+            product_name: product?.name ?? 'Unknown product',
+            product_slug: product?.slug ?? '',
+            store_name: location?.store_name ?? null,
+            is_owner: true,
+          }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
+
+    if (name === 'list_my_claims') {
+      const limit = args?.p_limit ?? 20
+      const rows = store.bounty_claims
+        .filter(c2 => c2.finder_id === currentUserId)
+        .slice(0, limit)
+        .map(c2 => {
+          const bounty = store.bounties.find(b => b.id === c2.bounty_id)
+          const product = store.products.find(p => p.id === bounty?.product_id)
+          return {
+            id: c2.id,
+            bounty_id: c2.bounty_id,
+            status: c2.status,
+            created_at: c2.created_at,
+            product_name: product?.name ?? 'Unknown product',
+            product_slug: product?.slug ?? '',
+          }
+        })
+      return Promise.resolve({ data: rows, error: null })
+    }
     if (name.startsWith('admin_list_')) {
       if (currentUserId !== 'u1') return Promise.resolve({ data: null, error: { message: 'Owner access required' } })
       if (name === 'admin_list_product_suggestions') return Promise.resolve({ data: store.product_suggestions, error: null })

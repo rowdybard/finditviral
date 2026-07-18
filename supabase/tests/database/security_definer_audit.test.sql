@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select plan(8);
+select plan(11);
 
 -- 1. search_products is SECURITY DEFINER and intentionally public (safe read, no auth check needed)
 select ok(
@@ -59,19 +59,31 @@ select ok(
   'create_sighting calls assert_permanent_member'
 );
 
--- 5. create_bounty is SECURITY DEFINER and calls assert_permanent_member
-select ok(
+-- 5. Exactly one create_bounty overload exists (the canonical 14-param version)
+select is(
   (
-    select pg_get_functiondef(p.oid) ~ 'assert_permanent_member'
+    select count(*)
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname = 'create_bounty'
-    limit 1
-  ),
-  'create_bounty calls assert_permanent_member'
+  )::integer,
+  1,
+  'Exactly one create_bounty overload exists (legacy overloads dropped)'
 );
 
--- 6. admin_list_products is SECURITY DEFINER and calls assert_app_owner
+-- 6. create_bounty has the canonical 14-param signature and calls both auth checks
+select ok(
+  (
+    select pg_get_functiondef(p.oid) ~ 'assert_permanent_member'
+      and pg_get_functiondef(p.oid) ~ 'check_contribution_rate_limit'
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_bounty'
+  ),
+  'create_bounty calls assert_permanent_member and check_contribution_rate_limit'
+);
+
+-- 7. admin_list_products is SECURITY DEFINER and calls assert_app_owner
 select ok(
   (
     select pg_get_functiondef(p.oid) ~ 'assert_app_owner'
@@ -83,7 +95,7 @@ select ok(
   'admin_list_products calls assert_app_owner'
 );
 
--- 7. admin_list_stores is SECURITY DEFINER and calls assert_app_owner
+-- 8. admin_list_stores is SECURITY DEFINER and calls assert_app_owner
 select ok(
   (
     select pg_get_functiondef(p.oid) ~ 'assert_app_owner'
@@ -95,7 +107,20 @@ select ok(
   'admin_list_stores calls assert_app_owner'
 );
 
--- 8. No SECURITY DEFINER function granted to authenticated/anon lacks authorization.
+-- 9. admin_search_members is SECURITY DEFINER and calls assert_app_owner
+select ok(
+  (
+    select pg_get_functiondef(p.oid) ~ 'assert_app_owner'
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'admin_search_members'
+      and pg_get_function_identity_arguments(p.oid) = 'text, integer'
+  ),
+  'admin_search_members(text, integer) calls assert_app_owner'
+);
+
+-- 10. No SECURITY DEFINER function granted to authenticated/anon lacks authorization.
 -- Uses effective ACL (acldefault when proacl is null) to catch default-privileged functions.
 -- Classifies safe public reads by: STABLE volatility + no mutation keywords in body.
 -- Mutating or volatile functions must call assert_app_owner or assert_permanent_member.
@@ -122,6 +147,19 @@ select ok(
       )
   ),
   'No SECURITY DEFINER function granted to authenticated/anon lacks authorization (effective ACL, property-based safe-read classification)'
+);
+
+-- 11. The bounty RLS policy is not using (true) — the restrictive policy must be in place
+select ok(
+  not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'bounties'
+      and policyname = 'authenticated_bounties_read'
+      and qual = 'true'
+  ),
+  'authenticated_bounties_read RLS policy is not using (true)'
 );
 
 select * from finish();

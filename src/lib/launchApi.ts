@@ -11,6 +11,7 @@ import type {
   BountyClaimView,
   BountyDetailView,
   CatalogSuggestion,
+  MyClaimView,
   ContributionDraft,
   ContributionDraftType,
   InterestEvent,
@@ -232,6 +233,15 @@ export async function getBountyDetail(id: string): RpcResult<BountyDetailView | 
 
 export async function listMyBountyClaims(id: string): RpcResult<BountyClaimView[]> {
   return callRpc<BountyClaimView[]>('list_my_bounty_claims', { p_bounty_id: id })
+}
+
+
+export async function listMyBounties(limit: number = 20): RpcResult<Bounty[]> {
+  return callRpc<Bounty[]>('list_my_bounties', { p_limit: limit })
+}
+
+export async function listMyClaims(limit: number = 20): RpcResult<MyClaimView[]> {
+  return callRpc<MyClaimView[]>('list_my_claims', { p_limit: limit })
 }
 
 export async function submitBountyClaim(input: {

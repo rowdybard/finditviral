@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import type { Profile, ProfileContact, Bounty, Sighting, BountyClaim } from '../types/database'
+import type { Profile, ProfileContact, Bounty, Sighting, MyClaimView } from '../types/database'
 import BountyCard from '../components/BountyCard'
 import SightingCard from '../components/SightingCard'
 import EmptyState from '../components/EmptyState'
-import { getMyContributionDrafts, deleteBounty, deleteSighting } from '../lib/launchApi'
+import { getMyContributionDrafts, deleteBounty, deleteSighting, listMyBounties, listMyClaims } from '../lib/launchApi'
 import { mapContributionError } from '../lib/errorMap'
 import { listUserFormDrafts } from '../lib/formDraftStore'
 import { trackEvent } from '../lib/analytics'
@@ -17,7 +17,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [bounties, setBounties] = useState<Bounty[]>([])
   const [sightings, setSightings] = useState<Sighting[]>([])
-  const [claims, setClaims] = useState<BountyClaim[]>([])
+  const [claims, setClaims] = useState<MyClaimView[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [contactInfo, setContactInfo] = useState('')
@@ -52,12 +52,7 @@ export default function ProfilePage() {
       setProfile(profileData)
 
       const [bountiesRes, sightingsRes, claimsRes, contributionDraftsRes] = await Promise.all([
-        supabase
-          .from('bounties')
-          .select('id,user_id,product_id,reward_amount,reward_cents,store_id,zip_code,radius_miles,notes,requirements,deadline,status,moderation_status,created_at,product:products(*)')
-          .eq('user_id', profileData.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
+        listMyBounties(20),
         supabase
           .from('sightings')
           .select('id,user_id,product_id,store_id,store_name,city,state,zip_code,stock_level,availability,quantity,notes,seen_at,is_public,bounty_id,photo_urls,moderation_status,created_at,edited_at,product:products(*)')
@@ -65,39 +60,19 @@ export default function ProfilePage() {
           .eq('is_public', true)
           .order('created_at', { ascending: false })
           .limit(20),
-        supabase
-          .from('bounty_claims')
-          .select('id,bounty_id,finder_id,sighting_id,status,created_at,bounty:bounties(id,product_id,status,product:products(*))')
-          .eq('finder_id', profileData.id)
-          .order('created_at', { ascending: false })
-          .limit(20),
+        listMyClaims(20),
         getMyContributionDrafts(),
       ])
 
-      const bountyRows = (bountiesRes.data ?? []).map((row) => ({
-        ...row,
-        product: Array.isArray(row.product) ? row.product[0] : row.product,
-      }))
+      const bountyRows = (bountiesRes.data ?? []) as unknown as Bounty[]
       const sightingRows = (sightingsRes.data ?? []).map((row) => ({
         ...row,
         is_owner: true,
         product: Array.isArray(row.product) ? row.product[0] : row.product,
       }))
-      const claimRows = (claimsRes.data ?? []).map((row) => {
-        const bounty = Array.isArray(row.bounty) ? row.bounty[0] : row.bounty
-        return {
-          ...row,
-          bounty: bounty
-            ? {
-                ...bounty,
-                product: Array.isArray(bounty.product) ? bounty.product[0] : bounty.product,
-              }
-            : undefined,
-        }
-      })
-      setBounties(bountyRows as unknown as Bounty[])
+      setBounties(bountyRows)
       setSightings(sightingRows as unknown as Sighting[])
-      setClaims(claimRows as unknown as BountyClaim[])
+      setClaims((claimsRes.data ?? []) as MyClaimView[])
       const serverDraftIds = new Set((contributionDraftsRes.data ?? []).map((draft) => draft.id))
       const unlinkedLocalCount = listUserFormDrafts(profileData.id)
         .filter((draft) => draft.formType !== 'onboarding' && (!draft.metadata.serverDraftId || !serverDraftIds.has(draft.metadata.serverDraftId)))
@@ -325,7 +300,7 @@ export default function ProfilePage() {
                     to={`/bounties/${c.bounty_id}`}
                     className="truncate font-medium text-brand-600 hover:text-brand-700"
                   >
-                    {c.bounty?.product?.name ?? 'Unknown product'}
+                    {c.product_name ?? 'Unknown product'}
                   </Link>
                   <span className={`badge ${
                     c.status === 'accepted' ? 'bg-green-100 text-green-800' :

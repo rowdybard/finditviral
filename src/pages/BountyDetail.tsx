@@ -348,7 +348,7 @@ export default function BountyDetail() {
         </div>
       </div>
 
-      {bounty.moderation_status !== 'approved' && (
+      {bounty.is_owner && bounty.moderation_status && bounty.moderation_status !== 'approved' && (
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">This bounty is {bounty.moderation_status}. New claims are disabled.</div>
       )}
       {actionError && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}

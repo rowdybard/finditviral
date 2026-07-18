@@ -125,7 +125,7 @@ export type Bounty = {
   retailer_names?: string[] | null
   store_names?: string[] | null
   deadline?: string | null
-  moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden'
+  moderation_status?: 'pending' | 'approved' | 'rejected' | 'hidden' | null
   is_owner?: boolean
   status: 'open' | 'claimed' | 'closed'
   created_at: string
@@ -324,7 +324,7 @@ export type BountyDetailView = {
   retailer_names: string[] | null
   store_names: string[] | null
   status: 'open' | 'claimed' | 'closed'
-  moderation_status: 'pending' | 'approved' | 'rejected' | 'hidden'
+  moderation_status: 'pending' | 'approved' | 'rejected' | 'hidden' | null
   created_at: string
   owner_username: string
   is_owner: boolean
@@ -332,6 +332,15 @@ export type BountyDetailView = {
   caller_claim_status: 'pending' | 'accepted' | 'rejected' | null
   owner_contact_info: string | null
   accepted_finder_contact_info: string | null
+}
+
+export type MyClaimView = {
+  id: string
+  bounty_id: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  product_name: string
+  product_slug: string
 }
 
 export type BountyClaimView = {
