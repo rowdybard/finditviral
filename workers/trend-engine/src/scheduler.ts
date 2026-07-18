@@ -73,6 +73,12 @@ export async function processScheduledRun(
   try {
     await cleanupCronRuns(env.DB, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
     if (controller.cron === SOURCE_POLL_CRON) {
+      // Reconcile stuck research runs and release stale lane leases on every poll cycle.
+      await releaseStaleLaneLeases(env.DB, now.toISOString())
+      const reEnqueued = await reconcileStaleResearchRuns(env.DB, now.toISOString())
+      for (const { runId, lane } of reEnqueued) {
+        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: runId, lane })
+      }
       const queuedSources = await enqueueDueSources(env, scheduledAt, executionKey)
       const recomputedCandidates = await recomputeAllCandidates(env.DB, now)
       return {
