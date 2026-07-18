@@ -970,7 +970,7 @@ export async function claimFinalize(db: D1Database, runId: string): Promise<bool
     UPDATE research_runs
     SET status = 'finalizing'
     WHERE id = ?
-      AND status IN ('running', 'queued')
+      AND status IN ('running', 'queued', 'paused_rate_limit')
       AND NOT EXISTS (
         SELECT 1 FROM research_lane_checkpoints
         WHERE run_id = ? AND status != 'succeeded'
@@ -978,6 +978,14 @@ export async function claimFinalize(db: D1Database, runId: string): Promise<bool
     RETURNING id
   `).bind(runId, runId).first<{ id: string }>()
   return !!claimed
+}
+
+export async function resumeResearchRunToRunning(db: D1Database, runId: string, now: string, leaseUntil: string): Promise<void> {
+  await db.prepare(`
+    UPDATE research_runs
+    SET status = 'running', started_at = COALESCE(started_at, ?), lease_until = ?
+    WHERE id = ? AND status IN ('queued', 'running', 'paused_rate_limit')
+  `).bind(now, leaseUntil, runId).run()
 }
 
 export async function getPausedRunForResume(db: D1Database, now: string): Promise<ResearchRunRow | null> {
@@ -1005,7 +1013,7 @@ export async function getOldestPausedRun(db: D1Database): Promise<ResearchRunRow
   `).first<ResearchRunRow>()
 }
 
-export async function reconcileStaleResearchRuns(db: D1Database, now: string): Promise<string[]> {
+export async function reconcileStaleResearchRuns(db: D1Database, now: string): Promise<Array<{ runId: string; lane: ResearchLane }>> {
   const stale = await db.prepare(`
     SELECT * FROM research_runs
     WHERE status IN ('running', 'paused_rate_limit', 'finalizing')
@@ -1013,7 +1021,7 @@ export async function reconcileStaleResearchRuns(db: D1Database, now: string): P
     ORDER BY created_at ASC
   `).bind(now).all<ResearchRunRow>()
 
-  const reEnqueued: string[] = []
+  const reEnqueued: Array<{ runId: string; lane: ResearchLane }> = []
   for (const run of stale.results) {
     const deadline = new Date(run.created_at)
     deadline.setHours(deadline.getHours() + 6)
@@ -1031,7 +1039,10 @@ export async function reconcileStaleResearchRuns(db: D1Database, now: string): P
       SET status = 'queued', lease_until = NULL
       WHERE id = ?
     `).bind(run.id).run()
-    reEnqueued.push(run.id)
+    const nextLane = await getNextLaneToRun(db, run.id, now)
+    if (nextLane) {
+      reEnqueued.push({ runId: run.id, lane: nextLane })
+    }
   }
   return reEnqueued
 }

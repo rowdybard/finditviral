@@ -20,14 +20,20 @@ CREATE TABLE research_runs_new (
   error_code TEXT
 );
 
--- 2. Copy all existing rows
+-- 2. Copy all existing rows (including diagnostics_json)
 INSERT INTO research_runs_new (id, request_key, trigger_type, status, model, prompt_version,
   created_at, started_at, completed_at, lease_until, received_count, accepted_count,
-  duplicate_count, rejected_count, candidate_ids_json, evidence_json, error_code)
+  duplicate_count, rejected_count, candidate_ids_json, evidence_json, diagnostics_json, error_code)
 SELECT id, request_key, trigger_type, status, model, prompt_version,
   created_at, started_at, completed_at, lease_until, received_count, accepted_count,
-  duplicate_count, rejected_count, candidate_ids_json, evidence_json, error_code
+  duplicate_count, rejected_count, candidate_ids_json, evidence_json, diagnostics_json, error_code
 FROM research_runs;
+
+-- 2a. Terminal-fail any active legacy runs that won't have lane checkpoints
+UPDATE research_runs_new
+SET status = 'failed', completed_at = created_at, lease_until = NULL,
+    error_code = 'RESEARCH_MIGRATED_RESTART_REQUIRED'
+WHERE status IN ('queued', 'running');
 
 -- 3. Drop old index and table
 DROP INDEX IF EXISTS idx_research_runs_one_active;

@@ -2,10 +2,10 @@ import { env } from 'cloudflare:workers'
 import { createExecutionContext, createMessageBatch, getQueueResult } from 'cloudflare:test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { claimResearchRun, cancelResearchRun, getResearchRun, researchRunView, getLaneCheckpoints, createLaneCheckpoints, claimLaneCheckpoint, completeLaneCheckpoint, getLaneCheckpoint, reconcileStaleResearchRuns, releaseStaleLaneLeases, pauseResearchRun, resumeResearchRun, claimFinalize } from '../src/repository'
-import { enqueueResearchRun, executeResearchRun, finalizeResearchRun, recordResearchFailure, computeRetryDelay } from '../src/research'
+import { enqueueResearchRun, executeResearchRun, executeResearchLane, finalizeResearchRun, recordResearchFailure, computeRetryDelay } from '../src/research'
 import { researchRetryDelay } from '../src/queue'
 import worker from '../src/index'
-import type { OpenAiResearchMessage, TrendEngineQueueMessage } from '../src/domain'
+import type { OpenAiResearchMessage, ResearchLaneMessage, TrendEngineQueueMessage } from '../src/domain'
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
@@ -452,7 +452,8 @@ describe('stale-run reconciliation', () => {
 
     const now = new Date('2026-07-17T18:00:00.000Z')
     const reEnqueued = await reconcileStaleResearchRuns(env.DB, now.toISOString())
-    expect(reEnqueued).toContain(queued.run.id)
+    expect(reEnqueued.some((r) => r.runId === queued.run.id)).toBe(true)
+    expect(reEnqueued.find((r) => r.runId === queued.run.id)?.lane).toBe('social')
     const run = await getResearchRun(env.DB, queued.run.id)
     expect(run?.status).toBe('queued')
     await cancelIfActive(queued.run.id)
@@ -554,5 +555,190 @@ describe('lane progress in views', () => {
     const pendingLane = view.lanes.find((l) => l.lane === 'search_demand')
     expect(pendingLane?.status).toBe('pending')
     await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('429 recovery to finalization (end-to-end)', () => {
+  it('recovers from a 429, resumes, completes remaining lanes, and finalizes', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `e2e-429-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T19:00:00.000Z')
+
+    // First lane (social) gets a 429
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'x-ratelimit-reset-tokens': '1m0s' },
+    })))
+    const result1 = await executeResearchLane(env, queued.run.id, 'social', now)
+    expect(result1.outcome).toBe('replacement_scheduled')
+
+    const runAfterPause = await getResearchRun(env.DB, queued.run.id)
+    expect(runAfterPause?.status).toBe('paused_rate_limit')
+
+    const socialCp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(socialCp?.status).toBe('retry_wait')
+
+    // Replacement message arrives — social lane succeeds
+    const now2 = new Date('2026-07-17T19:02:00.000Z')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ])))
+    const result2 = await executeResearchLane(env, queued.run.id, 'social', now2)
+    expect(result2.outcome).toBe('completed')
+
+    const runAfterResume = await getResearchRun(env.DB, queued.run.id)
+    expect(runAfterResume?.status).not.toBe('paused_rate_limit')
+
+    // Complete remaining lanes
+    const now3 = new Date('2026-07-17T19:04:00.000Z')
+    for (const lane of ['search_demand', 'commerce', 'trend_media'] as const) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+        'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+        'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+      ])))
+      const r = await executeResearchLane(env, queued.run.id, lane, now3)
+      expect(r.outcome).toBe('completed')
+    }
+
+    // Finalize
+    const now4 = new Date('2026-07-17T19:06:00.000Z')
+    await finalizeResearchRun(env, queued.run.id, now4)
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('succeeded')
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('cross-lane distinct observations', () => {
+  it('produces distinct observation IDs for the same candidate across lanes', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `cross-lane-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T19:30:00.000Z')
+    const nowIso = now.toISOString()
+
+    await claimResearchRun(env.DB, queued.run.id, nowIso, new Date(now.getTime() + 60000).toISOString())
+
+    const urls = [
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(response(urls))))
+
+    await executeResearchLane(env, queued.run.id, 'social', now)
+    await executeResearchLane(env, queued.run.id, 'search_demand', now)
+
+    const checkpoints = await getLaneCheckpoints(env.DB, queued.run.id)
+    const socialRecords = JSON.parse(checkpoints.find((c) => c.lane === 'social')!.candidates_json) as Array<{ external_observation_id: string }>
+    const searchRecords = JSON.parse(checkpoints.find((c) => c.lane === 'search_demand')!.candidates_json) as Array<{ external_observation_id: string }>
+
+    if (socialRecords.length > 0 && searchRecords.length > 0) {
+      expect(socialRecords[0]!.external_observation_id).not.toBe(searchRecords[0]!.external_observation_id)
+    }
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('non-429 retryable failure acks original message', () => {
+  it('acks the queue message when a replacement is durably scheduled', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `no-double-retry-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T20:00:00.000Z')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Internal Server Error', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain', 'x-request-id': 'req_500' },
+    })))
+
+    const batch = createMessageBatch<ResearchLaneMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-500', timestamp: now, attempts: 1, body: { kind: 'research_lane', run_id: queued.run.id, lane: 'social' } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-500')
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('busy lane retries the queue message', () => {
+  it('retries when the lane is already claimed by another consumer', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `busy-retry-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T20:10:00.000Z')
+    const nowIso = now.toISOString()
+
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
+    await claimResearchRun(env.DB, queued.run.id, nowIso, leaseUntil)
+    await claimLaneCheckpoint(env.DB, queued.run.id, 'social', nowIso, leaseUntil)
+
+    const batch = createMessageBatch<ResearchLaneMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-busy-lane', timestamp: now, attempts: 1, body: { kind: 'research_lane', run_id: queued.run.id, lane: 'social' } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.retryMessages).toEqual(
+      expect.arrayContaining([expect.objectContaining({ msgId: 'msg-busy-lane' })]),
+    )
+    await cancelIfActive(queued.run.id)
+  })
+})
+
+describe('retry backoff increases with attempts', () => {
+  it('uses checkpoint attempts for computeRetryDelay', () => {
+    const delay1 = computeRetryDelay(undefined, 1)
+    const delay2 = computeRetryDelay(undefined, 2)
+    const delay3 = computeRetryDelay(undefined, 3)
+    expect(delay2).toBeGreaterThanOrEqual(delay1)
+    expect(delay3).toBeGreaterThanOrEqual(delay2)
+  })
+})
+
+describe('research_lane queue delivery', () => {
+  it('acknowledges a successful research_lane message', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-queue-success-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T20:20:00.000Z')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+      'https://www.reddit.com/r/deals/comments/galaxy-glow-mini-printer',
+      'https://www.target.com/p/galaxy-glow-mini-printer/-/A-1234',
+    ])))
+
+    const batch = createMessageBatch<ResearchLaneMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-lane-ok', timestamp: now, attempts: 1, body: { kind: 'research_lane', run_id: queued.run.id, lane: 'social' } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-lane-ok')
+    const cp = await getLaneCheckpoint(env.DB, queued.run.id, 'social')
+    expect(cp?.status).toBe('succeeded')
+    await cancelIfActive(queued.run.id)
+  })
+
+  it('acks and fails on a non-retryable lane error', async () => {
+    const queued = await enqueueResearchRun(env, { trigger: 'manual', requestKey: `lane-queue-auth-${crypto.randomUUID()}` })
+    const now = new Date('2026-07-17T20:25:00.000Z')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'x-request-id': 'req_test' },
+    })))
+
+    const batch = createMessageBatch<ResearchLaneMessage>(
+      'finditviral-trend-research',
+      [{ id: 'msg-lane-auth', timestamp: now, attempts: 1, body: { kind: 'research_lane', run_id: queued.run.id, lane: 'social' } }],
+    )
+    const ctx = createExecutionContext()
+    await worker.queue(batch, env)
+    const result = await getQueueResult(batch, ctx)
+
+    expect(result.explicitAcks).toContain('msg-lane-auth')
+    const run = await getResearchRun(env.DB, queued.run.id)
+    expect(run?.status).toBe('failed')
+    expect(run?.error_code).toBe('OPENAI_RESEARCH_AUTH_FAILED')
   })
 })

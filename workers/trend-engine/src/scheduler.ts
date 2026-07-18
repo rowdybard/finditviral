@@ -10,6 +10,7 @@ import {
   cleanupCronRuns,
   cleanupRetention,
   getPausedRunForResume,
+  getNextLaneToRun,
   reconcileStaleResearchRuns,
   releaseCronRun,
   releaseSourceClaims,
@@ -117,15 +118,17 @@ export async function processScheduledRun(
       // Release stale lane leases and reconcile stale runs before enqueuing new work.
       await releaseStaleLaneLeases(env.DB, now.toISOString())
       const reEnqueued = await reconcileStaleResearchRuns(env.DB, now.toISOString())
-      for (const runId of reEnqueued) {
-        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: runId, lane: 'social' })
+      for (const { runId, lane } of reEnqueued) {
+        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: runId, lane })
       }
 
       // Resume a paused run if any retry_wait lanes are ready.
       const pausedRun = await getPausedRunForResume(env.DB, now.toISOString())
       if (pausedRun) {
         await resumeResearchRun(env.DB, pausedRun.id)
-        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: pausedRun.id, lane: 'social' })
+        const nextLane = await getNextLaneToRun(env.DB, pausedRun.id, now.toISOString())
+        const lane = nextLane ?? 'social'
+        await env.RESEARCH_QUEUE.send({ kind: 'research_lane', run_id: pausedRun.id, lane })
         return { duplicate: false, queuedSources: 0, recomputedCandidates: 0, patchId: null, researchRunId: pausedRun.id }
       }
 

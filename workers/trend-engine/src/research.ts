@@ -12,17 +12,19 @@ import {
   deleteQueuedResearchRun,
   failLaneCheckpoint,
   failResearchRun,
+  getLaneCheckpoint,
   getLaneCheckpoints,
   getNextLaneToRun,
   getResearchRun,
   pauseResearchRun,
+  resumeResearchRunToRunning,
   setLaneRetryWait,
 } from './repository'
 import { parseViralSignalBatch } from './validation'
 
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
-const MAX_CANDIDATES = 12
+const MAX_CANDIDATES_PER_LANE = 3
 const MAX_OUTPUT_TOKENS = 2_000
 
 type JsonRecord = Record<string, unknown>
@@ -57,18 +59,36 @@ function rateLimitResetSeconds(value: string | null): number | undefined {
 }
 
 function providerRetryAfterSeconds(response: Response): number | undefined {
+  const retryAfterHeader = response.headers.get('retry-after')
   const resets = [
+    retryAfterHeader,
     response.headers.get('x-ratelimit-reset-tokens'),
     response.headers.get('x-ratelimit-reset-project-tokens'),
     response.headers.get('x-ratelimit-reset-requests'),
   ].flatMap((value) => {
+    if (!value) return []
+    // Retry-After can be seconds or HTTP-date
+    if (/^\d+$/.test(value.trim())) {
+      const seconds = Number(value.trim())
+      return seconds > 0 ? [seconds] : []
+    }
     const seconds = rateLimitResetSeconds(value)
     return seconds === undefined ? [] : [seconds]
   })
   return resets.length > 0 ? Math.max(...resets) : undefined
 }
 
-function openAiHttpFailure(response: Response): EngineError {
+function isBillingOrQuotaError(body: unknown): boolean {
+  if (!isRecord(body)) return false
+  const error = isRecord(body.error) ? body.error : null
+  if (!error || typeof error.type !== 'string') return false
+  const type = error.type.toLowerCase()
+  const code = typeof error.code === 'string' ? error.code.toLowerCase() : ''
+  return type.includes('insufficient_quota') || type.includes('billing') ||
+    code.includes('insufficient_quota') || code.includes('billing')
+}
+
+function openAiHttpFailure(response: Response, body: unknown): EngineError {
   const requestId = response.headers.get('x-request-id')
   const requestSuffix = requestId ? ` OpenAI request ID: ${requestId}.` : ''
   if (response.status === 401) {
@@ -81,6 +101,9 @@ function openAiHttpFailure(response: Response): EngineError {
     return new EngineError('OPENAI_RESEARCH_MODEL_UNAVAILABLE', `The configured OpenAI research model is unavailable to this API project.${requestSuffix}`, 502, false)
   }
   if (response.status === 429) {
+    if (isBillingOrQuotaError(body)) {
+      return new EngineError('OPENAI_RESEARCH_QUOTA_EXHAUSTED', `OpenAI billing quota exhausted. Check the API project billing configuration.${requestSuffix}`, 502, false)
+    }
     const retryAfterSeconds = providerRetryAfterSeconds(response)
     const retrySuffix = retryAfterSeconds ? ` Retrying after the provider reset window (about ${retryAfterSeconds}s).` : ''
     return new EngineError('OPENAI_RESEARCH_RATE_LIMITED', `OpenAI rate-limited the research request.${retrySuffix}${requestSuffix}`, 502, true, retryAfterSeconds)
@@ -221,7 +244,7 @@ function outputText(response: JsonRecord): string | null {
   return null
 }
 
-async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, now: Date): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }>; diagnostics: ResearchRunDiagnostics }> {
+async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, lane: ResearchLane, now: Date): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }>; diagnostics: ResearchRunDiagnostics }> {
   const text = outputText(response)
   if (!text) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response did not contain structured output.', 502, false)
   let parsed: unknown
@@ -230,7 +253,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
   } catch {
     throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research output was not valid JSON.', 502, false)
   }
-  const candidates = isRecord(parsed) && Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_CANDIDATES) : []
+  const candidates = isRecord(parsed) && Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_CANDIDATES_PER_LANE) : []
   const allowed = allowedCitationUrls(response)
   const records: ViralSignalV1[] = []
   const evidence: Array<{ candidate_id: string; urls: string[] }> = []
@@ -288,7 +311,8 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, no
     if (!name || !productUrl || !topicName || !signal || !type || typeof value !== 'number' || typeof confidence !== 'number') continue
     const brand = optionalString(candidate.brand, 100)
     const externalId = await stableId('research_candidate', `${name}\u0000${brand ?? ''}\u0000${productUrl}`)
-    const observationId = await stableId('research_observation', `${run.id}\u0000${externalId}`)
+    const evidenceHash = urls.slice().sort().join('\u0000')
+    const observationId = await stableId('research_observation', `${run.id}\u0000${externalId}\u0000${lane}\u0000${type}\u0000${evidenceHash}`)
     const candidateId = await stableId('candidate', brand
       ? `brand-name:${brand.toLocaleLowerCase('en-US')}\u0000${name.toLocaleLowerCase('en-US')}`
       : `source:${OPENAI_RESEARCH_SOURCE}\u0000${externalId}`)
@@ -359,7 +383,7 @@ function responseSchema(): JsonRecord {
     properties: {
       candidates: {
         type: 'array',
-        maxItems: MAX_CANDIDATES,
+        maxItems: MAX_CANDIDATES_PER_LANE,
         items: {
           type: 'object',
           additionalProperties: false,
@@ -386,25 +410,25 @@ const LANE_PROMPTS: Record<ResearchLane, string> = {
 
 Search TikTok product/hashtag discovery, X/Twitter discussions, Reddit communities, public Facebook/Instagram posts, and YouTube Shorts/creator coverage. Find products with growing social buzz that are actually buyable.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Treat social platforms as discovery signals, not proof by themselves. Never claim a platform was searched if no public result was available. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Treat social platforms as discovery signals, not proof by themselves. Never claim a platform was searched if no public result was available. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
 
   search_demand: `You are FindItViral's high-recall consumer-product scout focused on SEARCH DEMAND. Research newly viral, buyable products in the United States discovered through search interest data.
 
 Search Google Trends, Google Shopping, autocomplete-style query coverage, and breakout-search reporting. Find products with rising or breakout search interest that are actually buyable.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
 
   commerce: `You are FindItViral's high-recall consumer-product scout focused on COMMERCE. Research newly viral, buyable products in the United States discovered through retail and marketplace availability.
 
 Search brand launches plus retailer and marketplace availability (including major retail, specialty, resale, and creator storefronts). Find products with new or notable retail presence that also have viral momentum.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. A product page is catalog evidence, not virality evidence. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. A product page is catalog evidence, not virality evidence. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
 
   trend_media: `You are FindItViral's high-recall consumer-product scout focused on TREND CONFIRMATION. Research newly viral, buyable products in the United States discovered through trend publications and media coverage.
 
 Search consumer trend publications, deal/community sites, trade coverage, and local or niche communities that corroborate emerging demand. Verify whether claims are genuinely current rather than old reposts, rumors, or a single creator's ad.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
 }
 
 async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<JsonRecord> {
@@ -426,7 +450,7 @@ async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<JsonRecord>
     }),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw openAiHttpFailure(response)
+  if (!response.ok) throw openAiHttpFailure(response, body)
   if (!isRecord(body)) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response was not a JSON object.', 502, false)
   return body
 }
@@ -470,22 +494,33 @@ export async function enqueueNextLane(env: Env, runId: string, now = new Date())
   }
 }
 
-export async function executeResearchLane(env: Env, runId: string, lane: ResearchLane, now = new Date()): Promise<void> {
+export type LaneExecutionResult =
+  | { outcome: 'completed' }
+  | { outcome: 'replacement_scheduled' }
+  | { outcome: 'busy' }
+
+export async function executeResearchLane(env: Env, runId: string, lane: ResearchLane, now = new Date()): Promise<LaneExecutionResult> {
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'Research run does not exist.', 404, false)
-  if (run.status === 'failed' || run.status === 'succeeded') return
+  if (run.status === 'failed' || run.status === 'succeeded') return { outcome: 'completed' }
 
   const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString()
   const claim = await claimLaneCheckpoint(env.DB, runId, lane, now.toISOString(), leaseUntil)
   if (claim === 'completed') {
     await enqueueNextLane(env, runId, now)
-    return
+    return { outcome: 'completed' }
   }
-  if (claim === 'busy') return
+  if (claim === 'busy') return { outcome: 'busy' }
+
+  // Transition run from paused_rate_limit/queued back to running now that we have a lane claim.
+  await resumeResearchRunToRunning(env.DB, runId, now.toISOString(), leaseUntil)
+
+  const checkpoint = await getLaneCheckpoint(env.DB, runId, lane)
+  const attempts = checkpoint?.attempts ?? 0
 
   try {
     const response = await callOpenAiLane(env, lane)
-    const research = await recordsFromResponse(response, run, now)
+    const research = await recordsFromResponse(response, run, lane, now)
     const requestId = response.id as string | undefined ?? null
     const usage = response.usage as Record<string, unknown> | undefined ?? {}
     await completeLaneCheckpoint(env.DB, runId, lane, {
@@ -498,9 +533,10 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
       now: now.toISOString(),
     })
     await enqueueNextLane(env, runId, now)
+    return { outcome: 'completed' }
   } catch (error) {
     if (error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED') {
-      const delay = computeRetryDelay(error.retryAfterSeconds, 1)
+      const delay = computeRetryDelay(error.retryAfterSeconds, attempts + 1)
       const nextRetryAt = new Date(now.getTime() + delay * 1000).toISOString()
       const rateLimitDiag = JSON.stringify({
         retry_after_seconds: error.retryAfterSeconds,
@@ -513,21 +549,21 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
         { kind: 'research_lane', run_id: runId, lane },
         { delaySeconds: delay },
       )
-    } else {
-      const retryable = !(error instanceof EngineError) || error.retryable
-      if (retryable) {
-        const delay = computeRetryDelay(undefined, 1)
-        const nextRetryAt = new Date(now.getTime() + delay * 1000).toISOString()
-        await setLaneRetryWait(env.DB, runId, lane, nextRetryAt, '{}', now.toISOString())
-        await env.RESEARCH_QUEUE.send(
-          { kind: 'research_lane', run_id: runId, lane },
-          { delaySeconds: delay },
-        )
-      } else {
-        await failLaneCheckpoint(env.DB, runId, lane, errorCode(error), now.toISOString())
-        await failResearchRun(env.DB, runId, errorCode(error), now.toISOString(), false)
-      }
+      return { outcome: 'replacement_scheduled' }
     }
+    const retryable = !(error instanceof EngineError) || error.retryable
+    if (retryable) {
+      const delay = computeRetryDelay(undefined, attempts + 1)
+      const nextRetryAt = new Date(now.getTime() + delay * 1000).toISOString()
+      await setLaneRetryWait(env.DB, runId, lane, nextRetryAt, '{}', now.toISOString())
+      await env.RESEARCH_QUEUE.send(
+        { kind: 'research_lane', run_id: runId, lane },
+        { delaySeconds: delay },
+      )
+      return { outcome: 'replacement_scheduled' }
+    }
+    await failLaneCheckpoint(env.DB, runId, lane, errorCode(error), now.toISOString())
+    await failResearchRun(env.DB, runId, errorCode(error), now.toISOString(), false)
     throw error
   }
 }
@@ -596,7 +632,7 @@ export async function executeResearchRun(env: Env, runId: string, now = new Date
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'Research run does not exist.', 404, false)
   const response = await callOpenAiLane(env, 'social')
-  const research = await recordsFromResponse(response, run, now)
+  const research = await recordsFromResponse(response, run, 'social', now)
   const ingestion = { received: 0, accepted: 0, duplicates: 0, candidateIds: [] as string[] }
   for (let index = 0; index < research.records.length; index += 4) {
     const current = await getResearchRun(env.DB, runId)

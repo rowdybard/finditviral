@@ -62,23 +62,21 @@ export async function processSourceQueue(batch: MessageBatch<TrendEngineQueueMes
       const now = new Date()
       const lane = message.body.lane as ResearchLane
       try {
-        await executeResearchLane(env, message.body.run_id, lane, now)
-        logEvent('info', 'research_lane_completed', { message_id: message.id, run_id: message.body.run_id, lane })
-        message.ack()
-      } catch (error) {
- const retryable = !(error instanceof EngineError) || error.retryable
-        if (error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED') {
-          logEvent('info', 'research_lane_rate_limited', { message_id: message.id, run_id: message.body.run_id, lane, retry_after_seconds: error.retryAfterSeconds ?? null })
-        } else {
-          logError('research_lane_failed', error, { message_id: message.id, run_id: message.body.run_id, lane, retryable })
-        }
-        // Application-managed replacement messages handle 429s and retryable errors.
-        // message.retry() is only for infra failures (non-EngineError).
-        if (retryable && !(error instanceof EngineError && error.code === 'OPENAI_RESEARCH_RATE_LIMITED')) {
-          message.retry({ delaySeconds: 30 })
-        } else {
+        const result = await executeResearchLane(env, message.body.run_id, lane, now)
+        if (result.outcome === 'completed') {
+          logEvent('info', 'research_lane_completed', { message_id: message.id, run_id: message.body.run_id, lane })
           message.ack()
+        } else if (result.outcome === 'replacement_scheduled') {
+          logEvent('info', 'research_lane_replacement_scheduled', { message_id: message.id, run_id: message.body.run_id, lane })
+          message.ack()
+        } else if (result.outcome === 'busy') {
+          message.retry({ delaySeconds: 60 })
         }
+      } catch (error) {
+        const retryable = !(error instanceof EngineError) || error.retryable
+        logError('research_lane_failed', error, { message_id: message.id, run_id: message.body.run_id, lane, retryable })
+        if (retryable) message.retry({ delaySeconds: 30 })
+        else message.ack()
       }
       continue
     }
