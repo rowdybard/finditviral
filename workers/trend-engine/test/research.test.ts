@@ -69,8 +69,7 @@ describe('OpenAI research', () => {
     }
     expect(requestBody).toMatchObject({
       model: 'gpt-5.6-luna',
-      max_output_tokens: 1_600,
-      max_tool_calls: 3,
+      max_output_tokens: 2_000,
       include: ['web_search_call.action.sources'],
       reasoning: { effort: 'medium' },
       tools: [{ type: 'web_search', search_context_size: 'low' }],
@@ -162,8 +161,7 @@ describe('OpenAI research', () => {
     await executeResearchRun(env, queued.run.id, now)
     const requestBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)
     expect(requestBody.tools).toEqual([{ type: 'web_search', search_context_size: 'low' }])
-    expect(requestBody.max_output_tokens).toBe(1_600)
-    expect(requestBody.max_tool_calls).toBe(3)
+    expect(requestBody.max_output_tokens).toBe(2_000)
     expect(requestBody.reasoning).toEqual({ effort: 'medium' })
     await cancelIfActive(queued.run.id)
   })

@@ -291,3 +291,24 @@ export async function listChanges(after?: number, limit?: number): Promise<{ cha
   if (limit !== undefined) qs.set('limit', String(limit))
   return engineFetch(`/v1/changes?${qs.toString()}`)
 }
+
+export interface EngineSettings {
+  max_output_tokens: number
+  max_candidates_per_lane: number
+  search_context_size: 'low' | 'medium' | 'high'
+  reasoning_effort: 'low' | 'medium' | 'high'
+  updated_at: string
+}
+
+export async function getEngineSettings(): Promise<EngineSettings> {
+  const data = await engineFetch<{ settings: EngineSettings }>('/v1/engine/settings')
+  return data.settings
+}
+
+export async function updateEngineSettings(input: Omit<EngineSettings, 'updated_at'>): Promise<EngineSettings> {
+  const data = await engineFetch<{ settings: EngineSettings }>('/v1/engine/settings', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+  return data.settings
+}

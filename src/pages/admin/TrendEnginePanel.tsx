@@ -5,6 +5,7 @@ import {
   createSource,
   generatePatch,
   getEngineHealth,
+  getEngineSettings,
   listCandidates,
   listChanges,
   listResearchRuns,
@@ -13,19 +14,21 @@ import {
   reviewCandidate,
   researchRunErrorMessage,
   startResearchRun,
+  updateEngineSettings,
   type CandidateState,
   type EngineCandidate,
   type EngineChange,
   type EngineHealth,
   type EnginePatch,
   type EngineResearchRun,
+  type EngineSettings,
   type EngineSource,
   type ReviewStatus,
   type SourceCreateInput,
   type SourceKind,
 } from '../../lib/trendEngine'
 
-type SubTab = 'sources' | 'research' | 'candidates' | 'patches' | 'changes'
+type SubTab = 'sources' | 'research' | 'candidates' | 'patches' | 'changes' | 'settings'
 
 const STATE_COLORS: Record<CandidateState, string> = {
   candidate: 'bg-stone-100 text-stone-700',
@@ -78,6 +81,7 @@ export default function TrendEnginePanel() {
     { id: 'candidates', label: 'Candidates' },
     { id: 'patches', label: 'Patches' },
     { id: 'changes', label: 'Changes' },
+    { id: 'settings', label: 'Settings' },
   ]
 
   return (
@@ -124,6 +128,7 @@ export default function TrendEnginePanel() {
       {subTab === 'candidates' && <CandidatesTab />}
       {subTab === 'patches' && <PatchesTab />}
       {subTab === 'changes' && <ChangesTab />}
+      {subTab === 'settings' && <SettingsTab />}
     </section>
   )
 }
@@ -613,6 +618,132 @@ function ChangesTab() {
           {loading && <div className="flex justify-center py-4"><Spinner /></div>}
         </div>
       )}
+    </div>
+  )
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState<EngineSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setSettings(await getEngineSettings())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  async function handleSave() {
+    if (!settings) return
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const updated = await updateEngineSettings({
+        max_output_tokens: settings.max_output_tokens,
+        max_candidates_per_lane: settings.max_candidates_per_lane,
+        search_context_size: settings.search_context_size,
+        reasoning_effort: settings.reasoning_effort,
+      })
+      setSettings(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Spinner /></div>
+  if (!settings) return <p className="card text-sm text-stone-600">Failed to load settings.</p>
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-stone-900">Engine settings</h3>
+        <button type="button" className="btn-primary" disabled={saving} onClick={() => void handleSave()}>
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save settings'}
+        </button>
+      </div>
+      {error && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+      <div className="card space-y-4">
+        <div>
+          <label className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-stone-700">Max output tokens</span>
+              <span className="text-sm font-mono text-stone-500">{settings.max_output_tokens}</span>
+            </div>
+            <input
+              type="range"
+              min={800}
+              max={4000}
+              step={100}
+              value={settings.max_output_tokens}
+              onChange={(e) => setSettings((s) => s ? { ...s, max_output_tokens: Number(e.target.value) } : s)}
+              className="w-full accent-brand-600"
+            />
+            <p className="text-xs text-stone-500">Token budget for each OpenAI response. Too low and the model runs out before producing structured JSON output.</p>
+          </label>
+        </div>
+        <div>
+          <label className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-stone-700">Max candidates per lane</span>
+              <span className="text-sm font-mono text-stone-500">{settings.max_candidates_per_lane}</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={settings.max_candidates_per_lane}
+              onChange={(e) => setSettings((s) => s ? { ...s, max_candidates_per_lane: Number(e.target.value) } : s)}
+              className="w-full accent-brand-600"
+            />
+            <p className="text-xs text-stone-500">Number of product candidates the model returns per research lane. 4 lanes × this value = total candidates per run.</p>
+          </label>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-sm font-bold text-stone-700">Search context size</span>
+            <select
+              className="input min-h-11"
+              value={settings.search_context_size}
+              onChange={(e) => setSettings((s) => s ? { ...s, search_context_size: e.target.value as 'low' | 'medium' | 'high' } : s)}
+            >
+              <option value="low">Low (fewer input tokens)</option>
+              <option value="medium">Medium</option>
+              <option value="high">High (more context, more tokens)</option>
+            </select>
+            <p className="text-xs text-stone-500">Controls how much web search context is supplied to the model. Lower = fewer tokens.</p>
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm font-bold text-stone-700">Reasoning effort</span>
+            <select
+              className="input min-h-11"
+              value={settings.reasoning_effort}
+              onChange={(e) => setSettings((s) => s ? { ...s, reasoning_effort: e.target.value as 'low' | 'medium' | 'high' } : s)}
+            >
+              <option value="low">Low (fewer output tokens)</option>
+              <option value="medium">Medium</option>
+              <option value="high">High (deeper reasoning, more tokens)</option>
+            </select>
+            <p className="text-xs text-stone-500">Controls how much reasoning the model does before producing output. Lower = fewer tokens.</p>
+          </label>
+        </div>
+        <p className="text-xs text-stone-400">Last updated: {new Date(settings.updated_at).toLocaleString()}</p>
+      </div>
     </div>
   )
 }

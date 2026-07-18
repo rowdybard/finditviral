@@ -12,6 +12,7 @@ import {
   deleteQueuedResearchRun,
   failLaneCheckpoint,
   failResearchRun,
+  getEngineSettings,
   getLaneCheckpoint,
   getLaneCheckpoints,
   getNextLaneToRun,
@@ -19,13 +20,20 @@ import {
   pauseResearchRun,
   resumeResearchRunToRunning,
   setLaneRetryWait,
+  type EngineSettingsRow,
 } from './repository'
 import { parseViralSignalBatch } from './validation'
 
 export const OPENAI_RESEARCH_SOURCE = 'openai-research'
 export const OPENAI_RESEARCH_PROMPT_VERSION = 'consumer-products-v2'
-const MAX_CANDIDATES_PER_LANE = 2
-const MAX_OUTPUT_TOKENS = 1_600
+
+const DEFAULT_SETTINGS: EngineSettingsRow = {
+  max_output_tokens: 2000,
+  max_candidates_per_lane: 2,
+  search_context_size: 'low',
+  reasoning_effort: 'medium',
+  updated_at: '1970-01-01T00:00:00.000Z',
+}
 
 type JsonRecord = Record<string, unknown>
 type ResearchDiscoveryLane = 'social' | 'search demand' | 'commerce' | 'trend media'
@@ -245,7 +253,7 @@ function outputText(response: JsonRecord): string | null {
   return null
 }
 
-async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, lane: ResearchLane, now: Date): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }>; diagnostics: ResearchRunDiagnostics }> {
+async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, lane: ResearchLane, now: Date, maxCandidates: number): Promise<{ records: ViralSignalV1[]; rejected: number; evidence: Array<{ candidate_id: string; urls: string[] }>; diagnostics: ResearchRunDiagnostics }> {
   const text = outputText(response)
   if (!text) throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research response did not contain structured output.', 502, false)
   let parsed: unknown
@@ -254,7 +262,7 @@ async function recordsFromResponse(response: JsonRecord, run: ResearchRunRow, la
   } catch {
     throw new EngineError('OPENAI_RESEARCH_INVALID_RESPONSE', 'OpenAI research output was not valid JSON.', 502, false)
   }
-  const candidates = isRecord(parsed) && Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_CANDIDATES_PER_LANE) : []
+  const candidates = isRecord(parsed) && Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, maxCandidates) : []
   const allowed = allowedCitationUrls(response)
   const records: ViralSignalV1[] = []
   const evidence: Array<{ candidate_id: string; urls: string[] }> = []
@@ -384,7 +392,7 @@ function responseSchema(): JsonRecord {
     properties: {
       candidates: {
         type: 'array',
-        maxItems: MAX_CANDIDATES_PER_LANE,
+        maxItems: DEFAULT_SETTINGS.max_candidates_per_lane,
         items: {
           type: 'object',
           additionalProperties: false,
@@ -406,30 +414,34 @@ function responseSchema(): JsonRecord {
   }
 }
 
-const LANE_PROMPTS: Record<ResearchLane, string> = {
+const LANE_PROMPT_TEMPLATES: Record<ResearchLane, string> = {
   social: `You are FindItViral's high-recall consumer-product scout focused on SOCIAL CONVERSATION. Research newly viral, buyable products in the United States discovered through social platforms.
 
 Search TikTok product/hashtag discovery, X/Twitter discussions, Reddit communities, public Facebook/Instagram posts, and YouTube Shorts/creator coverage. Find products with growing social buzz that are actually buyable.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Treat social platforms as discovery signals, not proof by themselves. Never claim a platform was searched if no public result was available. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Treat social platforms as discovery signals, not proof by themselves. Never claim a platform was searched if no public result was available. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to {MAX} candidates.`,
 
   search_demand: `You are FindItViral's high-recall consumer-product scout focused on SEARCH DEMAND. Research newly viral, buyable products in the United States discovered through search interest data.
 
 Search Google Trends, Google Shopping, autocomplete-style query coverage, and breakout-search reporting. Find products with rising or breakout search interest that are actually buyable.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to {MAX} candidates.`,
 
   commerce: `You are FindItViral's high-recall consumer-product scout focused on COMMERCE. Research newly viral, buyable products in the United States discovered through retail and marketplace availability.
 
 Search brand launches plus retailer and marketplace availability (including major retail, specialty, resale, and creator storefronts). Find products with new or notable retail presence that also have viral momentum.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. A product page is catalog evidence, not virality evidence. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. A product page is catalog evidence, not virality evidence. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to {MAX} candidates.`,
 
   trend_media: `You are FindItViral's high-recall consumer-product scout focused on TREND CONFIRMATION. Research newly viral, buyable products in the United States discovered through trend publications and media coverage.
 
 Search consumer trend publications, deal/community sites, trade coverage, and local or niche communities that corroborate emerging demand. Verify whether claims are genuinely current rather than old reposts, rumors, or a single creator's ad.
 
-Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to ${MAX_CANDIDATES_PER_LANE} candidates.`,
+Return only product-specific candidates with a real official or retailer product URL and exactly two distinct current HTTPS evidence URLs from different domains. Label each cited page as brand_owned, founder_owned, press_release, retailer_listing, independent_editorial, independent_social, or consumer_activity. Explain why it was discovered and explicitly list missing validation. Do not invent metrics, citations, availability, or viral claims. Keep confidence conservative and return up to {MAX} candidates.`,
+}
+
+function lanePrompt(lane: ResearchLane, maxCandidates: number): string {
+  return LANE_PROMPT_TEMPLATES[lane].replace('{MAX}', String(maxCandidates))
 }
 
 type OpenAiRateLimits = {
@@ -481,7 +493,7 @@ type OpenAiLaneResult = {
   rateLimits: OpenAiRateLimits
 }
 
-async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<OpenAiLaneResult> {
+async function callOpenAiLane(env: Env, lane: ResearchLane, settings: EngineSettingsRow): Promise<OpenAiLaneResult> {
   if (!env.OPENAI_API_KEY || env.OPENAI_API_KEY.length < 20) {
     throw new EngineError('OPENAI_RESEARCH_NOT_CONFIGURED', 'OPENAI_API_KEY is missing or invalid.', 500, false)
   }
@@ -490,13 +502,12 @@ async function callOpenAiLane(env: Env, lane: ResearchLane): Promise<OpenAiLaneR
     headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: configuredModel(env),
-      max_output_tokens: MAX_OUTPUT_TOKENS,
-      max_tool_calls: 3,
-      reasoning: { effort: 'medium' },
-      tools: [{ type: 'web_search', search_context_size: 'low' }],
+      max_output_tokens: settings.max_output_tokens,
+      reasoning: { effort: settings.reasoning_effort as 'low' | 'medium' | 'high' },
+      tools: [{ type: 'web_search', search_context_size: settings.search_context_size as 'low' | 'medium' | 'high' }],
       tool_choice: 'required',
       include: ['web_search_call.action.sources'],
-      input: LANE_PROMPTS[lane],
+      input: lanePrompt(lane, settings.max_candidates_per_lane),
       text: { format: { type: 'json_schema', name: 'viral_research_candidates', strict: true, schema: responseSchema() } },
     }),
   })
@@ -621,9 +632,10 @@ export async function executeResearchLane(env: Env, runId: string, lane: Researc
   const attempts = checkpoint?.attempts ?? 0
 
   try {
-    const openAiResult = await callOpenAiLane(env, lane)
+    const settings = await getEngineSettings(env.DB)
+    const openAiResult = await callOpenAiLane(env, lane, settings)
     const response = openAiResult.body
-    const research = await recordsFromResponse(response, run, lane, now)
+    const research = await recordsFromResponse(response, run, lane, now, settings.max_candidates_per_lane)
     const requestId = response.id as string | undefined ?? null
     const usage = response.usage as Record<string, unknown> | undefined ?? {}
     await completeLaneCheckpoint(env.DB, runId, lane, {
@@ -737,8 +749,9 @@ export async function finalizeResearchRun(env: Env, runId: string, now = new Dat
 export async function executeResearchRun(env: Env, runId: string, now = new Date()): Promise<void> {
   const run = await getResearchRun(env.DB, runId)
   if (!run) throw new EngineError('RESEARCH_RUN_NOT_FOUND', 'Research run does not exist.', 404, false)
-  const openAiResult = await callOpenAiLane(env, 'social')
-  const research = await recordsFromResponse(openAiResult.body, run, 'social', now)
+  const settings = await getEngineSettings(env.DB)
+  const openAiResult = await callOpenAiLane(env, 'social', settings)
+  const research = await recordsFromResponse(openAiResult.body, run, 'social', now, settings.max_candidates_per_lane)
   const ingestion = { received: 0, accepted: 0, duplicates: 0, candidateIds: [] as string[] }
   for (let index = 0; index < research.records.length; index += 4) {
     const current = await getResearchRun(env.DB, runId)

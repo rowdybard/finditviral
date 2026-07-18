@@ -23,6 +23,7 @@ import {
   getCandidate,
   listCandidates,
   listChanges,
+  getEngineSettings,
   getResearchRun,
   cancelResearchRun,
   getLaneCheckpoints,
@@ -31,6 +32,7 @@ import {
   resumeResearchRun,
   listSources,
   saveReviewDecision,
+  updateEngineSettings,
   upsertSource,
 } from './repository'
 import { enqueueResearchRun } from './research'
@@ -401,6 +403,36 @@ async function handleResearchRunDetail(request: Request, env: Env, runId: string
   return json({ run: researchRunView(run, checkpoints) })
 }
 
+async function handleEngineSettings(request: Request, env: Env): Promise<Response> {
+  await authorize(request, env, 'admin')
+  if (request.method === 'GET') {
+    const settings = await getEngineSettings(env.DB)
+    return json({ settings })
+  }
+  if (request.method === 'PUT') {
+    const body = await readJson(request)
+    if (!isRecord(body)) throw new EngineError('JSON_INVALID', 'Request body must be a JSON object.', 400)
+    const maxOutputTokens = boundedInteger(String(body.max_output_tokens ?? ''), 2000, 800, 4000)
+    const maxCandidatesPerLane = boundedInteger(String(body.max_candidates_per_lane ?? ''), 2, 1, 5)
+    const searchContextSize = body.search_context_size
+    if (searchContextSize !== 'low' && searchContextSize !== 'medium' && searchContextSize !== 'high') {
+      throw new EngineError('VALIDATION_ERROR', 'search_context_size must be low, medium, or high.', 400)
+    }
+    const reasoningEffort = body.reasoning_effort
+    if (reasoningEffort !== 'low' && reasoningEffort !== 'medium' && reasoningEffort !== 'high') {
+      throw new EngineError('VALIDATION_ERROR', 'reasoning_effort must be low, medium, or high.', 400)
+    }
+    const settings = await updateEngineSettings(env.DB, {
+      max_output_tokens: maxOutputTokens,
+      max_candidates_per_lane: maxCandidatesPerLane,
+      search_context_size: searchContextSize,
+      reasoning_effort: reasoningEffort,
+    }, new Date().toISOString())
+    return json({ settings })
+  }
+  throw new EngineError('METHOD_NOT_ALLOWED', 'Method not allowed.', 405)
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   if (request.method === 'OPTIONS') {
@@ -419,6 +451,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/v1/changes') return handleChanges(request, env, url)
   if (url.pathname === '/v1/recompute') return handleRecompute(request, env)
   if (url.pathname === '/v1/research/runs') return handleResearchRuns(request, env, url)
+  if (url.pathname === '/v1/engine/settings') return handleEngineSettings(request, env)
 
   const reviewMatch = url.pathname.match(/^\/v1\/candidates\/([^/]+)\/review$/)
   if (reviewMatch?.[1]) return handleCandidateReview(request, env, decodeURIComponent(reviewMatch[1]))

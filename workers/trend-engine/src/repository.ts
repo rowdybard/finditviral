@@ -1046,3 +1046,34 @@ export async function reconcileStaleResearchRuns(db: D1Database, now: string): P
   }
   return reEnqueued
 }
+
+export interface EngineSettingsRow {
+  max_output_tokens: number
+  max_candidates_per_lane: number
+  search_context_size: string
+  reasoning_effort: string
+  updated_at: string
+}
+
+export async function getEngineSettings(db: D1Database): Promise<EngineSettingsRow> {
+  const row = await db.prepare('SELECT max_output_tokens, max_candidates_per_lane, search_context_size, reasoning_effort, updated_at FROM engine_settings WHERE id = 1').first<EngineSettingsRow>()
+  if (!row) {
+    return { max_output_tokens: 2000, max_candidates_per_lane: 2, search_context_size: 'low', reasoning_effort: 'medium', updated_at: '1970-01-01T00:00:00.000Z' }
+  }
+  return row
+}
+
+export async function updateEngineSettings(db: D1Database, input: { max_output_tokens: number; max_candidates_per_lane: number; search_context_size: string; reasoning_effort: string }, now: string): Promise<EngineSettingsRow> {
+  await db.prepare(`
+    UPDATE engine_settings
+    SET max_output_tokens = ?, max_candidates_per_lane = ?, search_context_size = ?, reasoning_effort = ?, updated_at = ?
+    WHERE id = 1
+  `).bind(
+    input.max_output_tokens,
+    input.max_candidates_per_lane,
+    input.search_context_size,
+    input.reasoning_effort,
+    now,
+  ).run()
+  return getEngineSettings(db)
+}
