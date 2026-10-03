@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "build": "node scripts/build-retired-site.mjs",
+    "preview": "vite preview --mode development",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run test && npm run build",
+    "check": "npm run build && node scripts/verify-retired-site.mjs",
     "check:worker": "tsc --noEmit --project workers/interest-digest/tsconfig.json",
     "test:worker": "vitest run --root workers/interest-digest",
     "check:content-moderator": "tsc --noEmit --project workers/content-moderator/tsconfig.json",
@@ -21,10 +21,10 @@
     "types:trend-engine": "wrangler types workers/trend-engine/worker-configuration.d.ts --config workers/trend-engine/wrangler.jsonc --env-file workers/trend-engine/.dev.vars.example",
     "migrate:trend-engine:local": "wrangler d1 migrations apply finditviral-trend-engine --local --config workers/trend-engine/wrangler.jsonc",
     "dev:trend-engine": "wrangler dev --local --test-scheduled --config workers/trend-engine/wrangler.jsonc",
-    "check:all": "npm run lint && npm test && npm run build && npm run check:worker && npm run test:worker && npm run check:content-moderator && npm run test:content-moderator && npm run types:content-moderator -- --check && npm run types:trend-engine -- --check && npm run check:trend-engine && npm run test:trend-engine",
-    "smoke": "node scripts/verify-production.mjs",
-    "smoke:web": "node scripts/verify-production.mjs --web-only",
-    "deploy": "npm run build && wrangler pages deploy ./dist --project-name finditviral --branch main"
+    "check:all": "npm run check && wrangler deploy --dry-run --config workers/interest-digest/wrangler.jsonc && wrangler deploy --dry-run --config workers/content-moderator/wrangler.jsonc && wrangler deploy --dry-run --config workers/trend-engine/wrangler.jsonc",
+    "smoke": "node scripts/verify-retired-site.mjs --remote",
+    "smoke:web": "node scripts/verify-retired-site.mjs --remote",
+    "deploy": "npm run check && wrangler pages deploy ./dist --project-name finditviral --branch main"
   },
   "dependencies": {
     "@fontsource-variable/space-grotesk": "^5.2.10",

@@ -1,73 +1,11 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "finditviral-trend-engine",
-  "main": "src/index.ts",
+  "main": "../retired.ts",
   "compatibility_date": "2026-07-16",
-  "compatibility_flags": ["nodejs_compat"],
-  "vars": {
-    "ENVIRONMENT": "production",
-    "AUTOPILOT_MODE": "shadow",
-    "SOURCE_HOST_ALLOWLIST": "",
-    "OPENAI_RESEARCH_MODEL": "gpt-5.6-luna"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "finditviral-trend-engine",
-      "database_id": "0467a04f-78f9-4ad1-a227-2997689ff822",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "queues": {
-    "producers": [
-      {
-        "binding": "SOURCE_QUEUE",
-        "queue": "finditviral-trend-source-polls"
-      },
-      {
-        "binding": "RESEARCH_QUEUE",
-        "queue": "finditviral-trend-research"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "finditviral-trend-source-polls",
-        "max_batch_size": 1,
-        "max_batch_timeout": 5,
-        "max_retries": 5,
-        "retry_delay": 60,
-        "dead_letter_queue": "finditviral-trend-source-polls-dlq"
-      },
-      {
-        "queue": "finditviral-trend-research",
-        "max_batch_size": 1,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
-        "retry_delay": 300,
-        "max_concurrency": 1,
-        "dead_letter_queue": "finditviral-trend-research-dlq"
-      },
-      {
-        "queue": "finditviral-trend-research-dlq",
-        "max_batch_size": 1,
-        "max_batch_timeout": 5,
-        "max_retries": 1
-      }
-    ]
-  },
+  "workers_dev": false,
+  "preview_urls": false,
   "triggers": {
-    "crons": ["*/5 * * * *", "8 * * * *", "17 */4 * * *"]
-  },
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-      "invocation_logs": true
-    },
-    "traces": {
-      "enabled": true,
-      "head_sampling_rate": 0.1
-    }
+    "crons": []
   }
 }

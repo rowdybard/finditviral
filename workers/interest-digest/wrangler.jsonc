@@ -1,35 +1,11 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "finditviral-interest-digest",
-  "main": "src/index.ts",
+  "main": "../retired.ts",
   "compatibility_date": "2026-07-13",
-  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
+  "preview_urls": false,
   "triggers": {
-    "crons": ["0 * * * *"]
-  },
-  "vars": {
-    "SUPABASE_URL": "https://hsrfyiazliydrpgtwwul.supabase.co",
-    "DIGEST_FROM_EMAIL": "digest@finditviral.com",
-    "DIGEST_FROM_NAME": "FindItViral"
-  },
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "allowed_sender_addresses": ["digest@finditviral.com"],
-      "allowed_destination_addresses": ["owner@finditviral.com"]
-    }
-  ],
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-      "invocation_logs": true
-    },
-    "traces": {
-      "enabled": true,
-      "head_sampling_rate": 1
-    }
+    "crons": []
   }
 }

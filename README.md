@@ -1,5 +1,16 @@
 # FindItViral
 
+**Retired:** FindItViral has closed. Production builds now publish a static
+closure page with a purchase inquiry link for `finditviral.com` to
+`contact@finditviral.com`. The three background services have no schedules,
+queue consumers, or public worker URLs in their retirement configurations.
+See [retirement details](docs/retirement.md).
+
+Run `npm run check` to build and verify the static retirement page. Deploy it
+through the existing Cloudflare Pages Git integration or `npm run deploy`.
+The application setup and worker instructions below are preserved as historical
+reference; the old application and its background jobs should remain offline.
+
 FindItViral is an open beta for Greater Lansing shoppers to find and report viral, limited, and hard-to-find retail products. Members can post bounties, report sightings, and browse a verified store directory. The public landing page accepts early-access waitlist submissions.
 
 ## Stack

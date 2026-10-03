@@ -9,82 +9,20 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  retirement:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
-      VITE_SUPABASE_ANON_KEY: ci-publishable-key
-      VITE_TURNSTILE_SITE_KEY: 0x4AAAAAAD2z_wAcZ0_FypRg
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-      - name: npm audit (high severity)
-        run: npm audit --audit-level=high
+      - name: Verify static retirement page and inert worker bundles
+        run: npm run check:all
       - name: Gitleaks secret scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
-
-  database:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.107.0
-      - run: supabase start
-      - run: supabase db reset
-      - run: supabase db lint --local --schema public --level warning --fail-on error
-      - run: supabase test db
-      - name: Reapply migrations from a clean database
-        run: supabase db reset
-      - name: Stop local Supabase
-        if: always()
-        run: supabase stop --no-backup
-
-  workers:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run check:worker
-      - run: npm run test:worker
-      - run: npm run types:content-moderator -- --check
-      - run: npm run check:content-moderator
-      - run: npm run test:content-moderator
-      - run: npm run types:trend-engine -- --check
-      - run: npm run check:trend-engine
-      - run: npm run test:trend-engine
-      - run: npx wrangler deploy --dry-run --config workers/interest-digest/wrangler.jsonc
-      - run: npx wrangler deploy --dry-run --config workers/content-moderator/wrangler.jsonc
-      - run: npx wrangler deploy --dry-run --config workers/trend-engine/wrangler.jsonc
-
-  browser:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
