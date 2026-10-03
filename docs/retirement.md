@@ -3,6 +3,12 @@
 FindItViral has closed. The public site provides a closure message and a domain
 purchase link to `mailto:contact@finditviral.com?subject=Purchase%20finditviral.com`.
 
+The Pages deployment contains only static HTML and a catch-all redirect file;
+it includes no Pages Worker or application bundle. Both purchase links are
+wrapped in Cloudflare's `email_off` comments so they work without a decode
+script. Web Analytics was disabled for the domain and Pages project. Existing
+Cloudflare security protections remain in place.
+
 ## Production retirement record — October 2, 2026
 
 The Cloudflare production settings for all three workers were updated and
