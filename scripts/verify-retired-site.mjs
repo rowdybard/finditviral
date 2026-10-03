@@ -63,7 +63,7 @@ if (process.argv.includes('--remote')) {
 } else {
   const output = resolve(root, 'dist')
   const entries = await readdir(output, { withFileTypes: true })
-  assert.deepEqual(entries.map(entry => entry.name).sort(), ['404.html', '_redirects', 'index.html'].sort(), 'dist must contain only retirement HTML and redirects')
+  assert.deepEqual(entries.map(entry => entry.name).sort(), ['404.html', 'index.html'].sort(), 'dist must contain only retirement HTML and its fallback')
   assert.ok(entries.every(entry => entry.isFile()), 'dist must contain no asset directories or workers')
   const html = await readFile(resolve(output, 'index.html'), 'utf8')
   const fallback = await readFile(resolve(output, '404.html'), 'utf8')
@@ -71,6 +71,5 @@ if (process.argv.includes('--remote')) {
   assert.match(html, /<!--email_off-->[\s\S]*href="mailto:contact@finditviral\.com\?subject=Purchase%20finditviral\.com"[\s\S]*<!--\/email_off-->/, 'Purchase links must bypass Cloudflare email obfuscation without JavaScript')
   assert.equal(fallback, html, '404 fallback must show the same retirement message')
   assert.equal(html, await readFile(resolve(root, 'index.html'), 'utf8'), 'Built page must match the maintained source')
-  assert.equal(await readFile(resolve(output, '_redirects'), 'utf8'), '/* /index.html 200\n', 'All former routes must resolve to the retirement page')
-  console.log('[pass] Static retirement artifact, inquiry link, catch-all routes, and absence of app/worker assets')
+  console.log('[pass] Static retirement artifact, inquiry link, closure fallback, and absence of app/worker assets')
 }
